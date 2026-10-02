@@ -25,3 +25,11 @@ def engine(settings: Settings) -> Iterator[Engine]:
 @pytest.fixture
 def clock() -> SimClock:
     return SimClock(datetime(2026, 10, 5, 6, 30, tzinfo=UTC))
+
+
+@pytest.fixture
+def migrated_engine(engine: Engine, tmp_path: Path) -> Engine:
+    from app.core.migrations import upgrade_to_head
+
+    upgrade_to_head(engine, tmp_path / ".migrate.lock")
+    return engine
