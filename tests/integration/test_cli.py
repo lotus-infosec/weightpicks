@@ -1,3 +1,4 @@
+import socket
 from datetime import timedelta
 from pathlib import Path
 
@@ -52,6 +53,15 @@ def test_worker_health_fails_without_heartbeat_or_schema(cli_env: Path) -> None:
     assert main(["health", "--worker"]) == 1
 
 
-def test_web_health_fails_when_nothing_listens(cli_env: Path) -> None:
-    # Nothing is bound to 127.0.0.1:8000 during unit tests.
+def _closed_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def test_web_health_fails_when_nothing_listens(
+    cli_env: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Use a port that was just free so a running dev stack on :8000 can't interfere.
+    monkeypatch.setattr("app.cli.WEB_HEALTH_URL", f"http://127.0.0.1:{_closed_port()}/healthz")
     assert main(["health", "--web"]) == 1
