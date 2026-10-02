@@ -1,0 +1,50 @@
+"""Install-time settings from the environment (BUILD_PLAN §1.7).
+
+First-run and runtime settings live in the database and arrive in later stages.
+`WP_IMAGE`, `WP_VERSION` and `WP_BIND` are read by Compose only.
+"""
+
+from functools import cached_property
+from pathlib import Path
+from typing import Literal
+
+from pydantic import SecretStr, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+MIN_SECRET_KEY_LENGTH = 32
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(extra="ignore", frozen=True)
+
+    app_env: Literal["production", "dev"] = "production"
+    app_secret_key: SecretStr = SecretStr("")
+    wp_base_url: str = "http://127.0.0.1:8000"
+    data_provider: Literal["garmindb", "simulated"] = "garmindb"
+    sim_seed: int = 42
+    log_level: Literal["DEBUG", "INFO", "WARNING"] = "INFO"
+    log_format: Literal["json", "console"] = "json"
+    ai_daily_neuron_cap: int = 5000
+    backup_retention: int = 7
+    data_dir: Path = Path("/data")
+    # Overrides the SQLite file under data_dir (tests point this at a temp file).
+    database_url: str | None = None
+
+    @model_validator(mode="after")
+    def _secret_key_required_in_production(self) -> "Settings":
+        if (
+            self.app_env == "production"
+            and len(self.app_secret_key.get_secret_value()) < MIN_SECRET_KEY_LENGTH
+        ):
+            raise ValueError(
+                f"APP_SECRET_KEY must be at least {MIN_SECRET_KEY_LENGTH} characters in production"
+            )
+        return self
+
+    @cached_property
+    def db_url(self) -> str:
+        return self.database_url or f"sqlite:///{self.data_dir / 'app.db'}"
+
+    @property
+    def is_dev(self) -> bool:
+        return self.app_env == "dev"
