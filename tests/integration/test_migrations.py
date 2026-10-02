@@ -12,7 +12,7 @@ def test_upgrade_creates_tables_and_is_idempotent(engine: Engine, tmp_path: Path
     upgrade_to_head(engine, tmp_path / ".migrate.lock")
     upgrade_to_head(engine, tmp_path / ".migrate.lock")  # second run is a no-op
 
-    assert current_revision(engine) == head_revision() == "0001"
+    assert current_revision(engine) == head_revision()
     assert is_at_head(engine)
     tables = set(inspect(engine).get_table_names())
-    assert {"heartbeats", "job_runs", "alembic_version"} <= tables
+    assert {"heartbeats", "job_runs", "accounts", "ledger_entries", "alembic_version"} <= tables
