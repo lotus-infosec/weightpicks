@@ -1,0 +1,35 @@
+# Dev overrides:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+# Builds locally, mounts source read-only with auto-reload, simulated data.
+# Settings come from ~/.config/weightpicks/dev.env (outside the repo; see .env.example).
+
+x-dev: &dev
+  image: weightpicks:dev
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+  env_file: !override
+    - ${HOME}/.config/weightpicks/dev.env
+  environment:
+    APP_ENV: dev
+    DATA_PROVIDER: simulated
+
+services:
+  web:
+    <<: *dev
+    command: ["web", "--reload", "--reload-dir", "/app/app"]
+    volumes:
+      - ./app:/app/app:ro
+      - ./migrations:/app/migrations:ro
+
+  worker:
+    <<: *dev
+    command: ["worker", "--reload"]
+    volumes:
+      - ./app:/app/app:ro
+      - ./migrations:/app/migrations:ro
+
+  garmin-login:
+    image: weightpicks:dev
+    env_file: !override
+      - ${HOME}/.config/weightpicks/dev.env

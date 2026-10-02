@@ -1,5 +1,4 @@
-# Run `pre-commit autoupdate` in STAGE00 to pin the latest versions.
-# Python hooks (ruff, mypy) are added in STAGE01 once pyproject.toml exists.
+# Run `pre-commit autoupdate` to bump pinned hook versions.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -8,6 +7,7 @@ repos:
         args: ["--maxkb=512"]
       - id: check-merge-conflict
       - id: check-yaml
+        args: ["--unsafe"]  # syntax only; allows Compose tags like !override
       - id: check-json
       - id: check-toml
       - id: detect-private-key
@@ -19,6 +19,12 @@ repos:
       - id: no-commit-to-branch
         args: ["--branch", "main"]
         stages: [pre-commit]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      - id: ruff-check
+      - id: ruff-format
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.0
@@ -35,3 +41,10 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-commit, pre-push]
+
+      - id: mypy
+        name: mypy (uv run mypy app tests)
+        entry: uv run mypy app tests
+        language: system
+        types: [python]
+        pass_filenames: false

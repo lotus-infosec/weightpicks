@@ -1,0 +1,65 @@
+# Production stack (BUILD_PLAN §1.7). Configure via .env (see .env.example).
+# The web port binds to loopback only; cloudflared on the host is the only ingress.
+name: weightpicks
+
+x-app: &app
+  image: ${WP_IMAGE:-ghcr.io/lotus-infosec/weightpicks}:${WP_VERSION:-unset}
+  env_file: .env
+  restart: unless-stopped
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+
+services:
+  web:
+    <<: *app
+    command: ["web"]                       # entrypoint: migrate -> uvicorn
+    ports: ["${WP_BIND:-127.0.0.1:8000}:8000"]   # loopback only
+    volumes:
+      - wp_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.cli", "health", "--web"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+      start_interval: 2s
+    mem_limit: 512m
+
+  worker:
+    <<: *app
+    command: ["worker"]                    # waits for migrations, then tick loop
+    depends_on:
+      web: { condition: service_healthy }
+    volumes:
+      - wp_data:/data
+      - wp_garmin:/garmin                  # GarminDB home (config + SQLite)
+      - wp_garmin_tokens:/garmin-tokens
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.cli", "health", "--worker"]  # heartbeat < 3 min old
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+      start_interval: 5s
+    mem_limit: 1g
+
+  garmin-login:                            # one-off: docker compose run --rm garmin-login
+    <<: *app
+    profiles: ["tools"]
+    restart: "no"
+    command: ["garmin-login"]
+    stdin_open: true
+    tty: true
+    volumes:
+      - wp_garmin:/garmin
+      - wp_garmin_tokens:/garmin-tokens
+
+volumes:
+  wp_data: {}            # app.db (+WAL), backups/, uploads/, pending/
+  wp_garmin: {}
+  wp_garmin_tokens: {}
