@@ -52,6 +52,8 @@ jobs:
           enable-cache: true
       - run: uv sync --frozen
       - run: uv run pytest -q --cov --cov-report=term-missing:skip-covered
+      - name: Coverage gate (app/domain and app/services >= 95%)
+        run: uv run coverage report --include='app/domain/*,app/services/*' --fail-under=95
 
   gitleaks:
     runs-on: ubuntu-24.04
