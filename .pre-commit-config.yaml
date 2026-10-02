@@ -7,6 +7,7 @@ repos:
         args: ["--maxkb=512"]
       - id: check-merge-conflict
       - id: check-yaml
+        args: ["--unsafe"]  # syntax only; allows Compose tags like !override
       - id: check-json
       - id: check-toml
       - id: detect-private-key
