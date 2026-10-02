@@ -2,7 +2,7 @@
 
 Self-hosted, fake-money, pick'em-style betting on one person's Garmin weigh-ins and health stats. Friends and family bet against an automated house; lines come from math, bets settle from Garmin data, Discord carries the trash talk.
 
-> **Status:** pre-build. Repository tooling only; application code begins in STAGE01.
+> **Status:** Pre-build (STAGE00 complete). Environment and repository tooling are in place; application code begins in STAGE01.
 
 ## Built with AI — fully vibe-coded
 
