@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "ms-vscode-remote.remote-wsl",
+    "ms-python.python",
+    "charliermarsh.ruff",
+    "ms-azuretools.vscode-docker",
+    "tamasfe.even-better-toml",
+    "editorconfig.editorconfig"
+  ]
+}

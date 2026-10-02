@@ -1,0 +1,12 @@
+{
+  "editor.formatOnSave": true,
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.codeActionsOnSave": { "source.organizeImports": "explicit" }
+  },
+  "python.testing.pytestEnabled": true,
+  "git.enableCommitSigning": true
+}

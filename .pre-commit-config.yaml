@@ -1,0 +1,37 @@
+# Run `pre-commit autoupdate` in STAGE00 to pin the latest versions.
+# Python hooks (ruff, mypy) are added in STAGE01 once pyproject.toml exists.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=512"]
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        args: ["--markdown-linebreak-ext=md"]
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+      - id: no-commit-to-branch
+        args: ["--branch", "main"]
+        stages: [pre-commit]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  # Blocks commits whose author or committer email is not a GitHub noreply address.
+  - repo: local
+    hooks:
+      - id: noreply-identity
+        name: commit identity must be a GitHub noreply address
+        entry: bash -c 'e="$(git config user.email)"; case "$e" in *@users.noreply.github.com) exit 0;; *) echo "user.email is \"$e\" - set it to your GitHub noreply address"; exit 1;; esac'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit, pre-push]

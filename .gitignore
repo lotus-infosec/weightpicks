@@ -1,0 +1,94 @@
+# ---- Secrets & local config (NEVER commit) ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ecdsa*
+id_ed25519*
+secrets/
+.secrets/
+credentials*.json
+GarminConnectConfig.json
+garmin-tokens/
+.garth/
+.garminconnect/
+
+# ---- App data (local volumes, databases, backups) ----
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+/data/
+/backups/
+/uploads/
+/pending/
+*.tar.gz
+*.zip
+
+# ---- Real health data must never be committed ----
+fixtures/real/
+**/real_garmin*/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.eggs/
+pip-wheel-metadata/
+
+# ---- Tooling caches ----
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+
+# ---- Playwright / e2e artefacts ----
+test-results/
+playwright-report/
+playwright/.cache/
+
+# ---- Frontend build output ----
+app/web/static/build/
+node_modules/
+tailwindcss
+tailwindcss-*
+
+# ---- Editors / OS ----
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Claude Code personal files ----
+.claude/settings.local.json
+CLAUDE.local.md
+
+# ---- Logs ----
+*.log
+/logs/
+
+# ---- Private planning kit & AI-agent files (local only — see weightpicks/DECISIONS.md D-018) ----
+/weightpicks/
+/CLAUDE.md
+/AGENTS.md
+/.claude/
