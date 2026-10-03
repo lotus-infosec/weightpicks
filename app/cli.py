@@ -16,7 +16,7 @@ from app.core.logging import configure_logging
 from app.core.migrations import current_revision, upgrade_to_head
 from app.domain.money import Money
 from app.models import Heartbeat, Observation, SyncRun
-from app.services import auth, instance, ledger, setup, sim
+from app.services import auth, instance, ledger, reconcile, setup, sim
 from app.services.observations import canonical_weigh_ins, latest_complete_through
 from app.services.users import ensure_player
 
@@ -213,6 +213,22 @@ def _setup_token(settings: Settings) -> int:
     return 0
 
 
+def _reconcile(settings: Settings, days: int) -> int:
+    engine = make_engine(settings.db_url)
+    try:
+        domain_clock = sim.app_clock(settings, engine)
+        with engine.connect() as conn:
+            config = instance.read(conn)
+        tz = config.tz if config else settings.tz
+        unit = config.unit if config else settings.wp_unit
+        today = domain_clock.now().astimezone(tz).date()
+        with engine.connect() as conn:
+            print(reconcile.render(reconcile.build(conn, today, days), conn, tz, unit))
+    finally:
+        engine.dispose()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="wp", description="WeightPicks command line")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -246,6 +262,10 @@ def main(argv: list[str] | None = None) -> int:
     code_sub = code_cmd.add_subparsers(dest="code_command", required=True)
     code_sub.add_parser("new", help="replace the registration code and print the new one")
     commands.add_parser("setup-token", help="print a fresh one-time /setup token")
+    report_cmd = commands.add_parser("report", help="read-only reports")
+    report_sub = report_cmd.add_subparsers(dest="report_command", required=True)
+    rec = report_sub.add_parser("reconcile", help="engine inputs vs raw Garmin data, by day")
+    rec.add_argument("--days", type=int, default=7)
     args = parser.parse_args(argv)
 
     if args.command == "health" and args.web:
@@ -266,6 +286,8 @@ def main(argv: list[str] | None = None) -> int:
         return _registration_code(settings)
     if args.command == "setup-token":
         return _setup_token(settings)
+    if args.command == "report":
+        return _reconcile(settings, args.days)
     return _health_worker(settings)
 
 
