@@ -3,12 +3,6 @@
 {% set active = "board" %}
 {% block content %}
 <div x-data="slip">
-  <div class="tabs" role="tablist">
-    {% for t in tabs %}
-    <a href="/?tab={{ t }}" hx-get="/?tab={{ t }}" hx-target="#board" hx-push-url="true"
-       class="tab {{ 'active' if t == tab }}" role="tab">{{ t | capitalize }}</a>
-    {% endfor %}
-  </div>
   <div id="board">{% include "_board_tab.html" %}</div>
   {{ slip() }}
 </div>
