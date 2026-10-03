@@ -26,7 +26,7 @@ class Session(Base):
 class AuthAttempt(Base):
     __tablename__ = "auth_attempts"
     __table_args__ = (
-        CheckConstraint("kind IN ('login', 'register')", name="kind_valid"),
+        CheckConstraint("kind IN ('login', 'register', 'setup')", name="kind_valid"),
         Index("ix_auth_attempts_kind_ip_ts", "kind", "ip", "ts"),
     )
 
