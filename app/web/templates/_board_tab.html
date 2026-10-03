@@ -1,0 +1,22 @@
+{% from "_macros.html" import side_buttons %}
+{# The tabs are part of the swapped fragment so the active tab follows the content. #}
+<div class="tabs" role="tablist">
+  {% for t in tabs %}
+  <a href="/?tab={{ t }}" hx-get="/?tab={{ t }}" hx-target="#board" hx-push-url="true"
+     class="tab {{ 'active' if t == tab }}" role="tab" aria-selected="{{ 'true' if t == tab else 'false' }}">{{ t | capitalize }}</a>
+  {% endfor %}
+</div>
+{% if not cards %}<p class="muted empty">No open {{ tab }} markets right now. New lines drop at 11:00.</p>{% endif %}
+<div class="cards">
+  {% for c in cards %}
+  <article class="market" data-testid="market-{{ c.market_id }}" data-metric="{{ c.metric }}">
+    <header>
+      <a href="/markets/{{ c.market_id }}" class="market-title">{{ c.title }}</a>
+      {% if c.provisional %}<span class="badge">provisional</span>{% endif %}
+    </header>
+    <p class="market-line">O/U <strong>{{ c.line_x10 | line(c.metric) }}</strong></p>
+    {{ side_buttons(c) }}
+    <p class="muted small">Locks {{ c.lock_at | local_time }}</p>
+  </article>
+  {% endfor %}
+</div>

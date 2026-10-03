@@ -18,6 +18,7 @@ from app.services.observations import canonical_weigh_ins
 from app.web.main import create_app
 from app.worker.jobs import INFRA_JOBS, domain_jobs
 from app.worker.main import tick
+from tests.integration import web
 
 
 @pytest.fixture
@@ -126,7 +127,10 @@ def test_dev_routes_only_exist_in_dev(
 
 
 def test_dev_clock_page_and_forms(dev: Settings, migrated_engine: Engine) -> None:
-    with TestClient(create_app(dev)) as client:
+    with web.client(create_app(dev)) as client:
+        assert client.get("/dev/clock", follow_redirects=False).headers["location"] == "/login"
+        web.as_admin(client, migrated_engine)
+        csrf = web.page_csrf(client, "/dev/clock")
         page = client.get("/dev/clock")
         assert page.status_code == 200
         assert "Simulation clock" in page.text
@@ -135,7 +139,7 @@ def test_dev_clock_page_and_forms(dev: Settings, migrated_engine: Engine) -> Non
 
         moved = client.post(
             "/dev/clock/advance",
-            content="days=1&hours=6",
+            content=f"days=1&hours=6&csrf_token={csrf}",
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             follow_redirects=False,
         )
@@ -145,7 +149,7 @@ def test_dev_clock_page_and_forms(dev: Settings, migrated_engine: Engine) -> Non
 
         bad = client.post(
             "/dev/clock/reseed",
-            content="preset=%3Cscript%3E&seed=1",
+            content=f"preset=%3Cscript%3E&seed=1&csrf_token={csrf}",
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         assert bad.status_code == 200  # followed the redirect back to the page

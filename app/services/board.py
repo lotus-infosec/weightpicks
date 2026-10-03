@@ -1,0 +1,179 @@
+"""Read models for the player pages: the board, a market, my bets, the public feed.
+
+Read-only queries; nothing here writes. The feed and market pages show display names
+only, never emails (bets are public by design, BUILD_PLAN §1.3).
+"""
+
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import Connection, select
+
+from app.domain.ledger import AccountKind
+from app.domain.markets import MarketStatus
+from app.models import Account, Bet, BetLeg, Market, OddsVersion, Selection, Settlement, User
+from app.services.ledger import active_season_id
+
+
+@dataclass(frozen=True, slots=True)
+class Side:
+    selection_id: int
+    side: str
+    odds: int | None  # None = not offered
+
+
+@dataclass(frozen=True, slots=True)
+class MarketCard:
+    market_id: int
+    title: str
+    template: str
+    timeframe: str
+    metric: str
+    status: str
+    lock_at: datetime
+    line_x10: int | None
+    odds_version_id: int
+    sides: tuple[Side, ...]
+    provisional: bool
+
+
+@dataclass(frozen=True, slots=True)
+class BetRow:
+    bet_id: int
+    display_name: str
+    market_id: int
+    title: str
+    metric: str
+    side: str
+    american: int
+    line_x10: int | None
+    stake_cents: int
+    potential_payout_cents: int
+    status: str
+    payout_cents: int | None
+    placed_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class Wallet:
+    balance_cents: int
+    pnl_cents: int
+
+
+def _cards(conn: Connection, *conditions: Any) -> list[MarketCard]:
+    rows = conn.execute(
+        select(
+            Market.id,
+            Market.title,
+            Market.template,
+            Market.timeframe,
+            Market.metric,
+            Market.status,
+            Market.lock_at,
+            OddsVersion.id.label("version_id"),
+            OddsVersion.line_x10,
+            OddsVersion.odds,
+            OddsVersion.model_inputs,
+        )
+        .join(OddsVersion, (OddsVersion.market_id == Market.id) & OddsVersion.is_current)
+        .where(*conditions)
+        .order_by(Market.lock_at, Market.id)
+    ).all()
+    selections: dict[int, list[tuple[int, str]]] = {}
+    if rows:
+        for market_id, sel_id, side in conn.execute(
+            select(Selection.market_id, Selection.id, Selection.side)
+            .where(Selection.market_id.in_([r.id for r in rows]))
+            .order_by(Selection.id)
+        ):
+            selections.setdefault(market_id, []).append((sel_id, side))
+    return [
+        MarketCard(
+            market_id=r.id,
+            title=r.title,
+            template=r.template,
+            timeframe=r.timeframe,
+            metric=r.metric,
+            status=r.status,
+            lock_at=r.lock_at,
+            line_x10=r.line_x10,
+            odds_version_id=r.version_id,
+            sides=tuple(Side(s, side, r.odds.get(side)) for s, side in selections.get(r.id, [])),
+            provisional=bool(r.model_inputs.get("provisional")),
+        )
+        for r in rows
+    ]
+
+
+def open_markets(conn: Connection, timeframe: str, now: datetime) -> list[MarketCard]:
+    season = active_season_id(conn)
+    return _cards(
+        conn,
+        Market.season_id == season,
+        Market.timeframe == timeframe,
+        Market.status == MarketStatus.OPEN.value,
+        Market.lock_at > now,
+    )
+
+
+def market(conn: Connection, market_id: int) -> tuple[MarketCard, dict[str, Any] | None] | None:
+    cards = _cards(conn, Market.id == market_id)
+    if not cards:
+        return None
+    outcome = conn.execute(
+        select(Settlement.outcome).where(Settlement.market_id == market_id)
+    ).scalar_one_or_none()
+    return cards[0], outcome
+
+
+def _bets(conn: Connection, *conditions: Any, limit: int = 50) -> list[BetRow]:
+    rows = conn.execute(
+        select(
+            Bet.id.label("bet_id"),
+            User.display_name,
+            Market.id.label("market_id"),
+            Market.title,
+            Market.metric,
+            Selection.side,
+            BetLeg.american,
+            BetLeg.line_x10,
+            Bet.stake_cents,
+            Bet.potential_payout_cents,
+            Bet.status,
+            Bet.payout_cents,
+            Bet.placed_at,
+        )
+        .join(BetLeg, BetLeg.bet_id == Bet.id)
+        .join(Market, Market.id == BetLeg.market_id)
+        .join(Selection, Selection.id == BetLeg.selection_id)
+        .join(User, User.id == Bet.user_id)
+        .where(*conditions)
+        .order_by(Bet.placed_at.desc(), Bet.id.desc())
+        .limit(limit)
+    ).all()
+    return [BetRow(**r._asdict()) for r in rows]
+
+
+def my_bets(conn: Connection, user_id: int) -> list[BetRow]:
+    return _bets(conn, Bet.user_id == user_id, limit=200)
+
+
+def feed(conn: Connection, limit: int = 50) -> list[BetRow]:
+    return _bets(conn, Bet.season_id == active_season_id(conn), limit=limit)
+
+
+def market_bets(conn: Connection, market_id: int) -> list[BetRow]:
+    return _bets(conn, BetLeg.market_id == market_id, limit=500)
+
+
+def wallet(conn: Connection, user_id: int) -> Wallet | None:
+    season = active_season_id(conn)
+    row = conn.execute(
+        select(Account.balance_cents, Account.pnl_cents).where(
+            Account.kind == AccountKind.PLAYER.value,
+            Account.user_id == user_id,
+            Account.season_id == season,
+        )
+    ).one_or_none()
+    return None if row is None else Wallet(row.balance_cents, row.pnl_cents)

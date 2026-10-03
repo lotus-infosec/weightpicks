@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% set active = "feed" %}
+{% block title %}Feed · WeightPicks{% endblock %}
+{% block content %}
+<h1>Live feed</h1>
+<div id="feed" hx-get="/bets/feed" hx-trigger="every 30s">{% include "_feed.html" %}</div>
+{% endblock %}

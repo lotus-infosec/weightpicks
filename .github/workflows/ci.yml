@@ -51,13 +51,31 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --frozen
-      - run: uv run pytest -q -m "not perf and not calibration" --cov --cov-report=term-missing:skip-covered
+      - run: uv run pytest -q -m "not perf and not calibration and not e2e" --cov --cov-report=term-missing:skip-covered
       - name: Coverage gate (app/domain and app/services >= 95%)
         run: uv run coverage report --include='app/domain/*,app/services/*' --fail-under=95
       - name: Performance budgets and calibration (no coverage instrumentation)
         env:
           PERF_BUDGET_SCALE: "2"  # shared runners are ~2x slower than the dev machine
         run: uv run pytest -q -m "perf or calibration" -s
+
+  e2e:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: Build the stylesheet (layout test checks it is applied)
+        run: ./scripts/build-css.sh
+      - name: Install Chromium and its system libraries (version pinned by uv.lock)
+        run: uv run playwright install --with-deps chromium
+      - name: Browser tests at 375 px (register, bet, feed)
+        run: uv run pytest -q -m e2e --tracing=retain-on-failure --output=test-results
 
   gitleaks:
     runs-on: ubuntu-24.04

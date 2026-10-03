@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% from "_macros.html" import slip %}
+{% set active = "board" %}
+{% block content %}
+<div x-data="slip">
+  <div id="board">{% include "_board_tab.html" %}</div>
+  {{ slip() }}
+</div>
+{% endblock %}

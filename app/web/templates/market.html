@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% from "_macros.html" import side_buttons, slip, bet_rows %}
+{% block title %}{{ card.title }} · WeightPicks{% endblock %}
+{% block content %}
+<div x-data="slip">
+  <section class="card">
+    <h1>{{ card.title }}</h1>
+    <p class="market-line">O/U <strong>{{ card.line_x10 | line(card.metric) }}</strong> · {{ card.status }}</p>
+    {% if open %}
+      {{ side_buttons(card) }}
+      <p class="muted small">Locks {{ card.lock_at | local_time }}</p>
+    {% else %}
+      <p class="muted small">Locked {{ card.lock_at | local_time }}</p>
+    {% endif %}
+    {% if outcome %}
+      <p class="result">Result: {{ outcome.reason }}{% if outcome.value_x10 is not none %} ({{ outcome.value_x10 | line(card.metric) }}){% endif %}</p>
+    {% endif %}
+  </section>
+  <h2>All bets</h2>
+  {{ bet_rows(bets, show_name=True) }}
+  {{ slip() }}
+</div>
+{% endblock %}
