@@ -69,6 +69,19 @@ def test_settings_read_from_environment(monkeypatch: pytest.MonkeyPatch) -> None
     assert s.db_url == "sqlite:///elsewhere.db"
 
 
+def test_time_zone_and_unit(monkeypatch: pytest.MonkeyPatch) -> None:
+    s = Settings(app_env="dev")
+    assert (s.wp_timezone, s.wp_unit, s.tz.key) == ("America/New_York", "lb", "America/New_York")
+    monkeypatch.setenv("WP_TIMEZONE", "Europe/Berlin")
+    monkeypatch.setenv("WP_UNIT", "kg")
+    assert (Settings(app_env="dev").tz.key, Settings(app_env="dev").wp_unit) == (
+        "Europe/Berlin",
+        "kg",
+    )
+    with pytest.raises(ValidationError, match="unknown time zone"):
+        Settings(app_env="dev", wp_timezone="Mars/Olympus")
+
+
 def test_secret_key_is_not_shown_in_repr() -> None:
     s = Settings(app_env="dev", app_secret_key="super-secret-value-123")
     assert "super-secret-value-123" not in repr(s)

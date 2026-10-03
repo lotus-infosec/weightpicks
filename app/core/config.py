@@ -7,8 +7,9 @@ First-run and runtime settings live in the database and arrive in later stages.
 from functools import cached_property
 from pathlib import Path
 from typing import Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import SecretStr, model_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 MIN_SECRET_KEY_LENGTH = 32
@@ -29,6 +30,18 @@ class Settings(BaseSettings):
     data_dir: Path = Path("/data")
     # Overrides the SQLite file under data_dir (tests point this at a temp file).
     database_url: str | None = None
+    # Instance time zone and weight unit; owned by /setup from STAGE08 (D-027).
+    wp_timezone: str = "America/New_York"
+    wp_unit: Literal["lb", "kg"] = "lb"
+
+    @field_validator("wp_timezone")
+    @classmethod
+    def _known_time_zone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError(f"unknown time zone {value!r}") from exc
+        return value
 
     @model_validator(mode="after")
     def _secret_key_required_in_production(self) -> "Settings":
@@ -44,6 +57,10 @@ class Settings(BaseSettings):
     @cached_property
     def db_url(self) -> str:
         return self.database_url or f"sqlite:///{self.data_dir / 'app.db'}"
+
+    @property
+    def tz(self) -> ZoneInfo:
+        return ZoneInfo(self.wp_timezone)
 
     @property
     def is_dev(self) -> bool:
