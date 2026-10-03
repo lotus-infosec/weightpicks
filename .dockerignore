@@ -6,6 +6,7 @@
 !README.md
 !alembic.ini
 !app/
+app/web/static/build/
 !migrations/
 !docker/entrypoint.sh
 **/__pycache__

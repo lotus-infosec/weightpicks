@@ -1,0 +1,80 @@
+/* WeightPicks stylesheet: Tailwind v4 (standalone CLI) + a few semantic components.
+   Dark theme tokens; original branding only. Built by the Docker `css` stage or
+   scripts/build-css.sh; the app works unstyled if it hasn't been built. */
+@import "tailwindcss";
+@source "../templates";
+@source "../static/app.js";
+
+@theme {
+  --color-bg: #0f1216;
+  --color-surface: #181d23;
+  --color-raised: #212830;
+  --color-line: #2c353f;
+  --color-text: #e8edf2;
+  --color-muted: #93a1b0;
+  --color-accent: #f2b544;
+  --color-over: #2fbf71;
+  --color-under: #4c8dff;
+  --color-bad: #ff6b6b;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@layer base {
+  html { background: var(--color-bg); color: var(--color-text); font-family: var(--font-sans); }
+  a { color: var(--color-accent); }
+  h1 { @apply text-xl font-semibold mb-3; }
+  h2 { @apply text-lg font-semibold mt-6 mb-2; }
+  input { @apply w-full rounded-lg px-3 py-3 text-base; background: var(--color-raised); border: 1px solid var(--color-line); color: var(--color-text); }
+  label { @apply block text-sm; color: var(--color-muted); }
+  [x-cloak] { display: none !important; }
+}
+
+@layer components {
+  .app { @apply min-h-screen pb-56; }
+  .topbar { @apply flex items-center gap-3 px-4 py-3; background: var(--color-surface); border-bottom: 1px solid var(--color-line); }
+  .brand { @apply font-bold text-lg no-underline mr-auto; color: var(--color-accent); }
+  .wallet { @apply font-semibold tabular-nums; }
+  .nav { @apply flex gap-1 px-2 py-2 overflow-x-auto; background: var(--color-surface); }
+  .nav a { @apply px-3 py-2 rounded-lg no-underline text-sm; color: var(--color-muted); }
+  .nav a.active { color: var(--color-text); background: var(--color-raised); }
+  .page { @apply max-w-xl mx-auto px-4 py-4; }
+  .card { @apply rounded-2xl p-4 mb-4; background: var(--color-surface); border: 1px solid var(--color-line); }
+  .narrow { @apply max-w-md mx-auto; }
+  .stack { @apply flex flex-col gap-4; }
+  .inline { @apply inline; }
+  .muted { color: var(--color-muted); }
+  .small { @apply text-xs; }
+  .alert { @apply rounded-lg px-3 py-2 mb-3; background: color-mix(in srgb, var(--color-bad) 18%, transparent); color: var(--color-text); }
+  .primary { @apply rounded-xl px-4 py-3 font-semibold text-base; background: var(--color-accent); color: #1a1205; }
+  .primary:disabled { @apply opacity-50; }
+  .wide { @apply w-full; }
+  .link { @apply bg-transparent underline text-sm; color: var(--color-muted); }
+  .tabs { @apply flex gap-2 mb-4; }
+  .tab { @apply flex-1 text-center rounded-xl py-2 no-underline font-medium; background: var(--color-surface); color: var(--color-muted); border: 1px solid var(--color-line); }
+  .tab.active { color: var(--color-text); border-color: var(--color-accent); }
+  .cards { @apply flex flex-col gap-3; }
+  .market { @apply rounded-2xl p-4; background: var(--color-surface); border: 1px solid var(--color-line); }
+  .market header { @apply flex items-start justify-between gap-2; }
+  .market-title { @apply font-semibold no-underline; color: var(--color-text); }
+  .market-line { @apply my-2 text-sm; color: var(--color-muted); }
+  .market-line strong { @apply text-lg; color: var(--color-text); }
+  .badge { @apply text-xs rounded-full px-2 py-0.5; background: var(--color-raised); color: var(--color-muted); }
+  .sides { @apply grid grid-cols-2 gap-3 my-3; }
+  .side { @apply flex flex-col items-center justify-center rounded-xl py-4 min-h-16 font-semibold; background: var(--color-raised); border: 2px solid var(--color-line); color: var(--color-text); }
+  .side-over { border-color: var(--color-over); }
+  .side-under { border-color: var(--color-under); }
+  .side:disabled { @apply opacity-40; }
+  .side-odds { @apply text-lg tabular-nums; }
+  .empty { @apply text-center py-8; }
+  .slip { @apply fixed inset-x-0 bottom-0 p-4 flex flex-col gap-3 rounded-t-2xl max-w-xl mx-auto; background: var(--color-surface); border-top: 2px solid var(--color-accent); box-shadow: 0 -8px 24px rgb(0 0 0 / 0.4); }
+  .slip-head { @apply flex items-center justify-between gap-2; }
+  .slip-message.good { color: var(--color-over); }
+  .slip-message.bad { color: var(--color-bad); }
+  .bets { @apply flex flex-col gap-2; }
+  .bet { @apply rounded-xl px-3 py-2 text-sm; background: var(--color-surface); border-left: 4px solid var(--color-line); }
+  .bet.status-won { border-left-color: var(--color-over); }
+  .bet.status-lost { border-left-color: var(--color-bad); }
+  .bet.status-push { border-left-color: var(--color-muted); }
+  .bet-detail { color: var(--color-muted); }
+  .result { @apply mt-2 font-semibold; }
+}
