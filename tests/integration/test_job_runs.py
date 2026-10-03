@@ -3,8 +3,9 @@ from datetime import datetime, timedelta
 from sqlalchemy import Engine, select
 
 from app.core.clock import SimClock
+from app.core.config import Settings
 from app.models import Heartbeat, JobRun
-from app.worker.jobs import ALL_JOBS, HeartbeatJob
+from app.worker.jobs import INFRA_JOBS, HeartbeatJob, domain_jobs
 from app.worker.registry import JobContext, run_due
 
 
@@ -79,7 +80,21 @@ def test_heartbeat_job_upserts_clock_time(migrated_engine: Engine, clock: SimClo
     assert beats == [("worker", clock.now())]
 
 
-def test_registered_jobs_have_unique_names() -> None:
-    names = [job.name for job in ALL_JOBS]
+def test_registered_jobs_have_unique_names(settings: Settings) -> None:
+    names = [job.name for job in (*INFRA_JOBS, *domain_jobs(settings))]
     assert len(names) == len(set(names))
-    assert {"heartbeat", "demo_daily"} <= set(names)
+    assert set(names) == {"heartbeat", "garmin_sync", "demo_daily", "ledger_verify"}
+
+
+def test_seen_cache_skips_repeat_claims_but_not_new_periods(
+    migrated_engine: Engine, clock: SimClock
+) -> None:
+    job = CountingJob()
+    seen: dict[str, str] = {}
+    assert run_due([job], migrated_engine, clock, seen) == ["counting"]
+    assert run_due([job], migrated_engine, clock, seen) == []
+    assert seen == {"counting": "2026-10-05"}
+    clock.advance(timedelta(days=1))
+    assert run_due([job], migrated_engine, clock, seen) == ["counting"]
+    # A fresh process (empty cache) still can't run a claimed period twice.
+    assert run_due([job], migrated_engine, clock, {}) == []

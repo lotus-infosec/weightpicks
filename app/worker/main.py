@@ -2,22 +2,39 @@
 
 import signal
 import threading
+from collections.abc import Sequence
 from types import FrameType
 
 import structlog
+from sqlalchemy import Engine
 
-from app.core.clock import SystemClock
+from app.core.clock import Clock, SystemClock
 from app.core.config import Settings
 from app.core.db import make_engine
 from app.core.logging import configure_logging
 from app.core.migrations import is_at_head
-from app.worker.jobs import ALL_JOBS
-from app.worker.registry import run_due
+from app.services.sim import app_clock
+from app.worker.jobs import INFRA_JOBS, domain_jobs
+from app.worker.registry import Job, run_due
 
 TICK_SECONDS = 60
 SCHEMA_POLL_SECONDS = 2
 
 log = structlog.get_logger()
+
+
+def tick(
+    engine: Engine,
+    *,
+    infra: Sequence[Job],
+    domain: Sequence[Job],
+    system_clock: Clock,
+    domain_clock: Clock,
+    seen: dict[str, str],
+) -> list[str]:
+    """One worker tick: infrastructure jobs on real time, domain jobs on the app clock."""
+    ran = run_due(infra, engine, system_clock, seen)
+    return ran + run_due(domain, engine, domain_clock, seen)
 
 
 def main() -> None:
@@ -38,10 +55,25 @@ def main() -> None:
         log.info("waiting_for_schema")
         stop.wait(SCHEMA_POLL_SECONDS)
 
-    log.info("worker_started", tick_seconds=TICK_SECONDS, jobs=[j.name for j in ALL_JOBS])
+    jobs = domain_jobs(settings)
+    domain_clock = app_clock(settings, engine)
+    seen: dict[str, str] = {}
+    log.info(
+        "worker_started",
+        tick_seconds=TICK_SECONDS,
+        jobs=[j.name for j in (*INFRA_JOBS, *jobs)],
+        sim_clock=settings.is_dev,
+    )
     while not stop.is_set():
         try:
-            run_due(ALL_JOBS, engine, clock)
+            tick(
+                engine,
+                infra=INFRA_JOBS,
+                domain=jobs,
+                system_clock=clock,
+                domain_clock=domain_clock,
+                seen=seen,
+            )
         except Exception:
             log.exception("tick_failed")
         stop.wait(TICK_SECONDS)

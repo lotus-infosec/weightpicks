@@ -62,14 +62,24 @@ def _finish(engine: Engine, run_id: int, status: str, at: datetime, error: str |
         )
 
 
-def run_due(jobs: Sequence[Job], engine: Engine, clock: Clock) -> list[str]:
-    """Run every job whose current period has not been claimed yet. Returns names run."""
+def run_due(
+    jobs: Sequence[Job], engine: Engine, clock: Clock, seen: dict[str, str] | None = None
+) -> list[str]:
+    """Run every job whose current period has not been claimed yet. Returns names run.
+
+    `seen` (job name -> last period key attempted by this process) skips the claim
+    write when the period hasn't changed; `job_runs` uniqueness remains the guarantee.
+    """
     ran: list[str] = []
     now = clock.now()
     for job in jobs:
         period_key = job.due(now)
         if period_key is None:
             continue
+        if seen is not None:
+            if seen.get(job.name) == period_key:
+                continue
+            seen[job.name] = period_key
         run_id = _claim(engine, job.name, period_key, now)
         if run_id is None:
             continue
