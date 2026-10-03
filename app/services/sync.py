@@ -43,12 +43,25 @@ class SyncResult:
     error: str | None = None
 
 
-def make_provider(settings: Settings, engine: Engine, clock: Clock) -> DataProvider:
+def make_provider(
+    settings: Settings, engine: Engine, clock: Clock, cached: DataProvider | None = None
+) -> DataProvider:
+    """The configured provider. A cached simulator is reused while its config is unchanged
+    (keeping its per-day data cache); a reseed produces a fresh one."""
     if settings.data_provider == "simulated":
-        with immediate(engine) as conn:
-            state = sim.ensure_state(
-                conn, clock, seed=settings.sim_seed, tz_name=settings.wp_timezone
-            )
+        with engine.connect() as conn:  # no write lock once the state exists
+            state = sim.read_state(conn)
+        if state is None:
+            with immediate(engine) as conn:
+                state = sim.ensure_state(
+                    conn, clock, seed=settings.sim_seed, tz_name=settings.wp_timezone
+                )
+        if isinstance(cached, SimulatedProvider) and (
+            cached.preset_name,
+            cached.seed,
+            cached.anchor,
+        ) == (state.preset, state.seed, state.anchor_date):
+            return cached
         return SimulatedProvider(
             preset=state.preset, seed=state.seed, anchor_date=state.anchor_date, tz=settings.tz
         )

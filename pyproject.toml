@@ -60,6 +60,7 @@ strict = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+markers = ["perf: wall-clock performance budgets (CI runs them without coverage)"]
 
 [tool.coverage.run]
 source = ["app"]

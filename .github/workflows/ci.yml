@@ -51,9 +51,11 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --frozen
-      - run: uv run pytest -q --cov --cov-report=term-missing:skip-covered
+      - run: uv run pytest -q -m "not perf" --cov --cov-report=term-missing:skip-covered
       - name: Coverage gate (app/domain and app/services >= 95%)
         run: uv run coverage report --include='app/domain/*,app/services/*' --fail-under=95
+      - name: Performance budgets (no coverage instrumentation)
+        run: uv run pytest -q -m perf -s
 
   gitleaks:
     runs-on: ubuntu-24.04

@@ -59,6 +59,22 @@ def test_advance_set_and_reseed_rules(migrated_engine: Engine, dev: Settings) ->
         sim.reseed(migrated_engine, dev, preset="marathon", seed=1)
 
 
+def test_sync_job_reuses_provider_until_reseed(migrated_engine: Engine, dev: Settings) -> None:
+    job = next(j for j in domain_jobs(dev) if j.name == "garmin_sync")
+    sim.advance(migrated_engine, dev, timedelta(hours=1))
+    clock = sim.app_clock(dev, migrated_engine)
+    from app.worker.registry import JobContext
+
+    ctx = JobContext(migrated_engine, clock, clock.now(), "k")
+    job.run(ctx)
+    first = job._provider  # type: ignore[attr-defined]
+    job.run(ctx)
+    assert job._provider is first  # type: ignore[attr-defined]
+    sim.reseed(migrated_engine, dev, preset="plateau", seed=5)
+    job.run(ctx)
+    assert job._provider is not first  # type: ignore[attr-defined]
+
+
 def test_reseed_keeps_ingested_history(migrated_engine: Engine, dev: Settings) -> None:
     sim.advance(migrated_engine, dev, timedelta(days=5))
     state = sim.load_state(migrated_engine, dev)
@@ -141,6 +157,7 @@ def test_sim_cli_refuses_without_dev_simulated(
     assert main(["sim", "status"]) == 2  # DATA_PROVIDER defaults to garmindb
 
 
+@pytest.mark.perf
 def test_sim_advance_90_days_under_10_seconds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

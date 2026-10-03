@@ -32,7 +32,7 @@ class SimConfig:
     anchor_date: date
 
 
-def _row(conn: Connection) -> SimConfig | None:
+def read_state(conn: Connection) -> SimConfig | None:
     row = conn.execute(
         select(SimState.sim_now, SimState.preset, SimState.seed, SimState.anchor_date).where(
             SimState.id == 1
@@ -43,7 +43,7 @@ def _row(conn: Connection) -> SimConfig | None:
 
 def ensure_state(conn: Connection, clock: Clock, *, seed: int, tz_name: str) -> SimConfig:
     """Load the simulation state, creating it from `clock` on first use."""
-    state = _row(conn)
+    state = read_state(conn)
     if state is not None:
         return state
     now = clock.now().replace(second=0, microsecond=0)
@@ -57,6 +57,10 @@ def ensure_state(conn: Connection, clock: Clock, *, seed: int, tz_name: str) -> 
 
 
 def load_state(engine: Engine, settings: Settings) -> SimConfig:
+    with engine.connect() as conn:  # no write lock once the state exists
+        state = read_state(conn)
+    if state is not None:
+        return state
     with immediate(engine) as conn:
         return ensure_state(
             conn, SystemClock(), seed=settings.sim_seed, tz_name=settings.wp_timezone
