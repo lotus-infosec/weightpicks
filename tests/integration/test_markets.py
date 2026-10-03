@@ -134,7 +134,8 @@ def test_weekly_and_monthly_drops(world: World) -> None:
     assert {(r.window_start, r.window_end) for r in rows[1:]} == {
         (date(2026, 11, 1), date(2026, 11, 30))
     }
-    assert rows[0].lock_at == local(2026, 11, 29, 22)  # EST after the DST change
+    assert rows[0].lock_at == local(2026, 10, 31, 22)  # drop night (D-031)
+    assert rows[0].settle_after == local(2026, 11, 30, 11)  # EST after the DST change
 
 
 @pytest.mark.parametrize(

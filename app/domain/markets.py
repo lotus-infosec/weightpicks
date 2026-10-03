@@ -261,8 +261,10 @@ class WeightChangeOU:
             metric="weight",
             window=(p.d0, p.d1),
             title=f"Weight change, {_day(p.d0)} → {_day(p.d1)} ({unit})",
-            # The last unknown observation is d1's weigh-in: lock the night before.
-            lock_at=at_local(p.d1 - timedelta(days=1), schedule.bet_lock, tz),
+            # Lock the night of the start day (D-031): daily markets lock the night before
+            # d1's weigh-in; weekly/monthly ones lock on drop night and are held to settle,
+            # so nobody bets late with days of extra information against fixed odds.
+            lock_at=at_local(p.d0, schedule.bet_lock, tz),
             settle_after=at_local(p.d1, schedule.weigh_in_end, tz),
             keys=[f"weight:{p.d0.isoformat()}", f"weight:{p.d1.isoformat()}"],
         )

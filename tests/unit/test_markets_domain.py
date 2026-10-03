@@ -206,7 +206,7 @@ def test_weekly_drop() -> None:
     assert len(out) == 6  # weight + 5 counts incl. workouts
     weight = out[0]
     assert (weight.window_start, weight.window_end) == (sunday, date(2026, 10, 11))
-    assert weight.lock_at == local(2026, 10, 10, 22)  # Saturday night
+    assert weight.lock_at == local(2026, 10, 4, 22)  # drop night, held to settle (D-031)
     for count in out[1:]:
         assert (count.window_start, count.window_end) == (date(2026, 10, 5), date(2026, 10, 11))
         assert count.lock_at == local(2026, 10, 4, 22)  # the drop night
@@ -218,7 +218,7 @@ def test_monthly_drop_crosses_dst_and_month_lengths() -> None:
     out = specs(Timeframe.MONTHLY, date(2026, 10, 31), ("steps",))
     weight, steps = out
     assert (weight.window_start, weight.window_end) == (date(2026, 10, 31), date(2026, 11, 30))
-    assert weight.lock_at == local(2026, 11, 29, 22)
+    assert weight.lock_at == local(2026, 10, 31, 22)
     assert steps.lock_at == local(2026, 10, 31, 22)
     assert (steps.window_start, steps.window_end) == (date(2026, 11, 1), date(2026, 11, 30))
     assert steps.title == "Steps in November 2026"
