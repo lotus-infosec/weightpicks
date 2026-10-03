@@ -14,6 +14,7 @@ from app.core.db import make_engine
 from app.core.logging import configure_logging
 from app.core.migrations import is_at_head
 from app.services import instance
+from app.services.instance import InstanceConfig
 from app.services.sim import app_clock
 from app.worker.jobs import INFRA_JOBS, domain_jobs
 from app.worker.registry import Job, run_due
@@ -38,6 +39,21 @@ def tick(
     return ran + run_due(domain, engine, domain_clock, seen)
 
 
+def reload_if_changed(
+    engine: Engine,
+    clock: Clock,
+    settings: Settings,
+    config: InstanceConfig,
+    jobs: Sequence[Job],
+) -> tuple[InstanceConfig, Sequence[Job]]:
+    """Rebuild the domain jobs when /setup or the admin changed the settings row."""
+    latest = instance.load(engine, clock, settings)
+    if latest == config:
+        return config, jobs
+    log.info("worker_settings_reloaded")
+    return latest, domain_jobs(settings, latest)
+
+
 def main() -> None:
     settings = Settings()
     configure_logging(settings.log_level, settings.log_format)
@@ -57,7 +73,8 @@ def main() -> None:
         stop.wait(SCHEMA_POLL_SECONDS)
 
     domain_clock = app_clock(settings, engine)
-    jobs = domain_jobs(settings, instance.load(engine, domain_clock, settings))
+    config = instance.load(engine, domain_clock, settings)
+    jobs: Sequence[Job] = domain_jobs(settings, config)
     seen: dict[str, str] = {}
     log.info(
         "worker_started",
@@ -67,6 +84,7 @@ def main() -> None:
     )
     while not stop.is_set():
         try:
+            config, jobs = reload_if_changed(engine, domain_clock, settings, config, jobs)
             tick(
                 engine,
                 infra=INFRA_JOBS,

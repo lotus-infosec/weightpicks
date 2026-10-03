@@ -11,6 +11,7 @@ from app.core.db import immediate
 from app.models import Observation, SyncRun
 from app.providers.base import Batch, DailyTotal, DataProvider, WeighIn
 from app.providers.simulated import SimulatedProvider
+from app.services.instance import InstanceConfig
 from app.services.observations import canonical_weigh_ins, latest_complete_through
 from app.services.sync import ProviderUnavailable, SyncResult, make_provider, run_sync
 from app.worker.jobs.garmin_sync import GarminSyncJob
@@ -197,9 +198,11 @@ def test_observations_are_append_only(migrated_engine: Engine) -> None:
             c.execute(text(statement))
 
 
-def test_sync_job_period_key_and_run(migrated_engine: Engine, settings: Settings) -> None:
+def test_sync_job_period_key_and_run(
+    migrated_engine: Engine, settings: Settings, instance_config: InstanceConfig
+) -> None:
     dev = settings.model_copy(update={"data_provider": "simulated"})
-    job = GarminSyncJob(dev)
+    job = GarminSyncJob(dev, instance_config)
     clock = SimClock(local(2026, 10, 5, 6, 7))
     assert job.due(clock.now()) == "2026-10-05T06:00"
     assert run_due([job], migrated_engine, clock) == ["garmin_sync"]

@@ -32,3 +32,17 @@ def sync_sim(engine: Engine, clock: SimClock) -> None:
     """Ingest the simulator (anchored Sep 1, 2026) up to `clock.now()`."""
     provider = SimulatedProvider(preset="steady-loser", seed=3, anchor_date=date(2026, 9, 1), tz=NY)
     assert run_sync(engine, clock, provider, tz=NY, unit="lb").status == "ok"
+
+
+def mark_setup_done(engine: Engine, settings: Settings) -> None:
+    """Pretend /setup already ran: the settings row exists with setup_completed_at."""
+    from sqlalchemy import update
+
+    from app.core.db import immediate
+    from app.models import InstanceSettingsRow
+    from app.services import instance
+
+    clock = SimClock(local(2026, 10, 1, 9))
+    with immediate(engine) as conn:
+        instance.ensure(conn, clock, settings)
+        conn.execute(update(InstanceSettingsRow).values(setup_completed_at=clock.now()))
