@@ -22,11 +22,16 @@ from app.domain.schedule import in_weigh_in_window, local_date, next_local_midni
 from app.domain.units import Unit, grams_to_tenths
 from app.models import Observation, SyncRun
 from app.providers.base import Batch, DataProvider
+from app.providers.garmindb import GarminDBProvider
+from app.providers.garmindb_runner import GarminDBRunner, GarminRunError
 from app.providers.simulated import SimulatedProvider
 from app.services import sim
+from app.services.ledger import active_season_id
+from app.services.outbox import Category, enqueue
 
 log = structlog.get_logger()
 FETCH_OVERLAP = timedelta(days=1)
+STALE_AFTER = timedelta(hours=36)
 EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 MAX_ERROR_LENGTH = 2000
 
@@ -73,7 +78,13 @@ def make_provider(
             anchor_date=state.anchor_date,
             tz=tz or settings.tz,
         )
-    raise ProviderUnavailable("the GarminDB provider arrives in STAGE10")
+    zone = tz or settings.tz
+    if isinstance(cached, GarminDBProvider) and cached.tz == zone:
+        return cached
+    if not (settings.garmin_home / ".GarminDb" / "garmin_tokens.json").is_file():
+        raise ProviderUnavailable("no Garmin token yet: run garmin-login once")
+    runner = GarminDBRunner(settings.garmin_home, settings.garmindb_python, zone.key)
+    return GarminDBProvider(settings.garmin_home, zone, runner)
 
 
 def _rows(
@@ -147,15 +158,9 @@ def run_sync(
         batch = provider.fetch_since(since, now)
         complete = provider.complete_through(now)
     except Exception as exc:
-        error = repr(exc)[:MAX_ERROR_LENGTH]
-        with immediate(engine) as conn:
-            conn.execute(
-                update(SyncRun)
-                .where(SyncRun.id == run_id)
-                .values(status="failed", finished_at=clock.now(), error=error)
-            )
-        log.error("sync_failed", provider=provider.name, run_id=run_id, error=error)
-        return SyncResult(run_id, "failed", 0, error)
+        # GarminRunError messages are already scrubbed; anything else is shown by type.
+        error = (str(exc) if isinstance(exc, GarminRunError) else repr(exc))[:MAX_ERROR_LENGTH]
+        return _fail(engine, clock, provider.name, run_id, error)
 
     rows = _rows(batch, provider.name, run_id, tz, unit)
     with immediate(engine) as conn:
@@ -182,4 +187,61 @@ def run_sync(
             )
         )
     log.info("sync_ok", provider=provider.name, run_id=run_id, rows_new=len(new_ids))
+    stale = _stale_since(engine, clock.now())
+    if stale is not None:
+        hours = int((clock.now() - stale).total_seconds() // 3600)
+        return _fail(engine, clock, provider.name, run_id, f"no new data for {hours} h")
     return SyncResult(run_id, "ok", len(new_ids))
+
+
+def _stale_since(engine: Engine, now: datetime) -> datetime | None:
+    """During an active season, when new data last arrived if that was STALE_AFTER ago
+    or more (BUILD_PLAN §2.3); None while data is fresh or no season is running."""
+    with engine.connect() as conn:
+        if active_season_id(conn) is None:
+            return None
+        last_new = conn.execute(
+            select(func.max(SyncRun.finished_at)).where(SyncRun.rows_new > 0)
+        ).scalar_one_or_none()
+        first_run = conn.execute(select(func.min(SyncRun.started_at))).scalar_one_or_none()
+    reference = last_new or first_run
+    if reference is None:
+        return None
+    if reference.tzinfo is None:  # func.max() bypasses UTCDateTime
+        reference = reference.replace(tzinfo=UTC)
+    return reference if now - reference >= STALE_AFTER else None
+
+
+def record_failure(engine: Engine, clock: Clock, provider: str, error: str) -> SyncResult:
+    """A sync that could not even start (e.g. no Garmin token yet) still shows up as a
+    failed run and alerts the admin."""
+    with immediate(engine) as conn:
+        run_id = conn.execute(
+            insert(SyncRun)
+            .values(provider=provider, started_at=clock.now(), status="running", rows_new=0)
+            .returning(SyncRun.id)
+        ).scalar_one()
+    return _fail(engine, clock, provider, run_id, error[:MAX_ERROR_LENGTH])
+
+
+def _fail(engine: Engine, clock: Clock, provider: str, run_id: int, error: str) -> SyncResult:
+    """Mark the run failed and queue one admin alert per failure streak (keyed on the
+    last good run), so a broken sync alerts once, not every 15 minutes."""
+    with immediate(engine) as conn:
+        conn.execute(
+            update(SyncRun)
+            .where(SyncRun.id == run_id)
+            .values(status="failed", finished_at=clock.now(), error=error)
+        )
+        last_ok = conn.execute(
+            select(func.max(SyncRun.id)).where(SyncRun.status == "ok")
+        ).scalar_one_or_none()
+        enqueue(
+            conn,
+            clock,
+            category=Category.ADMIN_ALERTS,
+            payload={"kind": "sync_failed", "provider": provider, "error": error},
+            dedupe_key=f"sync_failed:{last_ok or 0}",
+        )
+    log.error("sync_failed", provider=provider, run_id=run_id, error=error)
+    return SyncResult(run_id, "failed", 0, error)

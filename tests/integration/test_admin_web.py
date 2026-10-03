@@ -11,6 +11,7 @@ from app.core.clock import SystemClock
 from app.domain.markets import Timeframe
 from app.models import AuditEntry, Command, Market, User
 from app.services import auth, markets
+from app.services.sync import record_failure
 from app.web.main import create_app
 from tests.integration import web
 from tests.integration.test_bets_settlement import account
@@ -195,5 +196,14 @@ def test_sync_now_button_and_dashboard(clients: tuple[TestClient, TestClient, Wo
     with w.engine.connect() as conn:
         assert conn.execute(select(Command.type, Command.status)).one() == ("sync_now", "pending")
     assert "Last request: pending" in admin_c.get("/admin").text
+    admin_c.__exit__(None, None, None)
+    player_c.__exit__(None, None, None)
+
+
+def test_dashboard_shows_why_sync_failed(clients: tuple[TestClient, TestClient, World]) -> None:
+    admin_c, player_c, w = clients
+    record_failure(w.engine, w.clock, "garmindb", "Garmin login failed: rerun garmin-login")
+    page = admin_c.get("/admin").text
+    assert "Garmin login failed: rerun garmin-login" in page and "nothing settles" in page
     admin_c.__exit__(None, None, None)
     player_c.__exit__(None, None, None)

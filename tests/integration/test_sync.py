@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -8,14 +9,20 @@ from sqlalchemy.exc import IntegrityError
 from app.core.clock import SimClock
 from app.core.config import Settings
 from app.core.db import immediate
-from app.models import Observation, SyncRun
+from app.domain.markets import Timeframe
+from app.models import Market, Observation, OutboxMessage, SyncRun
 from app.providers.base import Batch, DailyTotal, DataProvider, WeighIn
+from app.providers.garmindb import GarminDBProvider
+from app.providers.garmindb_runner import GarminRunError
 from app.providers.simulated import SimulatedProvider
+from app.services import markets, settlement
 from app.services.instance import InstanceConfig
+from app.services.ledger import open_season
 from app.services.observations import canonical_weigh_ins, latest_complete_through
 from app.services.sync import ProviderUnavailable, SyncResult, make_provider, run_sync
 from app.worker.jobs.garmin_sync import GarminSyncJob
 from app.worker.registry import run_due
+from tests.integration.world import World
 
 NY = ZoneInfo("America/New_York")
 
@@ -211,7 +218,107 @@ def test_sync_job_period_key_and_run(
         assert conn.execute(select(SyncRun.status)).scalar_one() == "ok"
 
 
-def test_garmindb_provider_not_available_yet(migrated_engine: Engine, settings: Settings) -> None:
-    prod_like = settings.model_copy(update={"data_provider": "garmindb"})
-    with pytest.raises(ProviderUnavailable, match="STAGE10"):
-        make_provider(prod_like, migrated_engine, SimClock(local(2026, 10, 5, 7)))
+def test_garmindb_provider_needs_a_token(
+    migrated_engine: Engine, settings: Settings, tmp_path: Path
+) -> None:
+    prod_like = settings.model_copy(update={"data_provider": "garmindb", "garmin_home": tmp_path})
+    clock = SimClock(local(2026, 10, 5, 7))
+    with pytest.raises(ProviderUnavailable, match="garmin-login"):
+        make_provider(prod_like, migrated_engine, clock)
+    (tmp_path / ".GarminDb").mkdir()
+    (tmp_path / ".GarminDb" / "garmin_tokens.json").write_text("{}")
+    provider = make_provider(prod_like, migrated_engine, clock)
+    assert isinstance(provider, GarminDBProvider)
+    assert make_provider(prod_like, migrated_engine, clock, provider) is provider
+
+
+# ---- failure alerts and staleness (STAGE10) ------------------------------------------
+
+
+def _alerts(engine: Engine) -> list[tuple[str, dict[str, object]]]:
+    with engine.connect() as conn:
+        return [
+            (key, payload)
+            for key, payload in conn.execute(
+                select(OutboxMessage.dedupe_key, OutboxMessage.payload)
+                .where(OutboxMessage.category == "admin_alerts")
+                .order_by(OutboxMessage.id)
+            )
+        ]
+
+
+def test_a_failure_streak_alerts_once(migrated_engine: Engine) -> None:
+    clock = SimClock(local(2026, 10, 5, 7))
+    provider = ScriptedProvider()
+    assert _sync(migrated_engine, clock, provider).status == "ok"
+    provider.fail = True
+    for _ in range(3):
+        clock.advance(timedelta(minutes=15))
+        result = _sync(migrated_engine, clock, provider)
+        assert result.status == "failed" and "garmin down" in (result.error or "")
+    alerts = _alerts(migrated_engine)
+    assert len(alerts) == 1 and alerts[0][1]["kind"] == "sync_failed"
+    provider.fail = False
+    clock.advance(timedelta(minutes=15))
+    assert _sync(migrated_engine, clock, provider).status == "ok"
+    provider.fail = True
+    clock.advance(timedelta(minutes=15))
+    _sync(migrated_engine, clock, provider)
+    assert len(_alerts(migrated_engine)) == 2  # a new streak alerts again
+
+
+def test_garmin_errors_are_stored_as_given(migrated_engine: Engine) -> None:
+    class Expired(ScriptedProvider):
+        def fetch_since(self, since: datetime, now: datetime) -> Batch:
+            raise GarminRunError("Garmin login failed: rerun garmin-login")
+
+    result = _sync(migrated_engine, SimClock(local(2026, 10, 5, 7)), Expired())
+    assert result.error == "Garmin login failed: rerun garmin-login"
+
+
+def test_no_new_data_for_36_hours_fails_during_a_season(migrated_engine: Engine) -> None:
+    clock = SimClock(local(2026, 10, 5, 7))
+    provider = ScriptedProvider()
+    provider.weigh_ins = [WeighIn("w1", local(2026, 10, 5, 6), 90_000, "scale")]
+    assert _sync(migrated_engine, clock, provider).rows_new == 1
+    clock.advance(timedelta(hours=40))
+    assert _sync(migrated_engine, clock, provider).status == "ok"  # no season: no alarm
+    with immediate(migrated_engine) as conn:
+        open_season(conn, clock)
+    clock.advance(timedelta(minutes=15))
+    stale = _sync(migrated_engine, clock, provider)
+    assert stale.status == "failed" and stale.error == "no new data for 40 h"
+    assert _alerts(migrated_engine)[0][1]["error"] == "no new data for 40 h"
+    provider.weigh_ins.append(WeighIn("w2", clock.now() - timedelta(minutes=5), 89_900, "scale"))
+    clock.advance(timedelta(minutes=15))
+    assert _sync(migrated_engine, clock, provider).status == "ok"
+
+
+def test_stale_data_blocks_settlement(world: World) -> None:
+    """A market whose window has ended does not settle while syncs are failing."""
+    w = world
+    markets.drop(w.engine, w.clock, w.config, Timeframe.DAILY, date(2026, 10, 5))
+    provider = ScriptedProvider()
+    provider.fail = True
+    w.clock.advance(timedelta(days=2))
+    markets.lock_due(w.engine, w.clock.now())
+    for _ in range(4):
+        w.clock.advance(timedelta(hours=2))
+        assert _sync(w.engine, w.clock, provider).status == "failed"
+    settle_pass = settlement.settle_due(w.engine, w.clock)
+    assert settle_pass.settled == 0
+    with w.engine.connect() as conn:
+        statuses = set(conn.execute(select(Market.status)).scalars())
+    assert "settled" not in statuses
+
+
+def test_sync_job_without_a_token_records_a_failed_run(
+    migrated_engine: Engine, settings: Settings, instance_config: InstanceConfig, tmp_path: Path
+) -> None:
+    real = settings.model_copy(update={"data_provider": "garmindb", "garmin_home": tmp_path})
+    clock = SimClock(local(2026, 10, 5, 7))
+    run_due([GarminSyncJob(real, instance_config)], migrated_engine, clock)
+    with migrated_engine.connect() as conn:
+        status, error = conn.execute(select(SyncRun.status, SyncRun.error)).one()
+    assert status == "failed" and "garmin-login" in (error or "")
+    assert _alerts(migrated_engine)[0][1]["kind"] == "sync_failed"

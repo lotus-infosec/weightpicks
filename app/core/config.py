@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     wp_cookie_secure: bool = True
     # Where the Docker build puts the compiled stylesheet (outside the dev source mount).
     wp_static_build_dir: Path = Path("/app/static-build")
+    # GarminDB (D-038): its home (config, token, downloads, SQLite) and its own venv.
+    garmin_home: Path = Path("/garmin")
+    garmindb_python: Path = Path("/opt/garmindb/bin/python")
 
     @field_validator("wp_timezone")
     @classmethod

@@ -21,6 +21,7 @@ CONFIG_DIR = Path(os.environ.get("GARMINDB_CONFIG_DIR", "/garmin/.GarminDb"))
 TOKEN_FILE = "garmin_tokens.json"  # noqa: S105 - a file name, not a secret
 CONFIG_FILE = "GarminConnectConfig.json"
 HISTORY_DAYS = 120  # the first sync downloads this much history, not years of it
+MONITORING_DAYS = 45
 STATS = ("weight", "sleep", "rhr", "hrv", "monitoring")
 
 Factory = Callable[..., Any]
@@ -30,6 +31,7 @@ Ask = Callable[[str], str]
 def garmindb_config(today: date) -> dict[str, Any]:
     """GarminDB settings: only the data WeightPicks reads, and no credentials."""
     start = (today - timedelta(days=HISTORY_DAYS)).strftime("%m/%d/%Y")
+    monitoring_start = (today - timedelta(days=MONITORING_DAYS)).strftime("%m/%d/%Y")
     return {
         "db": {"type": "sqlite"},
         "garmin": {"domain": "garmin.com"},
@@ -41,6 +43,9 @@ def garmindb_config(today: date) -> dict[str, Any]:
         },
         "data": {
             **{f"{stat}_start_date": start for stat in STATS},
+            # Monitoring downloads a FIT archive per day (~5 s each); 45 days keeps the
+            # first sync well inside the 15-minute timeout.
+            "monitoring_start_date": monitoring_start,
             "download_latest_activities": 25,
             "download_all_activities": 200,
         },
