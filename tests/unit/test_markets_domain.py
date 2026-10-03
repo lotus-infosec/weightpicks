@@ -16,6 +16,7 @@ from app.domain.markets import (
     MetricTotalParams,
     PricingData,
     Schedule,
+    SettlementData,
     Timeframe,
     WeightChangeParams,
     drop_specs,
@@ -252,11 +253,15 @@ def test_params_are_validated() -> None:
         MetricTotalParams.model_validate({"metric": "sleep", "start": "2026-10-05", "end": "x"})
 
 
-def test_registry_and_settle_stub() -> None:
+def test_registry_templates_settle_their_markets() -> None:
     assert set(TEMPLATES) == {"weight_change_ou", "metric_total_ou"}
-    spec = specs(Timeframe.DAILY, date(2026, 10, 5))[0]
-    with pytest.raises(NotImplementedError):
-        TEMPLATES[spec.template].settle(spec, [])
+    weight, steps = specs(Timeframe.DAILY, date(2026, 10, 5))[:2]
+    data = SettlementData(
+        weigh_ins={date(2026, 10, 5): 2000, date(2026, 10, 6): 1990},
+        daily_totals={date(2026, 10, 6): 9500},
+    )
+    assert TEMPLATES[weight.template].settle(weight.params, -5, data).winner == "under"
+    assert TEMPLATES[steps.template].settle(steps.params, 94995, data).winner == "over"
 
 
 # ---- pricing ---------------------------------------------------------------------------

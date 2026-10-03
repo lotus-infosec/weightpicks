@@ -93,6 +93,7 @@ def test_registered_jobs_have_unique_names(
         "weekly_drop",
         "monthly_drop",
         "lock_markets",
+        "settle_markets",
         "ledger_verify",
     ]
 

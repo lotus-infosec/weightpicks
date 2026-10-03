@@ -1,8 +1,6 @@
 from collections import Counter
-from dataclasses import dataclass
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
-from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import Engine, func, select, update
@@ -12,45 +10,12 @@ from app.core.config import Settings
 from app.core.db import immediate
 from app.domain.markets import InvalidTransition, MarketStatus, Timeframe
 from app.models import InstanceSettingsRow, JobRun, Market, OddsVersion, Selection
-from app.providers.simulated import SimulatedProvider
 from app.services import instance, markets, sim
-from app.services.instance import InstanceConfig
 from app.services.ledger import open_season
-from app.services.sync import run_sync
 from app.worker.jobs import domain_jobs
-from app.worker.jobs.markets import LOCK_RECHECK, LockMarketsJob, LockSchedule
+from app.worker.jobs.markets import RECHECK, DueCache, LockMarketsJob
 from app.worker.registry import Job, JobContext, run_due
-
-NY = ZoneInfo("America/New_York")
-DAY = date(2026, 10, 5)  # a Monday
-
-
-def local(y: int, m: int, d: int, hh: int, mm: int = 0) -> datetime:
-    return datetime(y, m, d, hh, mm, tzinfo=NY).astimezone(UTC)
-
-
-@dataclass
-class World:
-    engine: Engine
-    clock: SimClock
-    config: InstanceConfig
-    settings: Settings
-
-
-def _sync(engine: Engine, clock: SimClock) -> None:
-    provider = SimulatedProvider(preset="steady-loser", seed=3, anchor_date=date(2026, 9, 1), tz=NY)
-    assert run_sync(engine, clock, provider, tz=NY, unit="lb").status == "ok"
-
-
-@pytest.fixture
-def world(migrated_engine: Engine, settings: Settings) -> World:
-    """Five weeks of simulated history, a season, the settings row; 12:00 on Mon Oct 5."""
-    clock = SimClock(local(2026, 10, 5, 12))
-    _sync(migrated_engine, clock)
-    with immediate(migrated_engine) as conn:
-        open_season(conn, clock)
-        config = instance.ensure(conn, clock, settings)
-    return World(migrated_engine, clock, config, settings)
+from tests.integration.world import DAY, NY, World, local, sync_sim
 
 
 def market_rows(engine: Engine) -> list[Any]:
@@ -125,7 +90,7 @@ def test_weekly_and_monthly_drops(world: World) -> None:
     )
     assert len(weekly.created) == 6
     world.clock.set(local(2026, 10, 31, 18))
-    _sync(world.engine, world.clock)
+    sync_sim(world.engine, world.clock)
     monthly = markets.drop(
         world.engine, world.clock, world.config, Timeframe.MONTHLY, date(2026, 10, 31)
     )
@@ -154,7 +119,7 @@ def test_drop_skips_late_markets(world: World, now: datetime, reason: str) -> No
 
 def test_drop_needs_a_season(migrated_engine: Engine, settings: Settings) -> None:
     clock = SimClock(local(2026, 10, 5, 12))
-    _sync(migrated_engine, clock)
+    sync_sim(migrated_engine, clock)
     with immediate(migrated_engine) as conn:
         config = instance.ensure(conn, clock, settings)
     result = markets.drop(migrated_engine, clock, config, Timeframe.DAILY, DAY)
@@ -248,30 +213,30 @@ def test_markets_lock_at_their_lock_time(world: World) -> None:
 
 
 def test_lock_cache_still_finds_markets_created_elsewhere(world: World) -> None:
-    locks = LockSchedule()
-    job = LockMarketsJob(locks)
+    locks = DueCache()
+    job = LockMarketsJob(locks, DueCache())
 
     def tick() -> int:
         now = world.clock.now()
         return job.run(JobContext(world.engine, world.clock, now, "tick"))
 
-    assert tick() == 0 and locks.next_lock is None
+    assert tick() == 0 and locks.next_due is None
     # Another process drops markets; this process's cache is not told.
     markets.drop(world.engine, world.clock, world.config, Timeframe.DAILY, DAY)
     world.clock.set(local(2026, 10, 5, 22, 0))
     assert tick() == 5
-    assert locks.next_lock is None
+    assert locks.next_due is None
 
 
 def test_lock_schedule_cache() -> None:
-    locks = LockSchedule()
+    locks = DueCache()
     t = local(2026, 10, 5, 12)
     assert locks.needs_check(t)
-    locks.next_lock, locks.checked_at = t + timedelta(hours=10), t
+    locks.next_due, locks.checked_at = t + timedelta(hours=10), t
     assert not locks.needs_check(t + timedelta(minutes=1))
-    assert locks.needs_check(t + LOCK_RECHECK)
+    assert locks.needs_check(t + RECHECK)
     assert locks.needs_check(t - timedelta(minutes=1))  # clock moved back: recheck
-    locks.next_lock = t + timedelta(minutes=2)
+    locks.next_due = t + timedelta(minutes=2)
     assert locks.needs_check(t + timedelta(minutes=2))
     locks.invalidate()
     assert locks.needs_check(t + timedelta(seconds=1))
@@ -364,7 +329,11 @@ def test_fourteen_simulated_days_drop_and_lock_on_schedule(
     assert ("daily", "workouts") not in by_kind
     for r in rows:
         assert r.lock_at.astimezone(NY).time() == time(22, 0), r.title
-        assert r.status == ("locked" if r.lock_at <= end else "open"), r.title
+        if r.lock_at > end:
+            assert r.status == "open", r.title
+        else:  # locked on time; settled once its data was complete (STAGE06)
+            assert r.status in ("locked", "settled"), r.title
+            assert r.status == "locked" or r.settle_after <= end, r.title
     daily_weight = sorted(
         r.window_start for r in rows if r.timeframe == "daily" and r.metric == "weight"
     )
