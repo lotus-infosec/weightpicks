@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     # Instance time zone and weight unit; owned by /setup from STAGE08 (D-027).
     wp_timezone: str = "America/New_York"
     wp_unit: Literal["lb", "kg"] = "lb"
+    # Session cookies are Secure (HTTPS-only). Dev may turn this off for a plain-http
+    # LAN phone test; production refuses it (D-034).
+    wp_cookie_secure: bool = True
+    # Where the Docker build puts the compiled stylesheet (outside the dev source mount).
+    wp_static_build_dir: Path = Path("/app/static-build")
 
     @field_validator("wp_timezone")
     @classmethod
@@ -52,6 +57,12 @@ class Settings(BaseSettings):
             raise ValueError(
                 f"APP_SECRET_KEY must be at least {MIN_SECRET_KEY_LENGTH} characters in production"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _secure_cookies_outside_dev(self) -> "Settings":
+        if not self.wp_cookie_secure and self.app_env != "dev":
+            raise ValueError("WP_COOKIE_SECURE=false is only allowed with APP_ENV=dev")
         return self
 
     @cached_property

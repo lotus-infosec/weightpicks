@@ -1,6 +1,7 @@
-"""`wp` command line: migrations, health checks, ledger verification and dev tools."""
+"""`wp` command line: migrations, health checks, ledger verification, bootstrap and dev tools."""
 
 import argparse
+import getpass
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -17,7 +18,7 @@ from app.core.migrations import current_revision, upgrade_to_head
 from app.domain.economy import DEFAULT_ECONOMY
 from app.domain.money import Money
 from app.models import Heartbeat, Observation, SyncRun
-from app.services import ledger, sim
+from app.services import auth, ledger, sim
 from app.services.observations import canonical_weigh_ins, latest_complete_through
 from app.services.users import ensure_player
 
@@ -191,6 +192,35 @@ def _calibrate(settings: Settings, args: argparse.Namespace) -> int:
     return {"PASS": 0, "FAIL": 1}.get(report.status, 2)
 
 
+def _registration_code(settings: Settings) -> int:
+    engine = make_engine(settings.db_url)
+    try:
+        code = auth.rotate_registration_code(engine, SystemClock())
+    finally:
+        engine.dispose()
+    print(f"new registration code (the previous one no longer works): {code}")
+    return 0
+
+
+def _admin_create(settings: Settings, email: str, name: str) -> int:
+    password = getpass.getpass("admin password: ")
+    if password != getpass.getpass("repeat password: "):
+        print("passwords do not match")
+        return 1
+    engine = make_engine(settings.db_url)
+    try:
+        user_id = auth.create_admin(
+            engine, SystemClock(), email=email, display_name=name, password=password
+        )
+    except auth.AuthError as exc:
+        print(f"refused: {exc.message}")
+        return 1
+    finally:
+        engine.dispose()
+    print(f"admin created (user id {user_id})")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="wp", description="WeightPicks command line")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -220,6 +250,14 @@ def main(argv: list[str] | None = None) -> int:
     cal.add_argument("--days", type=int, default=365)
     cal.add_argument("--seeds", type=int, default=20)
     cal.add_argument("--out", default="docs/calibration", help="directory, or - for stdout")
+    code_cmd = commands.add_parser("registration-code", help="registration codes")
+    code_sub = code_cmd.add_subparsers(dest="code_command", required=True)
+    code_sub.add_parser("new", help="replace the registration code and print the new one")
+    admin_cmd = commands.add_parser("admin", help="the instance admin")
+    admin_sub = admin_cmd.add_subparsers(dest="admin_command", required=True)
+    admin_new = admin_sub.add_parser("create", help="create the admin (prompts for a password)")
+    admin_new.add_argument("--email", required=True)
+    admin_new.add_argument("--name", required=True, help="display name")
     args = parser.parse_args(argv)
 
     if args.command == "health" and args.web:
@@ -236,6 +274,10 @@ def main(argv: list[str] | None = None) -> int:
         return _sim(settings, args)
     if args.command == "calibrate":
         return _calibrate(settings, args)
+    if args.command == "registration-code":
+        return _registration_code(settings)
+    if args.command == "admin":
+        return _admin_create(settings, args.email, args.name)
     return _health_worker(settings)
 
 
