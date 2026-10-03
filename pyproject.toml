@@ -57,10 +57,17 @@ warn_unused_ignores = true
 module = ["app.domain.*", "app.services.*"]
 strict = true
 
+[[tool.mypy.overrides]]
+module = ["scipy", "scipy.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
-markers = ["perf: wall-clock performance budgets (CI runs them without coverage)"]
+markers = [
+    "perf: wall-clock performance budgets (CI runs them without coverage)",
+    "calibration: full line-engine calibration runs (CI runs them without coverage)",
+]
 
 [tool.coverage.run]
 source = ["app"]
