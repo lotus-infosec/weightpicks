@@ -187,8 +187,8 @@ def _calibrate(settings: Settings, args: argparse.Namespace) -> int:
         path = Path(args.out) / f"{args.preset}.md"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
-        print(f"wrote {path}: {'PASS' if report.passed else 'FAIL'} ({report.samples:,} samples)")
-    return 0 if report.passed else 1
+        print(f"wrote {path}: {report.status} ({report.samples:,} samples)")
+    return {"PASS": 0, "FAIL": 1}.get(report.status, 2)
 
 
 def main(argv: list[str] | None = None) -> int:

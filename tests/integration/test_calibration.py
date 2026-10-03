@@ -22,6 +22,18 @@ def test_small_run_report_is_deterministic_and_well_formed() -> None:
     assert "**Result:" in text
 
 
+def test_too_little_data_is_reported_as_insufficient(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    report = calibration.run("chaotic", days=60, seeds=1, tz=NY, unit="lb")
+    assert report.status == "INSUFFICIENT DATA"
+    assert "**Result: INSUFFICIENT DATA**" in calibration.render_markdown(report)
+    monkeypatch.setenv("APP_ENV", "dev")
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    args = ["calibrate", "--preset", "chaotic", "--days", "60", "--seeds", "1", "--out", "-"]
+    assert main(args) == 2
+
+
 def test_decile_grading_rules() -> None:
     ok = calibration.Decile(low=0.5, n=500, implied=0.55, realised=0.59)
     bad = calibration.Decile(low=0.5, n=500, implied=0.55, realised=0.61)
@@ -53,7 +65,7 @@ def test_cli_writes_report(
     assert "wrote" in capsys.readouterr().out
     assert main(
         ["calibrate", "--preset", "plateau", "--days", "150", "--seeds", "1", "--out", "-"]
-    ) in (0, 1)
+    ) in (0, 1, 2)  # 2 = insufficient data for a 1-seed run
     assert "**Result:" in capsys.readouterr().out
 
 

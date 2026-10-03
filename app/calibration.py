@@ -62,6 +62,12 @@ class CalibrationReport:
     def passed(self) -> bool:
         return all(d.ok for d in self.deciles) and any(d.graded for d in self.deciles)
 
+    @property
+    def status(self) -> str:
+        if not any(d.graded for d in self.deciles):
+            return "INSUFFICIENT DATA"
+        return "PASS" if self.passed else "FAIL"
+
 
 def canonical_tenths(
     provider: SimulatedProvider, days: int, tz: ZoneInfo, unit: Unit
@@ -178,5 +184,5 @@ def render_markdown(report: CalibrationReport) -> str:
             f"| {d.low:.1f}-{d.low + 0.1:.1f} | {d.n:,} | {d.implied:.1%} | {d.realised:.1%} "
             f"| {(d.realised - d.implied) * 100:+.1f} pts | {status} |"
         )
-    lines += ["", f"**Result: {'PASS' if report.passed else 'FAIL'}**", ""]
+    lines += ["", f"**Result: {report.status}**", ""]
     return "\n".join(lines)
