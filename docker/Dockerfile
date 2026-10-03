@@ -46,6 +46,13 @@ COPY app ./app
 # The project is installed editable, so /app is on sys.path and dev can mount source over it.
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
+# GarminDB gets its own venv: the worker runs it only as a subprocess, so its dependencies
+# never mix with the app's (D-038). Exact versions and hashes are pinned.
+COPY docker/garmindb-requirements.txt /tmp/garmindb-requirements.txt
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv venv /opt/garmindb \
+ && uv pip install --python /opt/garmindb/bin/python --require-hashes --no-deps \
+      -r /tmp/garmindb-requirements.txt
 
 # ---- runtime: venv + source only, non-root, read-only friendly ----
 FROM python:3.12-slim-bookworm@sha256:54c85f3c47607a77f32adec749d3c81d1348bf25833671f512b26a9b6d778cb3 AS runtime
@@ -55,10 +62,12 @@ ENV PATH=/opt/venv/bin:$PATH \
     DATA_DIR=/data
 RUN groupadd --system --gid 10001 wp \
  && useradd --system --uid 10001 --gid wp --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin wp \
- && mkdir -p /data \
- && chown 10001:10001 /data
+ && mkdir -p /data /garmin/.GarminDb \
+ && chown 10001:10001 /data /garmin /garmin/.GarminDb \
+ && chmod 700 /garmin/.GarminDb
 WORKDIR /app
 COPY --from=build /opt/venv /opt/venv
+COPY --from=build /opt/garmindb /opt/garmindb
 COPY --from=build /app /app
 # Outside /app/app so the dev source mount does not hide it (WP_STATIC_BUILD_DIR).
 COPY --from=css /out/app.css /app/static-build/app.css

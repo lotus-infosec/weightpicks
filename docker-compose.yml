@@ -37,8 +37,8 @@ services:
       web: { condition: service_healthy }
     volumes:
       - wp_data:/data
-      - wp_garmin:/garmin                  # GarminDB home (config + SQLite)
-      - wp_garmin_tokens:/garmin-tokens
+      - wp_garmin:/garmin                  # GarminDB home: downloads + SQLite
+      - wp_garmin_tokens:/garmin/.GarminDb  # token file + GarminDB config (mode 600)
     healthcheck:
       test: ["CMD", "python", "-m", "app.cli", "health", "--worker"]  # heartbeat < 3 min old
       interval: 60s
@@ -57,7 +57,7 @@ services:
     tty: true
     volumes:
       - wp_garmin:/garmin
-      - wp_garmin_tokens:/garmin-tokens
+      - wp_garmin_tokens:/garmin/.GarminDb  # token file + GarminDB config (mode 600)
 
 volumes:
   wp_data: {}            # app.db (+WAL), backups/, uploads/, pending/

@@ -22,8 +22,8 @@ case "$role" in
     exec wp "$@"
     ;;
   garmin-login)
-    echo "garmin-login is not available yet (arrives in STAGE10)." >&2
-    exit 1
+    # GarminDB's own venv; -P keeps the script's folder off sys.path (D-038).
+    exec /opt/garmindb/bin/python -P /app/app/providers/garmin_login.py
     ;;
   *)
     echo "unknown role: $role (expected web, worker, cli or garmin-login)" >&2
