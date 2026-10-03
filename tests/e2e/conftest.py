@@ -226,3 +226,114 @@ def fresh_server(tmp_path: Path) -> Iterator[FreshServer]:
     yield FreshServer(f"http://127.0.0.1:{port}", token)
     server.should_exit = True
     thread.join(timeout=10)
+
+
+@dataclass
+class OpsServer:
+    url: str
+    admin_email: str
+    password: str
+    reckless_id: int
+    steady_id: int
+
+
+@pytest.fixture
+def ops_server(tmp_path: Path) -> Iterator[OpsServer]:
+    """A dev instance on the persisted SimClock (so /dev/clock moves time), set up, with an
+    admin, two players and bets: one player has staked everything on a losing side."""
+    from sqlalchemy import select
+
+    from app.calibration import canonical_tenths
+    from app.models import Market, OddsVersion, Selection
+    from app.providers.simulated import SimulatedProvider
+    from app.services import ledger, sim
+    from app.services.bets import place_bet
+
+    settings = Settings(
+        app_env="dev",
+        data_dir=tmp_path,
+        data_provider="simulated",
+        log_format="console",
+        log_level="WARNING",
+    )
+    engine = make_engine(settings.db_url)
+    upgrade_to_head(engine, tmp_path / ".migrate.lock")
+    start = local(2026, 10, 5, 0, 30)
+    with immediate(engine) as conn:
+        state = sim.ensure_state(
+            conn, SimClock(start), seed=settings.sim_seed, tz_name=settings.wp_timezone
+        )
+        ledger.open_season(conn, SimClock(start))
+    sim.advance(engine, settings, local(2026, 10, 5, 12) - start)  # first daily drop at 11:00
+    clock = SimClock(local(2026, 10, 5, 12))
+    admin_email, password = "admin@example.invalid", "correct horse battery"
+    auth.create_admin(
+        engine, SystemClock(), email=admin_email, display_name="Admin", password=password
+    )
+    mark_setup_done(engine, settings)
+    code = auth.rotate_registration_code(engine, SystemClock())
+    ids = [
+        auth.register(
+            engine,
+            SystemClock(),
+            email=f"{n}@example.invalid",
+            display_name=n.title(),
+            password=password,
+            code=code,
+            ip=f"10.0.0.{i}",
+        )
+        for i, n in enumerate(("reckless", "steady"), start=1)
+    ]
+    provider = SimulatedProvider(
+        preset=state.preset, seed=state.seed, anchor_date=state.anchor_date, tz=settings.tz
+    )
+    series = canonical_tenths(provider, 10, settings.tz, settings.wp_unit)
+    change = series[date(2026, 10, 6)] - series[date(2026, 10, 5)]
+    with engine.connect() as conn:
+        market_id, line, version = conn.execute(
+            select(Market.id, OddsVersion.line_x10, OddsVersion.id)
+            .join(OddsVersion, (OddsVersion.market_id == Market.id) & OddsVersion.is_current)
+            .where(Market.metric == "weight", Market.timeframe == "daily")
+        ).one()
+        assert line is not None
+        losing = "under" if change > line else "over"
+        selections = dict(
+            conn.execute(
+                select(Selection.side, Selection.id).where(Selection.market_id == market_id)
+            ).all()
+        )
+    assert change != line, "pick another seed: the line tied"
+    place_bet(
+        engine,
+        clock,
+        user_id=ids[0],
+        selection_id=selections[losing],
+        odds_version_id=version,
+        stake_cents=100_000,
+        client_key="all-in",
+    )
+    place_bet(
+        engine,
+        clock,
+        user_id=ids[1],
+        selection_id=selections["over"],
+        odds_version_id=version,
+        stake_cents=2_500,
+        client_key="steady-1",
+    )
+    engine.dispose()
+
+    port = _free_port()
+    server = uvicorn.Server(
+        uvicorn.Config(create_app(settings), host="127.0.0.1", port=port, log_level="warning")
+    )
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 10
+    while not server.started:
+        if time.monotonic() > deadline:
+            raise RuntimeError("live server did not start")
+        time.sleep(0.05)
+    yield OpsServer(f"http://127.0.0.1:{port}", admin_email, password, ids[0], ids[1])
+    server.should_exit = True
+    thread.join(timeout=10)
