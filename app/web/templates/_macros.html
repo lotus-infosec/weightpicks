@@ -1,0 +1,51 @@
+{% macro side_buttons(card) -%}
+<div class="sides">
+  {% for s in card.sides %}
+  <button type="button" class="side side-{{ s.side }}" x-on:click="pick"
+          data-testid="pick-{{ card.market_id }}-{{ s.side }}"
+          data-title="{{ card.title }}" data-side="{{ s.side }}"
+          data-line="{{ card.line_x10 | line(card.metric) }}" data-odds-text="{{ s.odds | odds }}"
+          data-american="{{ s.odds or 0 }}" data-selection="{{ s.selection_id }}"
+          data-version="{{ card.odds_version_id }}"{% if s.odds is none %} disabled{% endif %}>
+    <span class="side-name">{{ "Over" if s.side == "over" else "Under" }}</span>
+    <span class="side-odds">{{ s.odds | odds }}</span>
+  </button>
+  {% endfor %}
+</div>
+{%- endmacro %}
+
+{% macro slip() -%}
+<aside class="slip" x-show="open" x-cloak data-testid="slip">
+  <div class="slip-head">
+    <strong x-text="title"></strong>
+    <button type="button" class="link" x-on:click="close" aria-label="Close slip">Close</button>
+  </div>
+  <p class="slip-pick"><span x-text="sideLabel"></span> <span x-text="line"></span> at <span x-text="oddsText"></span></p>
+  <label class="stake">Stake ($)
+    <input type="text" inputmode="decimal" name="stake" x-model="stake" placeholder="25" autocomplete="off" data-testid="stake">
+  </label>
+  <p class="muted">Returns <span x-text="payoutText" data-testid="payout"></span> if it wins</p>
+  <button type="button" class="primary wide" x-on:click="place" x-bind:disabled="cannotPlace" data-testid="place">Place bet</button>
+  <p class="slip-message" x-show="message" x-text="message" x-bind:class="messageClass" role="status" data-testid="slip-message"></p>
+</aside>
+{%- endmacro %}
+
+{% macro bet_rows(bets, show_name=False) -%}
+{% if not bets %}<p class="muted">No bets yet.</p>{% endif %}
+<ul class="bets">
+  {% for b in bets %}
+  <li class="bet status-{{ b.status }}" data-testid="bet-{{ b.bet_id }}">
+    <div class="bet-main">
+      {% if show_name %}<strong>{{ b.display_name }}</strong> · {% endif %}
+      <a href="/markets/{{ b.market_id }}">{{ b.title }}</a>
+    </div>
+    <div class="bet-detail">
+      {{ "Over" if b.side == "over" else "Under" }} {{ b.line_x10 | line(b.metric) }} at {{ b.american | odds }}
+      · {{ b.stake_cents | money }}
+      · {% if b.status == "open" %}to return {{ b.potential_payout_cents | money }}
+        {% elif b.status == "lost" %}lost{% else %}{{ b.status }}, returned {{ b.payout_cents | money }}{% endif %}
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{%- endmacro %}

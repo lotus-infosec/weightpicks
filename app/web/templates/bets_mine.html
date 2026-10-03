@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% set active = "mine" %}
+{% block title %}My bets · WeightPicks{% endblock %}
+{% block content %}
+<h1>My bets</h1>
+{% if wallet %}<p class="muted">Balance {{ wallet.balance_cents | money }} · P&amp;L {{ wallet.pnl_cents | signed_money }}</p>{% endif %}
+<div id="my-bets" hx-get="/bets/mine" hx-trigger="bet-placed from:body, every 60s">{% include "_my_bets.html" %}</div>
+{% endblock %}

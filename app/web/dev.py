@@ -1,14 +1,14 @@
 """Dev-only routes (`APP_ENV=dev`): the simulation clock and simulator controls.
 
-Mounted only in dev and reachable only on the loopback port. Admin auth and CSRF
-are added when accounts exist (STAGE07) — D-027.
+Mounted only in dev and reachable only on the loopback port. Admin only; every POST
+carries the CSRF token like the rest of the app (STAGE07 closes the D-027 debt).
 """
 
 from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -19,6 +19,7 @@ from app.models import Observation, SyncRun
 from app.providers.simulated import PRESETS
 from app.services import sim
 from app.services.observations import canonical_weigh_ins, latest_complete_through
+from app.web.security import require_admin, require_session
 
 TEMPLATES = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
@@ -33,7 +34,9 @@ async def _form(request: Request) -> dict[str, str]:
 
 
 def build_router(settings: Settings, engine: Engine) -> APIRouter:
-    router = APIRouter(prefix="/dev", include_in_schema=False)
+    router = APIRouter(
+        prefix="/dev", include_in_schema=False, dependencies=[Depends(require_admin)]
+    )
 
     def back(error: str | None = None) -> RedirectResponse:
         url = "/dev/clock" + (f"?{urlencode({'error': error})}" if error else "")
@@ -70,6 +73,7 @@ def build_router(settings: Settings, engine: Engine) -> APIRouter:
                 "canonical": [(c.local_date, _tenths(c.value), c.source) for c in canonical],
                 "complete": sorted(complete.items()),
                 "error": error,
+                "csrf": require_admin(require_session(request)).csrf_token,
             },
         )
 

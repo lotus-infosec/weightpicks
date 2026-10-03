@@ -1,0 +1,15 @@
+{% from "_macros.html" import side_buttons %}
+{% if not cards %}<p class="muted empty">No open {{ tab }} markets right now. New lines drop at 11:00.</p>{% endif %}
+<div class="cards">
+  {% for c in cards %}
+  <article class="market" data-testid="market-{{ c.market_id }}" data-metric="{{ c.metric }}">
+    <header>
+      <a href="/markets/{{ c.market_id }}" class="market-title">{{ c.title }}</a>
+      {% if c.provisional %}<span class="badge">provisional</span>{% endif %}
+    </header>
+    <p class="market-line">O/U <strong>{{ c.line_x10 | line(c.metric) }}</strong></p>
+    {{ side_buttons(c) }}
+    <p class="muted small">Locks {{ c.lock_at | local_time }}</p>
+  </article>
+  {% endfor %}
+</div>

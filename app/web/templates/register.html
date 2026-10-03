@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Register · WeightPicks{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Create an account</h1>
+  {% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+  <form method="post" action="/api/auth/register" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ form_csrf }}">
+    <label>Registration code <input type="text" name="code" autocomplete="off" autocapitalize="characters" required></label>
+    <label>Email <input type="email" name="email" value="{{ form.email or '' }}" autocomplete="email" required></label>
+    <label>Display name <span class="muted">(shown on bets)</span>
+      <input type="text" name="display_name" value="{{ form.display_name or '' }}" maxlength="40" required></label>
+    <label>Password <span class="muted">(10+ characters)</span>
+      <input type="password" name="password" minlength="10" autocomplete="new-password" required></label>
+    <button type="submit" class="primary">Create account</button>
+  </form>
+  <p class="muted">Already registered? <a href="/login">Log in</a></p>
+</section>
+{% endblock %}

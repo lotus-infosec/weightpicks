@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
+  <meta name="csrf-token" content="{{ csrf }}">
   <title>Simulation clock · WeightPicks dev</title>
 </head>
 <body>
@@ -19,15 +20,18 @@
        data from <code>{{ state.anchor_date }}</code></p>
 
     <form method="post" action="/dev/clock/advance">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
       <label>Days <input type="number" name="days" value="1" min="0" max="365"></label>
       <label>Hours <input type="number" name="hours" value="0" min="0" max="23"></label>
       <button type="submit">Advance (runs every tick)</button>
     </form>
     <form method="post" action="/dev/clock/set">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
       <label>Jump to (local) <input type="datetime-local" name="to" required></label>
       <button type="submit">Set (skips ticks)</button>
     </form>
     <form method="post" action="/dev/clock/reseed">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
       <label>Preset
         <select name="preset">
           {% for p in presets %}<option value="{{ p }}" {% if p == state.preset %}selected{% endif %}>{{ p }}</option>{% endfor %}
