@@ -1,12 +1,12 @@
-"""`wp` command line: migrations, health checks, ledger verification and dev seeding."""
+"""`wp` command line: migrations, health checks, ledger verification and dev tools."""
 
 import argparse
 import sys
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import httpx
 import structlog
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.clock import SystemClock
 from app.core.config import Settings
@@ -15,8 +15,9 @@ from app.core.logging import configure_logging
 from app.core.migrations import current_revision, upgrade_to_head
 from app.domain.economy import DEFAULT_ECONOMY
 from app.domain.money import Money
-from app.models import Heartbeat
-from app.services import ledger
+from app.models import Heartbeat, Observation, SyncRun
+from app.services import ledger, sim
+from app.services.observations import canonical_weigh_ins, latest_complete_through
 from app.services.users import ensure_player
 
 WEB_HEALTH_URL = "http://127.0.0.1:8000/healthz"
@@ -117,6 +118,61 @@ def _seed(settings: Settings, users: int) -> int:
     return 0
 
 
+def _sim_status(settings: Settings) -> int:
+    engine = make_engine(settings.db_url)
+    try:
+        state = sim.load_state(engine, settings)
+        with engine.connect() as conn:
+            counts = dict(
+                conn.execute(
+                    select(Observation.metric, func.count()).group_by(Observation.metric)
+                ).all()
+            )
+            canonical = canonical_weigh_ins(conn, state.anchor_date, state.sim_now.date())
+            complete = latest_complete_through(conn)
+            syncs = dict(
+                conn.execute(select(SyncRun.status, func.count()).group_by(SyncRun.status)).all()
+            )
+    finally:
+        engine.dispose()
+    local = state.sim_now.astimezone(settings.tz)
+    manual = sum(c.source == "manual" for c in canonical)
+    print(f"sim_now      {state.sim_now:%Y-%m-%d %H:%M} UTC ({local:%Y-%m-%d %H:%M %Z})")
+    print(f"simulator    preset={state.preset} seed={state.seed} anchor={state.anchor_date}")
+    print(f"syncs        {syncs}")
+    print(f"observations {counts}")
+    print(f"canonical    {len(canonical)} weigh-ins ({manual} manual)")
+    print(f"complete     { ({k: str(v) for k, v in sorted(complete.items())}) }")
+    return 0
+
+
+def _sim(settings: Settings, args: argparse.Namespace) -> int:
+    if not settings.is_dev or settings.data_provider != "simulated":
+        print("refusing: the simulator needs APP_ENV=dev and DATA_PROVIDER=simulated")
+        return 2
+    if args.sim_command == "status":
+        return _sim_status(settings)
+    engine = make_engine(settings.db_url)
+    try:
+        if args.sim_command == "advance":
+            delta = timedelta(days=args.days, hours=args.hours)
+            result = sim.advance(engine, settings, delta)
+            print(
+                f"advanced {result.start:%Y-%m-%d %H:%M} -> {result.end:%Y-%m-%d %H:%M} UTC: "
+                f"{result.ticks} ticks, jobs {dict(result.jobs_run)} in {result.seconds:.2f}s"
+            )
+        elif args.sim_command == "set":
+            sim.set_now(engine, settings, datetime.fromisoformat(args.to))
+        elif args.sim_command == "reseed":
+            sim.reseed(engine, settings, preset=args.preset, seed=args.seed)
+    except ValueError as exc:
+        print(f"error: {exc}")
+        return 1
+    finally:
+        engine.dispose()
+    return _sim_status(settings)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="wp", description="WeightPicks command line")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -130,6 +186,17 @@ def main(argv: list[str] | None = None) -> int:
     ledger_sub.add_parser("verify", help="recompute balances and P&L from entries")
     seed = commands.add_parser("seed", help="dev only: fake players with starting bankrolls")
     seed.add_argument("--users", type=int, default=10, help="number of players (default 10)")
+    sim_cmd = commands.add_parser("sim", help="dev only: the simulated clock and data")
+    sim_sub = sim_cmd.add_subparsers(dest="sim_command", required=True)
+    sim_sub.add_parser("status", help="show the simulation clock and ingested data")
+    adv = sim_sub.add_parser("advance", help="run every worker tick up to now + N")
+    adv.add_argument("--days", type=int, default=0)
+    adv.add_argument("--hours", type=int, default=0)
+    set_cmd = sim_sub.add_parser("set", help="jump forward to an ISO time (no ticks run)")
+    set_cmd.add_argument("--to", required=True, help="e.g. 2026-11-01T12:00:00+00:00")
+    reseed_cmd = sim_sub.add_parser("reseed", help="change the simulator preset and seed")
+    reseed_cmd.add_argument("--preset", required=True)
+    reseed_cmd.add_argument("--seed", type=int, required=True)
     args = parser.parse_args(argv)
 
     if args.command == "health" and args.web:
@@ -142,6 +209,8 @@ def main(argv: list[str] | None = None) -> int:
         return _ledger_verify(settings)
     if args.command == "seed":
         return _seed(settings, args.users)
+    if args.command == "sim":
+        return _sim(settings, args)
     return _health_worker(settings)
 
 

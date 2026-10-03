@@ -69,6 +69,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return JSONResponse({"status": "migrating"}, status_code=503)
         return JSONResponse({"status": "ok"})
 
+    if settings.is_dev and settings.data_provider == "simulated":
+        from app.web.dev import build_router
+
+        app.include_router(build_router(settings, engine))
+
     @app.get("/robots.txt", include_in_schema=False)
     def robots() -> PlainTextResponse:
         return PlainTextResponse(ROBOTS_TXT)

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Simulation clock · WeightPicks dev</title>
+</head>
+<body>
+  <main>
+    <h1>Simulation clock</h1>
+    <p>Dev only. Domain jobs run on this clock; heartbeats use real time.</p>
+    {% if error %}<p role="alert"><strong>Error:</strong> {{ error }}</p>{% endif %}
+
+    <h2>Now</h2>
+    <p><strong>{{ local_now.strftime("%Y-%m-%d %H:%M %Z") }}</strong>
+       ({{ state.sim_now.strftime("%Y-%m-%d %H:%M") }} UTC)</p>
+    <p>Simulator: preset <code>{{ state.preset }}</code>, seed <code>{{ state.seed }}</code>,
+       data from <code>{{ state.anchor_date }}</code></p>
+
+    <form method="post" action="/dev/clock/advance">
+      <label>Days <input type="number" name="days" value="1" min="0" max="365"></label>
+      <label>Hours <input type="number" name="hours" value="0" min="0" max="23"></label>
+      <button type="submit">Advance (runs every tick)</button>
+    </form>
+    <form method="post" action="/dev/clock/set">
+      <label>Jump to (local) <input type="datetime-local" name="to" required></label>
+      <button type="submit">Set (skips ticks)</button>
+    </form>
+    <form method="post" action="/dev/clock/reseed">
+      <label>Preset
+        <select name="preset">
+          {% for p in presets %}<option value="{{ p }}" {% if p == state.preset %}selected{% endif %}>{{ p }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Seed <input type="number" name="seed" value="{{ state.seed }}" required></label>
+      <button type="submit">Reseed</button>
+    </form>
+
+    <h2>Last sync</h2>
+    {% if last_sync %}
+      <p>{{ last_sync.status }} at {{ last_sync.started_at.strftime("%Y-%m-%d %H:%M") }} UTC,
+         {{ last_sync.rows_new }} new rows</p>
+    {% else %}<p>No sync yet.</p>{% endif %}
+    <table>
+      <caption>Complete through</caption>
+      {% for metric, day in complete %}<tr><th scope="row">{{ metric }}</th><td>{{ day }}</td></tr>{% endfor %}
+    </table>
+
+    <h2>Observations</h2>
+    <table>
+      {% for metric, n in counts %}<tr><th scope="row">{{ metric }}</th><td>{{ n }}</td></tr>{% endfor %}
+    </table>
+
+    <h2>Canonical weigh-ins (last 14 days)</h2>
+    <table>
+      <tr><th scope="col">Date</th><th scope="col">Weight ({{ unit }})</th><th scope="col">Source</th></tr>
+      {% for day, weight, source in canonical %}
+        <tr><td>{{ day }}</td><td>{{ weight }}</td><td>{{ source }}</td></tr>
+      {% else %}<tr><td colspan="3">None yet.</td></tr>{% endfor %}
+    </table>
+  </main>
+</body>
+</html>
