@@ -12,9 +12,12 @@ repos:
       - id: check-toml
       - id: detect-private-key
       - id: end-of-file-fixer
+        exclude: ^app/web/static/vendor/  # byte-identical to the verified npm files
       - id: trailing-whitespace
+        exclude: ^app/web/static/vendor/  # byte-identical to the verified npm files
         args: ["--markdown-linebreak-ext=md"]
       - id: mixed-line-ending
+        exclude: ^app/web/static/vendor/  # byte-identical to the verified npm files
         args: ["--fix=lf"]
       - id: no-commit-to-branch
         args: ["--branch", "main"]
