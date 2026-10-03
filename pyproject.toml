@@ -63,11 +63,12 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+addopts = "-ra --strict-markers -m 'not e2e'"
 markers = [
     "perf: wall-clock performance budgets (CI runs them without coverage)",
     "calibration: full line-engine calibration runs (CI runs them without coverage)",
     "season: simulated-season suite (tests/season); runs in the main test job on every PR",
+    "e2e: Playwright browser tests (tests/e2e); excluded by default, run with -m e2e",
 ]
 
 [tool.coverage.run]
@@ -80,5 +81,6 @@ dev = [
     "mypy>=2.4.0",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
+    "pytest-playwright==0.9.0",
     "ruff>=0.16.10",
 ]
