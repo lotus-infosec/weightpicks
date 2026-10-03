@@ -23,6 +23,14 @@
       <button type="submit" class="link">Log out</button>
     </form>
   </header>
+  {% if session.role == "admin" %}
+  <nav class="nav">
+    {% for key, label, href in (("dashboard", "Dashboard", "/admin"), ("markets", "Markets", "/admin/markets"), ("users", "Users", "/admin/users"), ("bank", "Bank", "/admin/bank"), ("registration", "Registration", "/admin/registration"), ("audit", "Audit", "/admin/audit")) %}
+    <a href="{{ href }}" class="{{ 'active' if active == key }}">{{ label }}</a>
+    {% endfor %}
+    {% if dev_tools %}<a href="/dev/clock">Dev clock</a>{% endif %}
+  </nav>
+  {% endif %}
   {% if session.role == "player" %}
   <nav class="nav">
     <a href="/" class="{{ 'active' if active == 'board' }}">Board</a>
@@ -33,7 +41,8 @@
   {% else %}
   <header class="topbar"><span class="brand">{{ instance.app_name }}</span></header>
   {% endif %}
-  <main class="page">
+  <main class="page{{ ' wide' if session and session.role == 'admin' }}">
+    {% if message %}<p class="notice" role="status">{{ message }}</p>{% endif %}
     {% block content %}{% endblock %}
   </main>
 </body>

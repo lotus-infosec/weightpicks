@@ -16,7 +16,6 @@ from app.services.auth import AuthError, SessionInfo
 from app.services.bets import BetRejected, place_bet
 from app.web.security import (
     SESSION_COOKIE,
-    Admin,
     Player,
     clear_session_cookie,
     client_ip,
@@ -243,11 +242,5 @@ def build_router() -> APIRouter:
                 "replayed": placed.replayed,
             }
         )
-
-    # ---- admin placeholder (STAGE09) ------------------------------------------------------
-
-    @router.get("/admin")
-    def admin_home(request: Request, session: Admin) -> Response:
-        return render(request, "admin_placeholder.html", {})
 
     return router

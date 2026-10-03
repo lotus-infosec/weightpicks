@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "_macros.html" import bet_rows %}
+{% from "admin/_reauth.html" import password %}
+{% block title %}{{ card.title }} · Admin{% endblock %}
+{% block content %}
+<p><a href="/admin/markets">← Markets</a></p>
+<section class="card">
+  <h1>{{ card.title }}</h1>
+  <p>O/U <strong>{{ card.line_x10 | line(card.metric) }}</strong> · <span class="badge status-{{ card.status }}">{{ card.status }}</span> · locks {{ card.lock_at | local_time }}</p>
+  <p>{% for s in card.sides %}{{ s.side | capitalize }} {{ s.odds | odds }}{{ " · " if not loop.last }}{% endfor %}</p>
+  {% if outcome %}<p class="result">Result: {{ outcome.reason }}{% if outcome.value_x10 is not none %} ({{ outcome.value_x10 | line(card.metric) }}){% endif %}</p>{% endif %}
+</section>
+{% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+{% if card.status in ("open", "locked") %}
+<section class="card danger">
+  <h2>Void this market</h2>
+  <p class="muted">Every open bet is refunded and the market never settles. This can't be undone.</p>
+  <form method="post" action="/admin/markets/{{ card.market_id }}/void" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>Reason <input type="text" name="reason" required maxlength="200"></label>
+    {{ password() }}
+    <button type="submit" class="danger-button">Void market</button>
+  </form>
+</section>
+{% endif %}
+<h2>Bets</h2>
+{{ bet_rows(bets, show_name=True) }}
+{% endblock %}

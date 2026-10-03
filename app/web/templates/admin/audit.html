@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Audit · Admin{% endblock %}
+{% block content %}
+<h1>Audit log</h1>
+{% if not rows %}<p class="muted">No admin actions yet.</p>{% endif %}
+<table class="table">
+  <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th><th>Reason</th><th>Change</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr><td class="small">{{ r.ts | local_time }}</td><td data-label="Who">{{ r.actor or "system" }}</td><td data-label="Action">{{ r.action }}</td>
+      <td class="small">{% if r.target_type %}{{ r.target_type }} {{ r.target_id or "" }}{% endif %}</td>
+      <td class="small">{{ r.reason or "" }}</td>
+      <td class="small mono">{% if r.before %}{{ r.before | tojson }} → {% endif %}{{ r.after | tojson if r.after else "" }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p>{% if page > 0 %}<a href="/admin/audit?page={{ page - 1 }}">← Newer</a>{% endif %} {% if more %}<a href="/admin/audit?page={{ page + 1 }}">Older →</a>{% endif %}</p>
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Markets · Admin{% endblock %}
+{% block content %}
+<h1>Markets</h1>
+<div class="tabs">
+  {% for s in statuses %}<a href="/admin/markets{{ '?status=' ~ s if s }}" class="tab {{ 'active' if s == status }}">{{ (s or "all") | capitalize }}</a>{% endfor %}
+</div>
+{% if not rows %}<p class="muted">No markets.</p>{% endif %}
+<table class="table">
+  <thead><tr><th>Market</th><th>Status</th><th class="num">Bets</th><th class="num">Staked</th><th>Locks</th></tr></thead>
+  <tbody>
+  {% for m in rows %}
+  <tr><td><a href="/admin/markets/{{ m.market_id }}">{{ m.title }}</a></td><td><span class="badge status-{{ m.status }}">{{ m.status }}</span></td>
+      <td class="num" data-label="Bets">{{ m.bets }}</td><td class="num" data-label="Staked">{{ m.staked_cents | money }}</td><td class="small" data-label="Locks">{{ m.lock_at | local_time }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -21,6 +21,7 @@ class Category(StrEnum):
     BET_RESULTS = "bet_results"
     MARKET_SETTLEMENTS = "market_settlements"
     ADMIN_ALERTS = "admin_alerts"
+    BUSTS = "busts"
 
 
 def enqueue(

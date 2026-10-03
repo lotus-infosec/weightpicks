@@ -21,7 +21,8 @@ from app.core.db import immediate, make_engine
 from app.core.migrations import upgrade_to_head
 from app.domain.markets import MarketStatus
 from app.models import Account, Market, OddsVersion, Selection, User
-from app.services import ledger, sim
+from app.services import admin, auth, ledger, sim
+from app.services.admin import Actor, AdminError
 from app.services.bets import BetRejected, place_bet
 from app.services.users import ensure_player
 
@@ -40,6 +41,7 @@ class SeasonRun:
     placed: int = 0
     rejected: Counter[str] = field(default_factory=Counter)
     expected_rejections: Counter[str] = field(default_factory=Counter)
+    bailouts: int = 0
 
 
 def _open_selections(engine: Engine, now: datetime) -> list[tuple[int, int, str]]:
@@ -97,6 +99,14 @@ def run_season(tmp_path: Path, *, days: int = 60, players: int = 6, seed: int = 
                 conn, SimClock(start), account, GRANT, idempotency_key=f"season:grant:{user}"
             )
             users.append(user)
+    admin_id = auth.create_admin(
+        engine,
+        SimClock(start),
+        email="admin@example.invalid",
+        display_name="Admin",
+        password="correct horse battery",
+    )
+    admin_actor = Actor(admin_id)
     run = SeasonRun(engine, settings, start + timedelta(days=days), users)
     rng = np.random.default_rng(seed)
     now = start
@@ -134,7 +144,9 @@ def run_season(tmp_path: Path, *, days: int = 60, players: int = 6, seed: int = 
                     continue
                 sel, ver, _ = options[int(rng.integers(len(options)))]
                 balance = _balance(engine, user)
-                stake = max(100, int(balance * rng.uniform(0.01, 0.10)))
+                # users[1] is reckless: all-in every time, so busts and bailouts happen.
+                fraction = 1.0 if user == users[1] else rng.uniform(0.01, 0.10)
+                stake = max(100, int(balance * fraction))
                 key = f"d{day}t{k}u{user}"
                 attempt(
                     user, sel, ver, stake, key, None if balance >= stake else "insufficient_funds"
@@ -159,5 +171,12 @@ def run_season(tmp_path: Path, *, days: int = 60, players: int = 6, seed: int = 
             if day > days // 2 and options and k == 0:
                 sel, ver, _ = options[0]
                 attempt(users[-1], sel, ver, 500, f"frozen{day}", "user_inactive")
+        # The admin bails out anyone whose cooldown has passed (D-037).
+        for user in users:
+            try:
+                admin.bailout(engine, SimClock(now), admin_actor, user)
+                run.bailouts += 1
+            except AdminError as exc:
+                assert exc.code in ("not_busted", "cooldown"), exc.code
     sim.advance(engine, settings, run.end - now)
     return run

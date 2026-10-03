@@ -45,6 +45,7 @@ def test_downgrade_and_upgrade_keep_guards(engine: Engine, tmp_path: Path) -> No
         "uq_seasons_one_open",
         "trg_ledger_entries_no_update",
         "trg_observations_no_delete",
+        "trg_audit_log_no_update",
     }
 
     def present() -> set[str]:
@@ -54,7 +55,7 @@ def test_downgrade_and_upgrade_keep_guards(engine: Engine, tmp_path: Path) -> No
     assert present() == guards
     with engine.begin() as conn:
         command.downgrade(_config(conn), "0006")
-    assert present() == guards
+    assert present() == guards - {"trg_audit_log_no_update"}  # audit_log arrives in 0008
     with engine.begin() as conn:
         command.upgrade(_config(conn), "head")
     assert present() == guards

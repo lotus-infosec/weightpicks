@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Admin · {{ instance.app_name }}{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+<div class="grid-cards">
+  <section class="card">
+    <h2>Health</h2>
+    <p>Worker: <strong class="{{ 'good' if d.worker_ok else 'bad' }}">{{ "running" if d.worker_ok else "not seen in 3 minutes" }}</strong></p>
+    {% if d.last_sync %}
+    <p>Last sync: <strong class="{{ 'good' if d.last_sync.status == 'ok' else 'bad' }}">{{ d.last_sync.status }}</strong>{% if d.last_sync.finished_at %}, {{ d.last_sync.finished_at | local_time }}{% endif %} · {{ d.last_sync.rows_new }} new rows</p>
+    {% else %}<p>No sync yet.</p>{% endif %}
+    <form method="post" action="/admin/sync" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <button type="submit" class="secondary">Sync now</button>
+      {% if d.command %}<span class="muted small" data-testid="sync-status">Last request: {{ d.command.status }}{% if d.command.result and d.command.result.rows_new is defined %} ({{ d.command.result.rows_new }} new rows){% endif %}</span>{% endif %}
+    </form>
+  </section>
+  <section class="card">
+    <h2>Markets</h2>
+    <p>{% for status in ("open", "locked", "settled", "voided") %}{{ status | capitalize }} <strong>{{ d.markets.get(status, 0) }}</strong>{{ " · " if not loop.last }}{% endfor %}</p>
+    <p>Open bets <strong>{{ d.open_bets }}</strong> · staked {{ d.staked | money }} · house owes up to {{ d.liability | money }}</p>
+    <p><a href="/admin/markets?status=open">See open markets</a></p>
+  </section>
+  <section class="card">
+    <h2>Alerts</h2>
+    {% if not d.alerts %}<p class="muted">None.</p>{% endif %}
+    <ul class="plain">{% for a in d.alerts %}<li>{{ a.created_at | local_time }} · {{ a.payload.kind | replace("_", " ") }}{% if a.payload.market_id %} · <a href="/admin/markets/{{ a.payload.market_id }}">market {{ a.payload.market_id }}</a>{% endif %}</li>{% endfor %}</ul>
+  </section>
+  <section class="card">
+    <h2>Recent admin actions</h2>
+    {% if not d.recent_audit %}<p class="muted">None yet.</p>{% endif %}
+    <ul class="plain">{% for r in d.recent_audit[:8] %}<li>{{ r.ts | local_time }} · {{ r.action }}{% if r.reason %} — {{ r.reason }}{% endif %}</li>{% endfor %}</ul>
+    <p><a href="/admin/audit">Full audit log</a></p>
+  </section>
+</div>
+{% endblock %}

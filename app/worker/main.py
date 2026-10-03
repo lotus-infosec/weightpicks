@@ -17,6 +17,7 @@ from app.services import instance
 from app.services.instance import InstanceConfig
 from app.services.sim import app_clock
 from app.worker.jobs import INFRA_JOBS, domain_jobs
+from app.worker.jobs.commands import CommandsJob
 from app.worker.registry import Job, run_due
 
 TICK_SECONDS = 60
@@ -75,11 +76,12 @@ def main() -> None:
     domain_clock = app_clock(settings, engine)
     config = instance.load(engine, domain_clock, settings)
     jobs: Sequence[Job] = domain_jobs(settings, config)
+    infra: tuple[Job, ...] = (*INFRA_JOBS, CommandsJob(settings, domain_clock))
     seen: dict[str, str] = {}
     log.info(
         "worker_started",
         tick_seconds=TICK_SECONDS,
-        jobs=[j.name for j in (*INFRA_JOBS, *jobs)],
+        jobs=[j.name for j in (*infra, *jobs)],
         sim_clock=settings.is_dev,
     )
     while not stop.is_set():
@@ -87,7 +89,7 @@ def main() -> None:
             config, jobs = reload_if_changed(engine, domain_clock, settings, config, jobs)
             tick(
                 engine,
-                infra=INFRA_JOBS,
+                infra=infra,
                 domain=jobs,
                 system_clock=clock,
                 domain_clock=domain_clock,
