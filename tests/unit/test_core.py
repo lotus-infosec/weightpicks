@@ -69,6 +69,12 @@ def test_settings_read_from_environment(monkeypatch: pytest.MonkeyPatch) -> None
     assert s.db_url == "sqlite:///elsewhere.db"
 
 
+def test_real_data_never_runs_on_the_sim_clock() -> None:
+    assert Settings(app_env="dev", data_provider="simulated").sim_clock
+    assert not Settings(app_env="dev", data_provider="garmindb").sim_clock
+    assert not Settings(app_secret_key="k" * 64, data_provider="simulated").sim_clock
+
+
 def test_time_zone_and_unit(monkeypatch: pytest.MonkeyPatch) -> None:
     s = Settings(app_env="dev")
     assert (s.wp_timezone, s.wp_unit, s.tz.key) == ("America/New_York", "lb", "America/New_York")

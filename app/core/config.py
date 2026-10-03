@@ -76,3 +76,9 @@ class Settings(BaseSettings):
     @property
     def is_dev(self) -> bool:
         return self.app_env == "dev"
+
+    @property
+    def sim_clock(self) -> bool:
+        """Dev with simulated data runs on the persisted SimClock; real data always runs
+        on real time, even in dev (STAGE10)."""
+        return self.is_dev and self.data_provider == "simulated"

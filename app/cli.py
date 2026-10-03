@@ -147,7 +147,7 @@ def _sim_status(settings: Settings) -> int:
 
 
 def _sim(settings: Settings, args: argparse.Namespace) -> int:
-    if not settings.is_dev or settings.data_provider != "simulated":
+    if not settings.sim_clock:
         print("refusing: the simulator needs APP_ENV=dev and DATA_PROVIDER=simulated")
         return 2
     if args.sim_command == "status":

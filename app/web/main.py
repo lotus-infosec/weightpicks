@@ -130,7 +130,7 @@ def create_app(
     engine = make_engine(settings.db_url)
     live = LiveInstance(settings)
     templates = build_templates(live)
-    templates.env.globals["dev_tools"] = settings.is_dev and settings.data_provider == "simulated"
+    templates.env.globals["dev_tools"] = settings.sim_clock
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -249,7 +249,7 @@ def create_app(
     app.include_router(build_router())
     app.include_router(build_admin_router())
     app.include_router(build_setup_router())
-    if settings.is_dev and settings.data_provider == "simulated":
+    if settings.sim_clock:
         from app.web.dev import build_router as build_dev_router
 
         app.include_router(build_dev_router(settings, engine))

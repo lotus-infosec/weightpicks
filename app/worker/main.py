@@ -82,7 +82,7 @@ def main() -> None:
         "worker_started",
         tick_seconds=TICK_SECONDS,
         jobs=[j.name for j in (*infra, *jobs)],
-        sim_clock=settings.is_dev,
+        sim_clock=settings.sim_clock,
     )
     while not stop.is_set():
         try:
