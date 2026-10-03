@@ -31,7 +31,7 @@ from app.models import (
     SyncRun,
 )
 from app.providers.base import COUNT_METRICS, WORKOUT_MIN_MINUTES
-from app.services import ledger
+from app.services import busts, ledger
 from app.services.markets import set_status
 from app.services.observations import canonical_weigh_ins, latest_complete_through
 from app.services.outbox import Category, enqueue
@@ -308,4 +308,9 @@ def settle_due(engine: Engine, clock: Clock) -> SettlePass:
         pending = conn.execute(
             select(func.min(Market.settle_after)).where(locked, Market.settle_after > now)
         ).scalar_one()
+    if settled:  # bust_check after each settlement batch (BUILD_PLAN §1.4.6)
+        with immediate(engine) as conn:
+            season_id = ledger.active_season_id(conn)
+            if season_id is not None:
+                busts.check(conn, clock, season_id)
     return SettlePass(settled, alerts, pending)

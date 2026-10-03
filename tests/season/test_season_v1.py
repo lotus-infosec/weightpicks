@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 from collections.abc import Iterator
+from datetime import timedelta
 
 import pytest
 from sqlalchemy import func, select
@@ -131,3 +132,21 @@ def test_every_bet_is_resolved_correctly_or_still_open(season: SeasonRun) -> Non
             assert r.status == "open" and r.payout_cents is None, r
     assert results == resolved > 100
     assert {r.status for r in rows} >= {"won", "lost"}
+
+
+def test_busts_and_bailouts_are_consistent(season: SeasonRun) -> None:
+    from app.models import Bust, LedgerTxn
+
+    with season.engine.connect() as conn:
+        rows = conn.execute(select(Bust.busted_at, Bust.bailed_out_at, Bust.resolved_at)).all()
+        bailout_txns = conn.execute(
+            select(func.count()).select_from(LedgerTxn).where(LedgerTxn.kind == "bailout")
+        ).scalar_one()
+    assert len(rows) >= 1, "the reckless bettor should go bust at least once"
+    assert season.bailouts >= 1
+    assert bailout_txns == season.bailouts == sum(1 for r in rows if r.bailed_out_at)
+    for busted_at, bailed, resolved in rows:
+        assert not (bailed and resolved)
+        if bailed:
+            assert bailed - busted_at >= timedelta(days=2)  # cooldown honoured
+    # P&L excludes bailouts: covered by test_pnl_counts_only_betting_entries.

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Connection, select
+from sqlalchemy import Connection, case, select
 
 from app.domain.ledger import AccountKind
 from app.domain.markets import MarketStatus
@@ -131,7 +131,9 @@ def _bets(conn: Connection, *conditions: Any, limit: int = 50) -> list[BetRow]:
     rows = conn.execute(
         select(
             Bet.id.label("bet_id"),
-            User.display_name,
+            case((User.status == "banned", "Removed player"), else_=User.display_name).label(
+                "display_name"
+            ),
             Market.id.label("market_id"),
             Market.title,
             Market.metric,
