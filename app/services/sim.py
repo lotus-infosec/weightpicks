@@ -102,6 +102,7 @@ class AdvanceResult:
 
 def advance(engine: Engine, settings: Settings, delta: timedelta) -> AdvanceResult:
     """Fast-forward the dev clock, running every worker tick in between."""
+    from app.services import instance
     from app.worker.jobs import domain_jobs
     from app.worker.registry import run_due
 
@@ -112,7 +113,7 @@ def advance(engine: Engine, settings: Settings, delta: timedelta) -> AdvanceResu
     end = state.sim_now + delta
     clock = SimClock(state.sim_now)
     result = AdvanceResult(start=state.sim_now, end=end)
-    jobs = domain_jobs(settings)
+    jobs = domain_jobs(settings, instance.load(engine, clock, settings))
     seen: dict[str, str] = {}
     last_saved_day = state.sim_now.date()
     while clock.now() < end:

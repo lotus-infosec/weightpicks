@@ -1,8 +1,10 @@
 from app.core.config import Settings
-from app.worker.jobs.demo import DemoDailyJob
+from app.domain.markets import Timeframe
+from app.services.instance import InstanceConfig
 from app.worker.jobs.garmin_sync import GarminSyncJob
 from app.worker.jobs.heartbeat import HeartbeatJob
 from app.worker.jobs.ledger_verify import LedgerVerifyJob
+from app.worker.jobs.markets import DropJob, LockMarketsJob, LockSchedule
 from app.worker.registry import Job
 
 # Infrastructure jobs always run on real time (the container health check compares
@@ -10,15 +12,26 @@ from app.worker.registry import Job
 INFRA_JOBS: tuple[Job, ...] = (HeartbeatJob(),)
 
 
-def domain_jobs(settings: Settings) -> tuple[Job, ...]:
-    return (GarminSyncJob(settings), DemoDailyJob(), LedgerVerifyJob())
+def domain_jobs(settings: Settings, config: InstanceConfig) -> tuple[Job, ...]:
+    """In tick order: sync first so the 11:00 drop prices from the post-window sync,
+    then drops, then the lock pass."""
+    locks = LockSchedule()
+    return (
+        GarminSyncJob(settings),
+        DropJob(Timeframe.DAILY, config, locks),
+        DropJob(Timeframe.WEEKLY, config, locks),
+        DropJob(Timeframe.MONTHLY, config, locks),
+        LockMarketsJob(locks),
+        LedgerVerifyJob(),
+    )
 
 
 __all__ = [
     "INFRA_JOBS",
-    "DemoDailyJob",
+    "DropJob",
     "GarminSyncJob",
     "HeartbeatJob",
     "LedgerVerifyJob",
+    "LockMarketsJob",
     "domain_jobs",
 ]

@@ -11,6 +11,7 @@ from app.domain.lines import (
     fit_weight,
     price_over_under,
     price_weight_change,
+    prior_fit,
     snap_count_line,
     snap_half,
 )
@@ -192,3 +193,18 @@ def test_weight_change_pricing_records_model_inputs() -> None:
         assert key in inputs
     assert inputs["start_known"] is True
     assert pricing.odds_over is not None and pricing.odds_under is not None
+
+
+def test_no_recent_weigh_ins_prices_start_unknown_from_the_prior() -> None:
+    pricing = price_weight_change([], "lb", horizon_days=1, start_weight=None)
+    inputs = pricing.model_inputs
+    assert (inputs["n"], inputs["provisional"], inputs["sigma_source"]) == (0, True, "prior")
+    assert inputs["mu"] == 0.0
+    assert inputs["sd"] == pytest.approx(math.sqrt(2 * 1.0**2 + UNIT_PARAMS["lb"].drift_q))
+    assert pricing.line_x10 == 5
+
+
+def test_prior_fit_refuses_a_start_weight() -> None:
+    with pytest.raises(ValueError, match="fitted level"):
+        change_distribution(prior_fit("kg"), 1, start_weight=90.0, unit="kg")
+    assert prior_fit("kg").sigma == 0.45

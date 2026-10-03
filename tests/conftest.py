@@ -1,6 +1,7 @@
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from sqlalchemy import Engine
@@ -8,6 +9,9 @@ from sqlalchemy import Engine
 from app.core.clock import SimClock
 from app.core.config import Settings
 from app.core.db import make_engine
+
+if TYPE_CHECKING:
+    from app.services.instance import InstanceConfig
 
 
 @pytest.fixture
@@ -33,3 +37,12 @@ def migrated_engine(engine: Engine, tmp_path: Path) -> Engine:
 
     upgrade_to_head(engine, tmp_path / ".migrate.lock")
     return engine
+
+
+@pytest.fixture
+def instance_config() -> "InstanceConfig":
+    """D-009 defaults, America/New_York, lb, every count metric enabled."""
+    from app.domain.markets import COUNT_MARKET_METRICS, Schedule
+    from app.services.instance import InstanceConfig
+
+    return InstanceConfig("America/New_York", "lb", Schedule(), COUNT_MARKET_METRICS, "active")

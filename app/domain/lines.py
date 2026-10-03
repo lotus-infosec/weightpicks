@@ -150,6 +150,13 @@ def fit_weight(points: Sequence[tuple[int, float]], unit: Unit) -> WeightFit:
     )
 
 
+def prior_fit(unit: Unit) -> WeightFit:
+    """No weigh-ins at all yet: slope 0, prior noise. Only start-unknown markets can use
+    it (the level `a` is meaningless, so `change_distribution` refuses a start weight)."""
+    sigma = UNIT_PARAMS[unit].prior_sigma
+    return WeightFit(0.0, 0.0, sigma, 0.0, 0.0, 0.0, 0, True, "prior", None)
+
+
 def change_distribution(
     fit: WeightFit, horizon_days: int, *, start_weight: float | None, unit: Unit
 ) -> tuple[float, float]:
@@ -161,6 +168,8 @@ def change_distribution(
     """
     if horizon_days < 1:
         raise ValueError("horizon must be at least one day")
+    if fit.n == 0 and start_weight is not None:
+        raise ValueError("a start weight needs a fitted level; the prior fit has none")
     h, q = float(horizon_days), UNIT_PARAMS[unit].drift_q
     if start_weight is None:
         return fit.b * h, math.sqrt(2 * fit.sigma**2 + h * h * fit.var_b + h * q)
@@ -226,7 +235,8 @@ def price_weight_change(
     start_weight: float | None,
     hold: float = DEFAULT_HOLD,
 ) -> Pricing:
-    fit = fit_weight(points, unit)
+    recent = any(-(WINDOW_DAYS - 1) <= t <= 0 for t, _ in points)
+    fit = fit_weight(points, unit) if recent else prior_fit(unit)
     mu, sd = change_distribution(fit, horizon_days, start_weight=start_weight, unit=unit)
     line = snap_half(mu)
     inputs: dict[str, Any] = {
