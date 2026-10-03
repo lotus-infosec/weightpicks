@@ -70,6 +70,8 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --frozen
+      - name: Build the stylesheet (layout test checks it is applied)
+        run: ./scripts/build-css.sh
       - name: Install Chromium and its system libraries (version pinned by uv.lock)
         run: uv run playwright install --with-deps chromium
       - name: Browser tests at 375 px (register, bet, feed)

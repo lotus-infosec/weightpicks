@@ -95,3 +95,6 @@ CLAUDE.local.md
 
 # Locally built stylesheet (scripts/build-css.sh); the image builds its own
 /app/web/static/build/
+
+# Screenshots from tests/e2e/test_layout.py
+/test-screens/
