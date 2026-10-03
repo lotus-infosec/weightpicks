@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "admin/_reauth.html" import password %}
+{% block title %}Registration · Admin{% endblock %}
+{% block content %}
+<h1>Registration code</h1>
+{% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+{% if code %}
+<section class="card"><h2>New code</h2>
+  <p>Share it privately. It's shown once; the old code no longer works.</p>
+  <p class="code-big" data-testid="registration-code">{{ code }}</p></section>
+{% endif %}
+<section class="card">
+  <p class="muted">Only a fingerprint of the code is stored, so the current code can't be shown again. Make a new one to share.</p>
+  <form method="post" action="/admin/registration" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    {{ password() }}
+    <button type="submit" class="primary">Make a new code</button>
+  </form>
+</section>
+{% endblock %}

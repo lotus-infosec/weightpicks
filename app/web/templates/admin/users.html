@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Users · Admin{% endblock %}
+{% block content %}
+<h1>Players</h1>
+{% if not rows %}<p class="muted">No players yet. Share the registration code.</p>{% endif %}
+<table class="table">
+  <thead><tr><th>Player</th><th>Status</th><th class="num">Balance</th><th class="num">P&amp;L</th><th class="num">Open</th><th class="num">Busts</th></tr></thead>
+  <tbody>
+  {% for p in rows %}
+  <tr><td><a href="/admin/users/{{ p.user_id }}">{{ p.display_name }}</a><br><span class="muted small">{{ p.email }}</span></td>
+      <td><span class="badge status-{{ p.status }}">{{ p.status }}</span>{% if p.active_bust_at %} <span class="badge bust">bust</span>{% endif %}</td>
+      <td class="num" data-label="Balance">{{ p.balance_cents | money }}</td><td class="num" data-label="P&amp;L">{{ p.pnl_cents | signed_money }}</td>
+      <td class="num" data-label="Open bets">{{ p.open_bets }}</td><td class="num" data-label="Busts">{{ p.busts }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

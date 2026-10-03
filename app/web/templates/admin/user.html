@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "_macros.html" import bet_rows %}
+{% from "admin/_reauth.html" import password %}
+{% block title %}{{ p.display_name }} · Admin{% endblock %}
+{% block content %}
+<p><a href="/admin/users">← Players</a></p>
+<section class="card">
+  <h1>{{ p.display_name }}</h1>
+  <p class="muted">{{ p.email }} · joined {{ p.created_at | local_time }}</p>
+  <p><span class="badge status-{{ p.status }}">{{ p.status }}</span>{% if p.active_bust_at %} <span class="badge bust">bust since {{ p.active_bust_at | local_time }}</span>{% endif %}</p>
+  <p>Balance <strong>{{ p.balance_cents | money }}</strong> · P&amp;L <strong>{{ p.pnl_cents | signed_money }}</strong> · {{ p.open_bets }} open bets · busts this season {{ p.busts }}</p>
+</section>
+{% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+{% if temporary %}
+<section class="card"><h2>Temporary password</h2>
+  <p>Give this to the player privately. It's shown once; their old sessions have ended.</p>
+  <p class="code-big" data-testid="temporary-password">{{ temporary }}</p></section>
+{% endif %}
+{% if p.status != "banned" %}
+<section class="card">
+  <h2>Actions</h2>
+  <form method="post" action="/admin/users/{{ p.user_id }}/{{ 'unfreeze' if p.status == 'frozen' else 'freeze' }}" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <button type="submit" class="secondary">{{ "Unfreeze" if p.status == "frozen" else "Freeze (no betting)" }}</button>
+  </form>
+  <details class="stack-details"><summary>Reset password</summary>
+    <form method="post" action="/admin/users/{{ p.user_id }}/reset-password" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      {{ password() }}
+      <button type="submit" class="secondary">Make a temporary password</button>
+    </form>
+  </details>
+  <details class="stack-details danger"><summary>Remove (ban) this player</summary>
+    <p class="muted">Ends their sessions, refunds open bets, blocks their email for good. History stays as "Removed player".</p>
+    <form method="post" action="/admin/users/{{ p.user_id }}/ban" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <label>Reason <input type="text" name="reason" required maxlength="200"></label>
+      {{ password() }}
+      <button type="submit" class="danger-button">Remove player</button>
+    </form>
+  </details>
+</section>
+{% endif %}
+<h2>Bets</h2>
+{{ bet_rows(bets) }}
+<h2>Money history</h2>
+<table class="table">
+  <thead><tr><th>When</th><th>Kind</th><th class="num">Amount</th><th>Note</th></tr></thead>
+  <tbody>{% for h in history %}<tr><td class="small">{{ h.created_at | local_time }}</td><td data-label="Kind">{{ h.kind | replace("_", " ") }}</td><td class="num" data-label="Amount">{{ h.amount_cents | signed_money }}</td><td class="small">{{ h.memo or "" }}</td></tr>{% endfor %}</tbody>
+</table>
+{% endblock %}

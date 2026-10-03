@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "admin/_reauth.html" import password %}
+{% from "setup/_fields.html" import field %}
+{% block title %}Bank · Admin{% endblock %}
+{% block content %}
+<h1>Bank</h1>
+{% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+<section class="card">
+  <h2>Bailouts</h2>
+  <p class="muted">For players who are bust (under $1, no open bets). Opens {{ economy.bailout_cooldown_days }} days after going bust; pays {{ economy.bailout_cents | money }}. Never counts toward P&amp;L.</p>
+  {% if not busted %}<p class="muted">Nobody is bust.</p>{% endif %}
+  {% for p, ready in busted %}
+  <form method="post" action="/admin/bank/bailout" class="stack bailout">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <input type="hidden" name="user_id" value="{{ p.user_id }}">
+    <p><strong>{{ p.display_name }}</strong> · bust since {{ p.active_bust_at | local_time }} ·
+      {% if ready <= now %}<span class="good">ready</span>{% else %}opens {{ ready | local_time }}{% endif %}</p>
+    {% if ready <= now %}{{ password() }}<button type="submit" class="primary">Pay bailout</button>{% endif %}
+  </form>
+  {% endfor %}
+</section>
+<section class="card">
+  <h2>Adjust a balance</h2>
+  <p class="muted">For corrections and goodwill. Positive adds, negative removes; never below $0. Never counts toward P&amp;L.</p>
+  <form method="post" action="/admin/bank/adjust" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>Player <select name="user_id">{% for p in players %}<option value="{{ p.user_id }}">{{ p.display_name }} ({{ p.balance_cents | money }})</option>{% endfor %}</select></label>
+    <label>Amount ($) <input type="text" name="amount" inputmode="decimal" placeholder="25 or -12.50" required></label>
+    <label>Reason <input type="text" name="reason" required maxlength="200"></label>
+    {{ password() }}
+    <button type="submit" class="primary">Adjust balance</button>
+  </form>
+</section>
+<section class="card">
+  <h2>Economy</h2>
+  <p class="muted">Applies from now on: new players, the next drops and new bets.</p>
+  {% for key in ("economy",) %}{% if errors[key] %}<p class="alert">{{ errors[key] }}</p>{% endif %}{% endfor %}
+  <form method="post" action="/admin/bank/economy" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    {{ field("starting_bankroll", "Starting bankroll ($)", values.starting_bankroll, error=errors.starting_bankroll) }}
+    {{ field("daily_allowance", "Daily allowance ($)", values.daily_allowance, error=errors.daily_allowance) }}
+    {{ field("bailout", "Bailout amount ($)", values.bailout, error=errors.bailout) }}
+    {{ field("bailout_cooldown_days", "Bailout cooldown (days)", values.bailout_cooldown_days, "number", errors.bailout_cooldown_days) }}
+    <label>House edge (price of an even bet)
+      <select name="vig">{% for v in vigs %}<option value="{{ v }}"{% if values.vig == v %} selected{% endif %}>{{ v }} / {{ v }}</option>{% endfor %}</select>
+    </label>
+    {{ field("max_bet", "Maximum bet ($)", values.max_bet, error=errors.max_bet, hint="empty = no maximum") }}
+    {{ field("max_parlay_legs", "Max parlay legs", values.max_parlay_legs, "number", errors.max_parlay_legs) }}
+    {{ field("high_roller", "High-roller threshold ($)", values.high_roller, error=errors.high_roller) }}
+    {{ password() }}
+    <button type="submit" class="primary">Save economy</button>
+  </form>
+</section>
+{% endblock %}

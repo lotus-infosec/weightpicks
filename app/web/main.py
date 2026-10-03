@@ -130,6 +130,7 @@ def create_app(
     engine = make_engine(settings.db_url)
     live = LiveInstance(settings)
     templates = build_templates(live)
+    templates.env.globals["dev_tools"] = settings.is_dev and settings.data_provider == "simulated"
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -241,10 +242,12 @@ def create_app(
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+    from app.web.admin import build_router as build_admin_router
     from app.web.pages import build_router
     from app.web.setup import build_router as build_setup_router
 
     app.include_router(build_router())
+    app.include_router(build_admin_router())
     app.include_router(build_setup_router())
     if settings.is_dev and settings.data_provider == "simulated":
         from app.web.dev import build_router as build_dev_router
