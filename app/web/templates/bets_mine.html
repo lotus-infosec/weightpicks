@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set active = "mine" %}
-{% block title %}My bets · WeightPicks{% endblock %}
+{% block title %}My bets · {{ instance.app_name }}{% endblock %}
 {% block content %}
 <h1>My bets</h1>
 {% if wallet %}<p class="muted">Balance {{ wallet.balance_cents | money }} · P&amp;L {{ wallet.pnl_cents | signed_money }}</p>{% endif %}
