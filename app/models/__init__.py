@@ -1,5 +1,6 @@
 """SQLAlchemy tables. Import from here so Alembic sees every table."""
 
+from app.models.admin import AuditEntry, Bust, Command
 from app.models.auth import AuthAttempt, BannedEmail, RegistrationCode, Session
 from app.models.base import Base
 from app.models.bets import Bet, BetLeg, Settlement
@@ -12,11 +13,14 @@ from app.models.system import Heartbeat, JobRun
 
 __all__ = [
     "Account",
+    "AuditEntry",
     "AuthAttempt",
     "BannedEmail",
     "Base",
     "Bet",
     "BetLeg",
+    "Bust",
+    "Command",
     "Heartbeat",
     "InstanceSettingsRow",
     "JobRun",
