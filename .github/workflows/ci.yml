@@ -55,6 +55,8 @@ jobs:
       - name: Coverage gate (app/domain and app/services >= 95%)
         run: uv run coverage report --include='app/domain/*,app/services/*' --fail-under=95
       - name: Performance budgets (no coverage instrumentation)
+        env:
+          PERF_BUDGET_SCALE: "2"  # shared runners are ~2x slower than the dev machine
         run: uv run pytest -q -m perf -s
 
   gitleaks:
