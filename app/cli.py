@@ -3,6 +3,7 @@
 import argparse
 import sys
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import httpx
 import structlog
@@ -173,6 +174,23 @@ def _sim(settings: Settings, args: argparse.Namespace) -> int:
     return _sim_status(settings)
 
 
+def _calibrate(settings: Settings, args: argparse.Namespace) -> int:
+    from app import calibration
+
+    report = calibration.run(
+        args.preset, days=args.days, seeds=args.seeds, tz=settings.tz, unit=settings.wp_unit
+    )
+    text = calibration.render_markdown(report)
+    if args.out == "-":
+        print(text)
+    else:
+        path = Path(args.out) / f"{args.preset}.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+        print(f"wrote {path}: {'PASS' if report.passed else 'FAIL'} ({report.samples:,} samples)")
+    return 0 if report.passed else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="wp", description="WeightPicks command line")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -197,6 +215,11 @@ def main(argv: list[str] | None = None) -> int:
     reseed_cmd = sim_sub.add_parser("reseed", help="change the simulator preset and seed")
     reseed_cmd.add_argument("--preset", required=True)
     reseed_cmd.add_argument("--seed", type=int, required=True)
+    cal = commands.add_parser("calibrate", help="line-engine calibration report")
+    cal.add_argument("--preset", required=True, help="simulator preset, e.g. steady-loser")
+    cal.add_argument("--days", type=int, default=365)
+    cal.add_argument("--seeds", type=int, default=20)
+    cal.add_argument("--out", default="docs/calibration", help="directory, or - for stdout")
     args = parser.parse_args(argv)
 
     if args.command == "health" and args.web:
@@ -211,6 +234,8 @@ def main(argv: list[str] | None = None) -> int:
         return _seed(settings, args.users)
     if args.command == "sim":
         return _sim(settings, args)
+    if args.command == "calibrate":
+        return _calibrate(settings, args)
     return _health_worker(settings)
 
 
