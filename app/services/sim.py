@@ -84,8 +84,9 @@ class PersistedSimClock:
 
 
 def app_clock(settings: Settings, engine: Engine) -> Clock:
-    """The clock for domain logic: the persisted SimClock in dev, real time otherwise."""
-    if settings.is_dev:
+    """The clock for domain logic: the persisted SimClock in dev with simulated data,
+    real time otherwise."""
+    if settings.sim_clock:
         load_state(engine, settings)
         return PersistedSimClock(engine)
     return SystemClock()

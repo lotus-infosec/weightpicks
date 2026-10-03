@@ -9,5 +9,6 @@
 app/web/static/build/
 !migrations/
 !docker/entrypoint.sh
+!docker/garmindb-requirements.txt
 **/__pycache__
 **/*.py[cod]

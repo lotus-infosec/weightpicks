@@ -4,7 +4,7 @@ from app.core.config import Settings
 from app.domain.schedule import sync_period_key
 from app.providers.base import DataProvider
 from app.services.instance import InstanceConfig
-from app.services.sync import make_provider, run_sync
+from app.services.sync import ProviderUnavailable, make_provider, record_failure, run_sync
 from app.worker.registry import JobContext
 
 
@@ -26,9 +26,13 @@ class GarminSyncJob:
         return sync_period_key(now, self.config.tz)
 
     def run(self, ctx: JobContext) -> None:
-        provider = make_provider(
-            self.settings, ctx.engine, ctx.clock, self._provider, tz=self.config.tz
-        )
+        try:
+            provider = make_provider(
+                self.settings, ctx.engine, ctx.clock, self._provider, tz=self.config.tz
+            )
+        except ProviderUnavailable as exc:
+            record_failure(ctx.engine, ctx.clock, self.settings.data_provider, str(exc))
+            raise SyncFailed(str(exc)) from exc
         self._provider = provider
         result = run_sync(ctx.engine, ctx.clock, provider, tz=self.config.tz, unit=self.config.unit)
         if result.status != "ok":

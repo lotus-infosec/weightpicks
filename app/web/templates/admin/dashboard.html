@@ -8,6 +8,7 @@
     <p>Worker: <strong class="{{ 'good' if d.worker_ok else 'bad' }}">{{ "running" if d.worker_ok else "not seen in 3 minutes" }}</strong></p>
     {% if d.last_sync %}
     <p>Last sync: <strong class="{{ 'good' if d.last_sync.status == 'ok' else 'bad' }}">{{ d.last_sync.status }}</strong>{% if d.last_sync.finished_at %}, {{ d.last_sync.finished_at | local_time }}{% endif %} · {{ d.last_sync.rows_new }} new rows</p>
+    {% if d.last_sync.status == 'failed' and d.last_sync.error %}<p class="bad small" data-testid="sync-error">{{ d.last_sync.error }}. Markets wait until data is fresh again; nothing settles on stale data.</p>{% endif %}
     {% else %}<p>No sync yet.</p>{% endif %}
     <form method="post" action="/admin/sync" class="inline-form">
       <input type="hidden" name="csrf_token" value="{{ csrf }}">

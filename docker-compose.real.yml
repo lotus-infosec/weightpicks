@@ -1,0 +1,21 @@
+# Real Garmin data on this machine, before any go-live (STAGE10, D-035, D-038).
+# Use its own project name so its volumes never mix with the simulated dev stack, and stop
+# the dev stack first (both bind 127.0.0.1:8000):
+#   R="docker compose -p weightpicks-real -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.real.yml"
+#   $R run --rm garmin-login          # once: email, password (hidden) and MFA; only a token is kept
+#   $R up --build -d                  # web + worker on real time, syncing from Garmin Connect
+#   $R down                           # never -v: that deletes the Garmin token and data
+
+services:
+  web:
+    environment:
+      DATA_PROVIDER: garmindb
+
+  worker:
+    environment:
+      DATA_PROVIDER: garmindb
+
+  garmin-login:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile

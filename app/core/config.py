@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     wp_cookie_secure: bool = True
     # Where the Docker build puts the compiled stylesheet (outside the dev source mount).
     wp_static_build_dir: Path = Path("/app/static-build")
+    # GarminDB (D-038): its home (config, token, downloads, SQLite) and its own venv.
+    garmin_home: Path = Path("/garmin")
+    garmindb_python: Path = Path("/opt/garmindb/bin/python")
 
     @field_validator("wp_timezone")
     @classmethod
@@ -76,3 +79,9 @@ class Settings(BaseSettings):
     @property
     def is_dev(self) -> bool:
         return self.app_env == "dev"
+
+    @property
+    def sim_clock(self) -> bool:
+        """Dev with simulated data runs on the persisted SimClock; real data always runs
+        on real time, even in dev (STAGE10)."""
+        return self.is_dev and self.data_provider == "simulated"

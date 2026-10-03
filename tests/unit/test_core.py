@@ -43,6 +43,8 @@ def test_no_direct_time_calls_outside_clock() -> None:
         f"{path.relative_to(APP_DIR.parent)}:{n}"
         for path in APP_DIR.rglob("*.py")
         if path.name != "clock.py" or path.parent.name != "core"
+        # Interactive one-off under GarminDB's venv; it cannot import the app (D-038).
+        if path.name != "garmin_login.py"
         for n, line in enumerate(path.read_text().splitlines(), 1)
         if forbidden.search(line)
     ]
@@ -67,6 +69,12 @@ def test_settings_read_from_environment(monkeypatch: pytest.MonkeyPatch) -> None
     assert s.is_dev
     assert s.data_provider == "simulated"
     assert s.db_url == "sqlite:///elsewhere.db"
+
+
+def test_real_data_never_runs_on_the_sim_clock() -> None:
+    assert Settings(app_env="dev", data_provider="simulated").sim_clock
+    assert not Settings(app_env="dev", data_provider="garmindb").sim_clock
+    assert not Settings(app_secret_key="k" * 64, data_provider="simulated").sim_clock
 
 
 def test_time_zone_and_unit(monkeypatch: pytest.MonkeyPatch) -> None:
