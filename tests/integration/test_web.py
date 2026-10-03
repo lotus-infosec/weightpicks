@@ -14,7 +14,7 @@ from app.models import Bet, Market, OddsVersion, OutboxMessage, Selection, User
 from app.services import auth, markets
 from app.web.main import create_app
 from tests.integration import web
-from tests.integration.world import World, local
+from tests.integration.world import World, local, mark_setup_done
 
 HEADERS = {
     "X-Robots-Tag": "noindex, nofollow",
@@ -94,6 +94,7 @@ def app_and_code(world: World) -> tuple[TestClient, World, str]:
 
 
 def test_anonymous_visitors_are_sent_to_login(settings: Settings, migrated_engine: Engine) -> None:
+    mark_setup_done(migrated_engine, settings)
     with web.client(create_app(settings)) as c:
         for path in ("/", "/bets/mine", "/bets/feed", "/markets/1", "/admin"):
             response = c.get(path, follow_redirects=False)
@@ -257,6 +258,7 @@ def test_roles(app_and_code: tuple[TestClient, World, str]) -> None:
 
 def test_dev_routes_need_admin_and_csrf(settings: Settings, migrated_engine: Engine) -> None:
     dev = settings.model_copy(update={"data_provider": "simulated"})
+    mark_setup_done(migrated_engine, dev)
     with web.client(create_app(dev)) as c:
         assert c.post("/dev/clock/advance", data={"days": "1"}).status_code == 403  # no CSRF
         web.as_admin(c, migrated_engine)

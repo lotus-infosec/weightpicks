@@ -1,0 +1,9 @@
+{% extends "setup/_layout.html" %}
+{% from "setup/_fields.html" import secret %}
+{% block fields %}
+<p class="muted">Optional. Cloudflare Workers AI writes prop ideas and Discord copy. It never sets odds or settles bets. Leave empty to skip.</p>
+{% if not can_store_secrets %}<p class="alert">APP_SECRET_KEY isn't set, so secrets can't be saved here. Skip this step for now.</p>{% endif %}
+{{ secret("account_id", "Cloudflare account ID", "workers_ai.account_id" in secret_names, can_store_secrets, errors["workers_ai.account_id"]) }}
+{{ secret("token", "Workers AI API token", "workers_ai.token" in secret_names, can_store_secrets, errors["workers_ai.token"]) }}
+{% if "workers_ai.token" in secret_names %}<label class="choice"><input type="checkbox" name="clear"> Remove the saved Workers AI details</label>{% endif %}
+{% endblock %}

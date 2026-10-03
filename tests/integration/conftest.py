@@ -6,7 +6,7 @@ from app.core.config import Settings
 from app.core.db import immediate
 from app.services import instance
 from app.services.ledger import open_season
-from tests.integration.world import World, local, sync_sim
+from tests.integration.world import World, local, mark_setup_done, sync_sim
 
 
 @pytest.fixture
@@ -17,4 +17,5 @@ def world(migrated_engine: Engine, settings: Settings) -> World:
     with immediate(migrated_engine) as conn:
         open_season(conn, clock)
         config = instance.ensure(conn, clock, settings)
+    mark_setup_done(migrated_engine, settings)
     return World(migrated_engine, clock, config, settings)

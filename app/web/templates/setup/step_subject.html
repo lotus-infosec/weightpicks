@@ -1,0 +1,15 @@
+{% extends "setup/_layout.html" %}
+{% from "setup/_fields.html" import field %}
+{% block fields %}
+{{ field("subject_name", "Name shown to players", values.subject_name, error=errors.subject_name, attrs='maxlength="40"') }}
+<fieldset class="choices">
+  <legend>Unit</legend>
+  {% for u, label in (("lb", "Pounds (lb)"), ("kg", "Kilograms (kg)")) %}
+  <label class="choice"><input type="radio" name="unit" value="{{ u }}"{% if values.unit == u %} checked{% endif %}> {{ label }}</label>
+  {% endfor %}
+  {% if errors.unit %}<span class="field-error" role="alert">{{ errors.unit }}</span>{% endif %}
+</fieldset>
+{{ field("start_weight", "Starting weight", values.start_weight, error=errors.start_weight, attrs='inputmode="decimal"') }}
+{{ field("goal_weight", "Goal weight", values.goal_weight, error=errors.goal_weight, attrs='inputmode="decimal"') }}
+<p class="muted small">The unit can't change once the season starts. Reaching the goal ends the season.</p>
+{% endblock %}

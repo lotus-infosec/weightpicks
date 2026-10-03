@@ -1,0 +1,18 @@
+{% extends "setup/_layout.html" %}
+{% block action %}/setup/finish{% endblock %}
+{% block fields %}
+{% if missing %}
+<p class="alert" role="alert">Finish these steps first: {% for s in missing %}<a href="/setup/step/{{ s.number }}">{{ s.title }}</a>{{ ", " if not loop.last }}{% endfor %}</p>
+{% endif %}
+<dl class="review">
+  {% if draft.admin %}<dt>Admin</dt><dd>{{ draft.admin.display_name }} · {{ draft.admin.email }}</dd>{% endif %}
+  {% if draft.subject %}<dt>Subject</dt><dd>{{ draft.subject.subject_name }}: {{ "%.1f" | format(draft.subject.start_weight_x10 / 10) }} → goal {{ "%.1f" | format(draft.subject.goal_weight_x10 / 10) }} {{ draft.subject.unit }} (going {{ draft.subject.direction }})</dd>{% endif %}
+  {% if draft.schedule %}<dt>Schedule</dt><dd>{{ draft.schedule.timezone }} · daily {{ draft.schedule.daily_drop }} · lock {{ draft.schedule.bet_lock }} · weekly {{ weekdays[draft.schedule.weekly_drop_weekday][1] }} {{ draft.schedule.weekly_drop }}</dd>{% endif %}
+  {% if economy %}<dt>Economy</dt><dd>Start {{ economy.starting_bankroll_cents | money }} · allowance {{ economy.daily_allowance_cents | money }} · bailout {{ economy.bailout_cents | money }} · even bet {{ economy.vig_preset }}</dd>{% endif %}
+  {% if draft.stats %}<dt>Stats</dt><dd>Weight{% for m in draft.stats.enabled_metrics %}, {{ metric_labels[m] | lower }}{% endfor %}</dd>{% endif %}
+  <dt>Integrations</dt><dd>Workers AI {{ "set" if "workers_ai.token" in secret_names else "not set" }} · Discord webhooks {{ (draft.discord.categories | length) if draft.discord else 0 }} · email {{ "set" if draft.smtp and draft.smtp.configured else "not set" }}</dd>
+  {% if draft.registration %}<dt>Registration code</dt><dd>{{ draft.registration.code }}</dd>{% endif %}
+  {% if draft.appearance %}<dt>Look</dt><dd>{{ draft.appearance.app_name }} · {{ palettes[draft.appearance.palette] }}</dd>{% endif %}
+</dl>
+{% endblock %}
+{% block submit %}<button type="submit" class="primary"{% if missing %} disabled{% endif %}>Finish setup</button>{% endblock %}

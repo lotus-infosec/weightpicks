@@ -25,9 +25,8 @@ from app.core.security import (
     token_hash,
     verify_password,
 )
-from app.domain.economy import DEFAULT_ECONOMY
 from app.models import AuthAttempt, BannedEmail, RegistrationCode, Session, User
-from app.services import ledger
+from app.services import instance, ledger
 from app.services.users import normalize_email
 
 log = structlog.get_logger()
@@ -172,7 +171,7 @@ def _create_player(
             conn,
             clock,
             account_id,
-            DEFAULT_ECONOMY.starting_bankroll_cents,
+            instance.economy(conn).starting_bankroll_cents,
             idempotency_key=f"register:grant:season{season_id}:user{user_id}",
         )
     return user_id

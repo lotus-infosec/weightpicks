@@ -12,7 +12,7 @@ pytestmark = pytest.mark.e2e
 
 SCREENS = Path("test-screens")  # git-ignored; pytest-playwright wipes test-results/
 SIZES = {"phone": (375, 812), "desktop": (1280, 800)}
-THEME_BG = "rgb(15, 18, 22)"  # --color-bg
+UNSTYLED = {"rgba(0, 0, 0, 0)", "rgb(255, 255, 255)"}  # browser defaults: no stylesheet
 
 
 def check(page: Page, name: str, size: str, errors: list[str]) -> None:
@@ -21,7 +21,7 @@ def check(page: Page, name: str, size: str, errors: list[str]) -> None:
     viewport = page.evaluate("window.innerWidth")
     assert width <= viewport, f"{name}@{size}: page is {width}px wide in a {viewport}px window"
     bg = page.evaluate("getComputedStyle(document.documentElement).backgroundColor")
-    assert bg == THEME_BG, f"{name}@{size}: stylesheet not applied (background {bg})"
+    assert bg not in UNSTYLED, f"{name}@{size}: stylesheet not applied (background {bg})"
     for box in page.locator("button.side:visible, button.primary:visible").all():
         height = box.bounding_box()["height"]  # type: ignore[index]
         assert height >= 44, f"{name}@{size}: a button is only {height}px tall"

@@ -33,6 +33,7 @@ BET_MESSAGES = {
     "stale_odds": "The odds changed. Refresh the board and try again.",
     "side_not_offered": "That side isn't offered.",
     "below_minimum": "The minimum bet is $1.",
+    "above_maximum": "That's over the maximum bet.",
     "insufficient_funds": "You don't have enough balance for that stake.",
     "user_inactive": "Your account can't bet right now.",
     "instance_frozen": "Betting is paused.",
@@ -78,7 +79,8 @@ def build_router() -> APIRouter:
         session = current_session(request)
         if session is not None:
             return RedirectResponse(_home_for(session), status_code=303)
-        return anon_form(request, "login.html", {"error": None, "email": ""})
+        welcome = request.query_params.get("welcome") == "1"
+        return anon_form(request, "login.html", {"error": None, "email": "", "welcome": welcome})
 
     @router.post("/api/auth/login")
     async def login(request: Request) -> Response:

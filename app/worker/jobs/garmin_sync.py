@@ -3,6 +3,7 @@ from datetime import datetime
 from app.core.config import Settings
 from app.domain.schedule import sync_period_key
 from app.providers.base import DataProvider
+from app.services.instance import InstanceConfig
 from app.services.sync import make_provider, run_sync
 from app.worker.registry import JobContext
 
@@ -16,18 +17,19 @@ class GarminSyncJob:
 
     name = "garmin_sync"
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, config: InstanceConfig) -> None:
         self.settings = settings
+        self.config = config  # zone and unit come from the settings row (D-036)
         self._provider: DataProvider | None = None
 
     def due(self, now: datetime) -> str:
-        return sync_period_key(now, self.settings.tz)
+        return sync_period_key(now, self.config.tz)
 
     def run(self, ctx: JobContext) -> None:
-        provider = make_provider(self.settings, ctx.engine, ctx.clock, self._provider)
-        self._provider = provider
-        result = run_sync(
-            ctx.engine, ctx.clock, provider, tz=self.settings.tz, unit=self.settings.wp_unit
+        provider = make_provider(
+            self.settings, ctx.engine, ctx.clock, self._provider, tz=self.config.tz
         )
+        self._provider = provider
+        result = run_sync(ctx.engine, ctx.clock, provider, tz=self.config.tz, unit=self.config.unit)
         if result.status != "ok":
             raise SyncFailed(result.error)

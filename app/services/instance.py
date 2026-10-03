@@ -1,8 +1,11 @@
-"""The singleton instance settings row (STAGE05 minimum: zone, unit, schedule, enabled
-metrics, instance state). Created on first use from the install-time environment so
-dev and tests need no setup; `/setup` takes ownership in STAGE08 (D-030)."""
+"""The singleton instance settings row: the source of truth for zone, unit, schedule,
+enabled metrics, economy, appearance, flags and instance state (D-030, D-036).
 
-from dataclasses import asdict, dataclass
+`/setup` writes it. Dev and tests may auto-create it from the environment defaults
+(`ensure`), which is also how pre-STAGE08 databases got theirs.
+"""
+
+from dataclasses import asdict, dataclass, field
 from datetime import time
 from typing import Any, get_args
 from zoneinfo import ZoneInfo
@@ -12,11 +15,26 @@ from sqlalchemy import Connection, Engine, insert, select, update
 from app.core.clock import Clock
 from app.core.config import Settings
 from app.core.db import immediate
+from app.domain.economy import Economy
 from app.domain.markets import COUNT_MARKET_METRICS, Schedule
 from app.domain.units import Unit
 from app.models import InstanceSettingsRow
 
 ACTIVE, FROZEN = "active", "frozen"
+
+
+FLAG_DEFAULTS: dict[str, bool] = {  # BUILD_PLAN §4.2: everything off until its stage
+    "real_garmin": False,
+    "registration_open": False,
+    "discord_public": False,
+    "props_futures": False,
+    "parlays": False,
+    "ai_props": False,
+    "ai_hype": False,
+    "special_events": False,
+    "backup_ui": False,
+}
+PALETTES = ("ember", "lagoon", "grove", "slate")
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +44,13 @@ class InstanceConfig:
     schedule: Schedule
     enabled_metrics: tuple[str, ...]
     state: str
+    app_name: str = "WeightPicks"
+    palette: str = "ember"
+    subject_name: str | None = None
+    economy: Economy = field(default_factory=Economy)
+    ai_mode: str = "review"
+    flags: dict[str, bool] = field(default_factory=lambda: dict(FLAG_DEFAULTS))
+    setup_completed: bool = False
 
     @property
     def tz(self) -> ZoneInfo:
@@ -59,20 +84,46 @@ def schedule_from_json(data: dict[str, Any]) -> Schedule:
 def read(conn: Connection) -> InstanceConfig | None:
     t = InstanceSettingsRow
     row = conn.execute(
-        select(t.timezone, t.unit, t.schedule, t.enabled_metrics, t.instance_state).where(t.id == 1)
+        select(
+            t.timezone,
+            t.unit,
+            t.schedule,
+            t.enabled_metrics,
+            t.instance_state,
+            t.app_name,
+            t.palette,
+            t.subject_name,
+            t.economy,
+            t.ai_mode,
+            t.flags,
+            t.setup_completed_at,
+        ).where(t.id == 1)
     ).one_or_none()
     if row is None:
         return None
-    timezone, unit, schedule, enabled, state = row
-    if unit not in get_args(Unit):
-        raise ValueError(f"unknown unit {unit!r}")
+    if row.unit not in get_args(Unit):
+        raise ValueError(f"unknown unit {row.unit!r}")
     return InstanceConfig(
-        timezone=timezone,
-        unit=unit,
-        schedule=schedule_from_json(schedule),
-        enabled_metrics=tuple(m for m in enabled if m in COUNT_MARKET_METRICS),
-        state=state,
+        timezone=row.timezone,
+        unit=row.unit,
+        schedule=schedule_from_json(row.schedule),
+        enabled_metrics=tuple(m for m in row.enabled_metrics if m in COUNT_MARKET_METRICS),
+        state=row.instance_state,
+        app_name=row.app_name,
+        palette=row.palette if row.palette in PALETTES else "ember",
+        subject_name=row.subject_name,
+        economy=Economy.from_json(row.economy),
+        ai_mode=row.ai_mode,
+        flags=FLAG_DEFAULTS
+        | {k: bool(v) for k, v in (row.flags or {}).items() if k in FLAG_DEFAULTS},
+        setup_completed=row.setup_completed_at is not None,
     )
+
+
+def economy(conn: Connection) -> Economy:
+    """The live economy settings (defaults if the row doesn't exist yet)."""
+    config = read(conn)
+    return config.economy if config else Economy()
 
 
 def ensure(conn: Connection, clock: Clock, settings: Settings) -> InstanceConfig:
@@ -89,6 +140,8 @@ def ensure(conn: Connection, clock: Clock, settings: Settings) -> InstanceConfig
             enabled_metrics=list(COUNT_MARKET_METRICS),
             instance_state=ACTIVE,
             updated_at=clock.now(),
+            economy=Economy().to_json(),
+            flags=dict(FLAG_DEFAULTS),
         )
     )
     created = read(conn)

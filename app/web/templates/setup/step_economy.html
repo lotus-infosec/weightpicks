@@ -1,0 +1,17 @@
+{% extends "setup/_layout.html" %}
+{% from "setup/_fields.html" import field %}
+{% block fields %}
+<p class="muted">Fake money. Defaults are filled in; change anything you like.</p>
+{{ field("starting_bankroll", "Starting bankroll ($)", values.starting_bankroll, error=errors.starting_bankroll, attrs='inputmode="decimal"') }}
+{{ field("daily_allowance", "Daily allowance ($)", values.daily_allowance, error=errors.daily_allowance, attrs='inputmode="decimal"') }}
+{{ field("bailout", "Bailout amount ($)", values.bailout, error=errors.bailout, attrs='inputmode="decimal"') }}
+{{ field("bailout_cooldown_days", "Bailout cooldown (days)", values.bailout_cooldown_days, "number", errors.bailout_cooldown_days, attrs='min="0" max="30"') }}
+<label>House edge (price of an even bet)
+  <select name="vig">
+    {% for v in vigs %}<option value="{{ v }}"{% if values.vig == v %} selected{% endif %}>{{ v }} / {{ v }}{% if v == "-110" %} (standard){% endif %}</option>{% endfor %}
+  </select>
+</label>
+{{ field("max_bet", "Maximum bet ($)", values.max_bet, error=errors.max_bet, hint="empty = no maximum", attrs='inputmode="decimal"') }}
+{{ field("max_parlay_legs", "Max parlay legs", values.max_parlay_legs, "number", errors.max_parlay_legs, attrs='min="2" max="12"') }}
+{{ field("high_roller", "High-roller threshold ($)", values.high_roller, error=errors.high_roller, hint="announced on Discord", attrs='inputmode="decimal"') }}
+{% endblock %}

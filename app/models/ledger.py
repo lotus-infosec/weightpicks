@@ -30,6 +30,10 @@ class Season(Base):
     status: Mapped[str] = mapped_column(String(16))  # active | frozen | ended
     started_at: Mapped[datetime] = mapped_column(UTCDateTime())
     ended_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    # Set by /setup (STAGE08); tenths of the instance unit. Nullable for older rows.
+    start_weight_x10: Mapped[int | None]
+    goal_weight_x10: Mapped[int | None]
+    direction: Mapped[str | None] = mapped_column(String(4))  # down | up
 
 
 class User(Base):

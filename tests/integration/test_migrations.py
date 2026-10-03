@@ -31,3 +31,30 @@ def test_migrations_match_the_models(migrated_engine: Engine) -> None:
     with migrated_engine.connect() as conn:
         diff = compare_metadata(MigrationContext.configure(conn), Base.metadata)
     assert diff == []
+
+
+def test_downgrade_and_upgrade_keep_guards(engine: Engine, tmp_path: Path) -> None:
+    """Table rebuilds must not drop the expression index or the append-only triggers."""
+    from alembic import command
+    from sqlalchemy import text
+
+    from app.core.migrations import _config
+
+    upgrade_to_head(engine, tmp_path / ".migrate.lock")
+    guards = {
+        "uq_seasons_one_open",
+        "trg_ledger_entries_no_update",
+        "trg_observations_no_delete",
+    }
+
+    def present() -> set[str]:
+        with engine.connect() as conn:
+            return set(conn.execute(text("SELECT name FROM sqlite_master")).scalars()) & guards
+
+    assert present() == guards
+    with engine.begin() as conn:
+        command.downgrade(_config(conn), "0006")
+    assert present() == guards
+    with engine.begin() as conn:
+        command.upgrade(_config(conn), "head")
+    assert present() == guards

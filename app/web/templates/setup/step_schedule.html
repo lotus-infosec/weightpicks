@@ -1,0 +1,18 @@
+{% extends "setup/_layout.html" %}
+{% from "setup/_fields.html" import field %}
+{% block fields %}
+<label>Time zone
+  <input type="text" name="timezone" value="{{ values.timezone }}" list="zones" autocomplete="off">
+  <datalist id="zones">{% for z in zones %}<option value="{{ z }}">{% endfor %}</datalist>
+  {% if errors.timezone %}<span class="field-error" role="alert">{{ errors.timezone }}</span>{% endif %}
+</label>
+{{ field("daily_drop", "Daily lines drop at", values.daily_drop, "time", errors.daily_drop, "after the 04:00–11:00 weigh-in window") }}
+{{ field("bet_lock", "Bets lock at", values.bet_lock, "time", errors.bet_lock) }}
+<label>Weekly lines drop on
+  <select name="weekly_drop_weekday">
+    {% for n, day in weekdays %}<option value="{{ n }}"{% if values.weekly_drop_weekday|int == n %} selected{% endif %}>{{ day }}</option>{% endfor %}
+  </select>
+</label>
+{{ field("weekly_drop", "Weekly drop time", values.weekly_drop, "time", errors.weekly_drop) }}
+{{ field("monthly_drop", "Monthly drop time (last day of the month)", values.monthly_drop, "time", errors.monthly_drop) }}
+{% endblock %}

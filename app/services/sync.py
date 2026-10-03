@@ -44,7 +44,12 @@ class SyncResult:
 
 
 def make_provider(
-    settings: Settings, engine: Engine, clock: Clock, cached: DataProvider | None = None
+    settings: Settings,
+    engine: Engine,
+    clock: Clock,
+    cached: DataProvider | None = None,
+    *,
+    tz: ZoneInfo | None = None,
 ) -> DataProvider:
     """The configured provider. A cached simulator is reused while its config is unchanged
     (keeping its per-day data cache); a reseed produces a fresh one."""
@@ -63,7 +68,10 @@ def make_provider(
         ) == (state.preset, state.seed, state.anchor_date):
             return cached
         return SimulatedProvider(
-            preset=state.preset, seed=state.seed, anchor_date=state.anchor_date, tz=settings.tz
+            preset=state.preset,
+            seed=state.seed,
+            anchor_date=state.anchor_date,
+            tz=tz or settings.tz,
         )
     raise ProviderUnavailable("the GarminDB provider arrives in STAGE10")
 

@@ -19,8 +19,7 @@ from app.models import Account, Bet, BetLeg, Market, OddsVersion, Selection, Use
 from app.services import instance, ledger
 from app.services.outbox import Category, enqueue
 
-MIN_STAKE_CENTS = 100  # $1 (A9); no maximum (CONCEPT §6)
-HIGH_ROLLER_CENTS = 50_000  # $500 (CONCEPT §6); a setting from STAGE08
+MIN_STAKE_CENTS = 100  # $1 (A9); the maximum and high-roller threshold are settings
 
 
 class BetRejected(Exception):
@@ -130,6 +129,9 @@ def place_bet(
             raise BetRejected("side_not_offered")
         if stake_cents < MIN_STAKE_CENTS:
             raise BetRejected("below_minimum", f"minimum stake is {MIN_STAKE_CENTS} cents")
+        economy = instance.economy(conn)
+        if economy.max_bet_cents is not None and stake_cents > economy.max_bet_cents:
+            raise BetRejected("above_maximum", f"maximum stake is {economy.max_bet_cents} cents")
 
         potential = payout_cents(stake_cents, american)
         bet_id = conn.execute(
@@ -185,7 +187,7 @@ def place_bet(
             payload=payload,
             dedupe_key=f"bet_placed:{bet_id}",
         )
-        if stake_cents >= HIGH_ROLLER_CENTS:
+        if stake_cents >= economy.high_roller_cents:
             enqueue(
                 conn,
                 clock,

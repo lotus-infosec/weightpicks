@@ -1,0 +1,14 @@
+{% macro field(name, label, value="", type="text", error=None, hint=None, attrs="") -%}
+<label>{{ label }}{% if hint %} <span class="muted">({{ hint }})</span>{% endif %}
+  <input type="{{ type }}" name="{{ name }}" value="{{ value if value is not none else '' }}" {{ attrs | safe }}>
+  {% if error %}<span class="field-error" role="alert">{{ error }}</span>{% endif %}
+</label>
+{%- endmacro %}
+
+{% macro secret(name, label, saved, can_store, error=None) -%}
+<label>{{ label }}
+  <input type="password" name="{{ name }}" autocomplete="off"{% if not can_store %} disabled{% endif %}
+         placeholder="{{ 'Saved — leave empty to keep' if saved else '' }}">
+  {% if error %}<span class="field-error" role="alert">{{ error }}</span>{% endif %}
+</label>
+{%- endmacro %}

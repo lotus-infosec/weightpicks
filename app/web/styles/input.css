@@ -78,3 +78,34 @@
   .bet-detail { color: var(--color-muted); }
   .result { @apply mt-2 font-semibold; }
 }
+
+/* ---- palettes (chosen in /setup; original names and colours) ---- */
+.palette-ember { --color-accent: #f2b544; }
+.palette-lagoon { --color-bg: #0c1418; --color-surface: #12202a; --color-raised: #1a2d39; --color-line: #24404f; --color-accent: #3cc7c0; }
+.palette-grove { --color-bg: #0f140f; --color-surface: #162016; --color-raised: #1e2c1e; --color-line: #2c3f2c; --color-accent: #8fd16a; }
+.palette-slate { --color-bg: #121318; --color-surface: #1b1d25; --color-raised: #252836; --color-line: #343849; --color-accent: #a5b4fc; }
+
+@layer components {
+  .notice { @apply rounded-lg px-3 py-2 mb-3; background: color-mix(in srgb, var(--color-over) 18%, transparent); }
+  .field-error { @apply block text-sm mt-1; color: var(--color-bad); }
+  .secondary { @apply rounded-xl px-4 py-3 font-semibold text-base; background: var(--color-raised); color: var(--color-text); border: 1px solid var(--color-line); }
+  .setup h1 { @apply mt-2; }
+  .steps { @apply flex flex-wrap gap-1 mb-4 text-xs; }
+  .steps li a { @apply inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-full no-underline; background: var(--color-raised); color: var(--color-muted); }
+  .steps li.done a { color: var(--color-text); border: 1px solid var(--color-over); }
+  .steps li.current a { background: var(--color-accent); color: #1a1205; }
+  .step-name { @apply hidden; }
+  .setup-nav { @apply flex gap-3 justify-end mt-2; }
+  .setup-nav .primary { @apply flex-1; }
+  .code { @apply rounded-lg px-3 py-2 text-sm my-2 whitespace-pre-wrap; overflow-wrap: anywhere; background: var(--color-raised); }
+  .code-big { @apply text-2xl font-mono tracking-widest text-center rounded-xl py-4; background: var(--color-raised); }
+  .choices { @apply flex flex-col gap-2 border-0 p-0; }
+  .choices legend { @apply text-sm mb-1; color: var(--color-muted); }
+  .choice { @apply flex items-center gap-3 rounded-xl px-3 py-3 text-base; background: var(--color-raised); color: var(--color-text); }
+  .choice input { @apply w-5 h-5 p-0; accent-color: var(--color-accent); }
+  .swatch { @apply inline-block w-6 h-6 rounded-full; background: var(--color-accent); border: 2px solid var(--color-surface); }
+  .review { @apply grid gap-1 text-sm; }
+  .review dt { @apply mt-2 font-semibold; }
+  .review dd { color: var(--color-muted); }
+  select { @apply w-full rounded-lg px-3 py-3 text-base; background: var(--color-raised); border: 1px solid var(--color-line); color: var(--color-text); }
+}

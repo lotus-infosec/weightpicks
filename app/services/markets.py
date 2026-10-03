@@ -30,7 +30,6 @@ from app.domain.markets import (
     drop_specs,
     transition,
 )
-from app.domain.odds import DEFAULT_HOLD
 from app.domain.schedule import local_date
 from app.models import InstanceSettingsRow, Market, Observation, OddsVersion, Selection
 from app.providers.base import COUNT_METRICS, WORKOUT_MIN_MINUTES
@@ -179,7 +178,7 @@ def drop(
     timeframe: Timeframe,
     day: date,
     *,
-    hold: float = DEFAULT_HOLD,
+    hold: float | None = None,
 ) -> DropResult:
     """Post the core markets of one drop (daily/weekly/monthly) for local date `day`."""
     result = DropResult(timeframe, day)
@@ -191,6 +190,7 @@ def drop(
         unit=config.unit,
         enabled_metrics=config.enabled_metrics,
     )
+    vig = float(config.economy.hold) if hold is None else hold  # settings, D-036
     now = clock.now()
     if local_date(now, config.tz) != day:
         result.skipped = dict.fromkeys((s.dedupe_key for s in specs), "stale_drop")
@@ -207,7 +207,7 @@ def drop(
         if spec.lock_at <= now:
             result.skipped[spec.dedupe_key] = "lock_passed"
             continue
-        pricing = TEMPLATES[spec.template].price(spec, data, config.unit, hold)
+        pricing = TEMPLATES[spec.template].price(spec, data, config.unit, vig)
         if pricing is None:
             result.skipped[spec.dedupe_key] = "no_history"
             continue

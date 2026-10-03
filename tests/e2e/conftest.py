@@ -26,7 +26,7 @@ from app.domain.markets import Timeframe
 from app.services import auth, instance, markets
 from app.services.ledger import open_season
 from app.web.main import create_app
-from tests.integration.world import local, sync_sim
+from tests.integration.world import local, mark_setup_done, sync_sim
 
 
 @dataclass
@@ -65,6 +65,7 @@ def live_server(tmp_path: Path) -> Iterator[LiveServer]:
         config = instance.ensure(conn, clock, settings)
     markets.drop(engine, clock, config, Timeframe.DAILY, date(2026, 10, 5))
     code = auth.rotate_registration_code(engine, SystemClock())
+    mark_setup_done(engine, settings)
     engine.dispose()
 
     port = _free_port()
@@ -163,6 +164,7 @@ def rich_server(tmp_path: Path) -> Iterator[RichServer]:
     bet_all(date(2026, 10, 4), 1_500)
     with engine.connect() as conn:
         assert ledger.verify(conn).ok
+    mark_setup_done(engine, settings)
     engine.dispose()
 
     port = _free_port()
@@ -182,5 +184,45 @@ def rich_server(tmp_path: Path) -> Iterator[RichServer]:
             raise RuntimeError("live server did not start")
         time.sleep(0.05)
     yield RichServer(f"http://127.0.0.1:{port}", "p1@example.invalid", "correct horse battery")
+    server.should_exit = True
+    thread.join(timeout=10)
+
+
+@dataclass
+class FreshServer:
+    url: str
+    token: str
+
+
+@pytest.fixture
+def fresh_server(tmp_path: Path) -> Iterator[FreshServer]:
+    """A brand-new instance that hasn't been set up, with a secret key for secrets."""
+    from pydantic import SecretStr
+
+    from app.services import setup
+
+    settings = Settings(
+        app_env="dev",
+        data_dir=tmp_path,
+        log_format="console",
+        log_level="WARNING",
+        app_secret_key=SecretStr("e2e-" + "k" * 40),
+    )
+    engine = make_engine(settings.db_url)
+    upgrade_to_head(engine, tmp_path / ".migrate.lock")
+    token = setup.issue_token(engine, SystemClock())  # what `wp setup-token` prints
+    engine.dispose()
+    port = _free_port()
+    server = uvicorn.Server(
+        uvicorn.Config(create_app(settings), host="127.0.0.1", port=port, log_level="warning")
+    )
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 10
+    while not server.started:
+        if time.monotonic() > deadline:
+            raise RuntimeError("live server did not start")
+        time.sleep(0.05)
+    yield FreshServer(f"http://127.0.0.1:{port}", token)
     server.should_exit = True
     thread.join(timeout=10)

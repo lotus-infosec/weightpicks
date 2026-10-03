@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="palette-{{ instance.palette }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <meta name="csrf-token" content="{{ csrf }}">
   <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false}'>
-  <title>{% block title %}WeightPicks{% endblock %}</title>
+  <title>{% block title %}{{ instance.app_name }}{% endblock %}</title>
   <link rel="stylesheet" href="/static/app.css">
   {# app.js registers Alpine components on alpine:init, so it must load before Alpine. #}
   <script src="/static/app.js" defer></script>
@@ -16,7 +16,7 @@
 <body class="app" hx-headers='{{ {"X-CSRF-Token": csrf} | tojson }}'>
   {% if session %}
   <header class="topbar">
-    <a class="brand" href="/">WeightPicks</a>
+    <a class="brand" href="/">{{ instance.app_name }}</a>
     {% if wallet %}<span class="wallet" data-testid="balance">{{ wallet.balance_cents | money }}</span>{% endif %}
     <form method="post" action="/api/auth/logout" class="inline">
       <input type="hidden" name="csrf_token" value="{{ csrf }}">
@@ -31,7 +31,7 @@
   </nav>
   {% endif %}
   {% else %}
-  <header class="topbar"><span class="brand">WeightPicks</span></header>
+  <header class="topbar"><span class="brand">{{ instance.app_name }}</span></header>
   {% endif %}
   <main class="page">
     {% block content %}{% endblock %}

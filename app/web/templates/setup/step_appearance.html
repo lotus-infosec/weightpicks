@@ -1,0 +1,13 @@
+{% extends "setup/_layout.html" %}
+{% from "setup/_fields.html" import field %}
+{% block fields %}
+{{ field("app_name", "App name", values.app_name, error=errors.app_name, attrs='maxlength="40"') }}
+<fieldset class="choices palettes">
+  <legend>Colours</legend>
+  {% for key, label in palettes.items() %}
+  <label class="choice palette-choice palette-{{ key }}"><input type="radio" name="palette" value="{{ key }}"{% if values.palette == key %} checked{% endif %}>
+    <span class="swatch" aria-hidden="true"></span> {{ label }}</label>
+  {% endfor %}
+</fieldset>
+<p class="muted small">A logo upload comes with the appearance settings in a later stage.</p>
+{% endblock %}

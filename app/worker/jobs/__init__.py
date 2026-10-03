@@ -17,7 +17,7 @@ def domain_jobs(settings: Settings, config: InstanceConfig) -> tuple[Job, ...]:
     then drops, the lock pass and the settle pass."""
     locks, settles = DueCache(), DueCache()
     return (
-        GarminSyncJob(settings),
+        GarminSyncJob(settings, config),
         DropJob(Timeframe.DAILY, config, locks),
         DropJob(Timeframe.WEEKLY, config, locks),
         DropJob(Timeframe.MONTHLY, config, locks),
