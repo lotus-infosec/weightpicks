@@ -1,9 +1,12 @@
-"""The line engine (BUILD_PLAN §1.4.1, D-008). Pure and deterministic.
+"""The line engine (BUILD_PLAN §1.4.1, D-008 as amended by D-029). Pure and deterministic.
 
-Weight = trend level + scale noise, fitted by weighted least squares over the last
-14 days of canonical weigh-ins (half-life 7 days). Lines snap to x.5; fair
-probabilities become vigged American odds through `app.domain.odds`. Floats are
-used for probabilities and model math only; lines leave as integer tenths.
+Weight = trend level + scale noise. The trend is fitted by weighted least squares
+over the last 14 days of canonical weigh-ins (half-life 7 days). Scale noise sigma
+is a stable property of the person and scale, so it is estimated from day-to-day
+changes over the last 12 weeks (D-029); early in a season it falls back to the
+14-day fit with a Student-t predictive. Lines snap to x.5; fair probabilities become
+vigged American odds through `app.domain.odds`. Floats are used for probabilities
+and model math only; lines leave as integer tenths.
 """
 
 import math
@@ -14,6 +17,7 @@ from typing import Any
 
 import numpy as np
 from scipy.stats import norm, poisson
+from scipy.stats import t as student_t
 
 from app.domain.odds import DEFAULT_HOLD, american, apply_vig, is_offered
 from app.domain.units import Unit
@@ -21,6 +25,8 @@ from app.domain.units import Unit
 WINDOW_DAYS = 14
 HALF_LIFE_DAYS = 7.0
 MIN_WEIGH_INS = 7
+SIGMA_WINDOW_DAYS = 84  # D-029: noise from day-to-day changes over 12 weeks
+MIN_SIGMA_PAIRS = 14
 COUNT_WINDOW_DAYS = 28
 COUNT_HALF_LIFE_DAYS = 10.0
 COUNT_SD_FLOOR = 0.10  # of the mean
@@ -52,9 +58,17 @@ class WeightFit:
     a: float  # trend level at day 0 (the pricing day), display unit
     b: float  # trend per day
     sigma: float  # scale noise (floored)
-    se_b: float  # standard error of b
-    n: int  # weigh-ins used
+    var_a: float  # sampling variance of a
+    cov_ab: float
+    var_b: float  # sampling variance of b
+    n: int  # weigh-ins in the 14-day trend window
     provisional: bool
+    sigma_source: str  # "long" (12-week day-to-day changes) | "short" (14-day fit) | "prior"
+    df: float | None  # Student-t degrees of freedom when sigma is short-window, else None
+
+    @property
+    def se_b(self) -> float:
+        return math.sqrt(self.var_b)
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,29 +82,72 @@ class Pricing:
     model_inputs: dict[str, Any] = field(default_factory=dict)
 
 
+def long_window_sigma(points: Sequence[tuple[int, float]]) -> tuple[float, int] | None:
+    """Scale noise from consecutive-day changes over the last 12 weeks (D-029).
+
+    Var(w_t - w_(t-1)) = 2·sigma² (+ tiny drift); subtracting the mean change removes
+    the trend, so plateaus and rebounds don't inflate it. None if < 14 pairs.
+    """
+    by_day = dict(p for p in points if -(SIGMA_WINDOW_DAYS - 1) <= p[0] <= 0)
+    changes = [by_day[t] - by_day[t - 1] for t in sorted(by_day) if t - 1 in by_day]
+    if len(changes) < MIN_SIGMA_PAIRS:
+        return None
+    d = np.array(changes)
+    return math.sqrt(float(np.sum((d - d.mean()) ** 2)) / (len(d) - 1) / 2), len(d)
+
+
 def fit_weight(points: Sequence[tuple[int, float]], unit: Unit) -> WeightFit:
-    """WLS fit of (day_offset <= 0, weight) over the last 14 days."""
+    """Trend by WLS over the last 14 days; sigma from 12 weeks of changes when available.
+
+    `points` are (day_offset <= 0, weight); pass up to 84 days so sigma can use them.
+    """
     params = UNIT_PARAMS[unit]
     recent = sorted((t, y) for t, y in points if -(WINDOW_DAYS - 1) <= t <= 0)
     if not recent:
         raise ValueError("need at least one weigh-in in the last 14 days")
+    long = long_window_sigma(points)
     t = np.array([p[0] for p in recent], dtype=float)
     y = np.array([p[1] for p in recent], dtype=float)
     w = 2.0 ** (t / HALF_LIFE_DAYS)
     w *= len(w) / w.sum()
     n = len(recent)
-    if n < MIN_WEIGH_INS:
-        level = float(np.sum(w * y) / np.sum(w))
-        return WeightFit(level, 0.0, params.prior_sigma, 0.0, n, provisional=True)
 
-    t_bar = float(np.sum(w * t) / np.sum(w))
-    y_bar = float(np.sum(w * y) / np.sum(w))
-    sxx = float(np.sum(w * (t - t_bar) ** 2))
-    b = float(np.sum(w * (t - t_bar) * (y - y_bar)) / sxx)
-    a = y_bar - b * t_bar
-    residuals = y - (a + b * t)
-    sigma = max(math.sqrt(float(np.sum(w * residuals**2)) / (n - 2)), params.sigma_floor)
-    return WeightFit(a, b, sigma, sigma / math.sqrt(sxx), n, provisional=False)
+    if n < MIN_WEIGH_INS:
+        sigma = max(long[0], params.sigma_floor) if long else params.prior_sigma
+        level = float(np.sum(w * y) / np.sum(w))
+        var_level = sigma**2 * float(np.sum(w**2)) / float(np.sum(w)) ** 2
+        return WeightFit(
+            level, 0.0, sigma, var_level, 0.0, 0.0, n, True, "long" if long else "prior", None
+        )
+
+    # Weighted least squares with homoscedastic errors: sandwich covariance.
+    x = np.column_stack([np.ones(n), t])
+    xtw = x.T * w
+    inv = np.linalg.inv(xtw @ x)
+    beta = inv @ xtw @ y
+    residuals = y - x @ beta
+    if long is not None:
+        sigma, df, source = max(long[0], params.sigma_floor), None, "long"
+    else:
+        # Unbiased weighted residual variance; Satterthwaite degrees of freedom.
+        m = np.eye(n) - x @ inv @ xtw
+        b_mat = m.T @ np.diag(w) @ m
+        tr = float(np.trace(b_mat))
+        sigma = max(math.sqrt(float(np.sum(w * residuals**2)) / tr), params.sigma_floor)
+        df, source = tr**2 / float(np.trace(b_mat @ b_mat)), "short"
+    cov = sigma**2 * inv @ (xtw * w) @ x @ inv
+    return WeightFit(
+        float(beta[0]),
+        float(beta[1]),
+        sigma,
+        float(cov[0, 0]),
+        float(cov[0, 1]),
+        float(cov[1, 1]),
+        n,
+        False,
+        source,
+        df,
+    )
 
 
 def change_distribution(
@@ -98,16 +155,17 @@ def change_distribution(
 ) -> tuple[float, float]:
     """Mean and SD of w(start + h) - w(start).
 
-    Start known (the start weigh-in is in hand at lock): mu = a + b*h - w_s,
-    v = sigma² + h²·SE_b² + h·q. Start unknown: mu = b*h, v = 2·sigma² + h²·SE_b² + h·q.
+    Start known (the start weigh-in is in hand at lock): mu = a + b·h - w_s and
+    v = sigma² + Var(a + b·h) + h·q, where Var(a + b·h) includes level uncertainty
+    (D-029). Start unknown: mu = b·h, v = 2·sigma² + h²·Var(b) + h·q.
     """
     if horizon_days < 1:
         raise ValueError("horizon must be at least one day")
     h, q = float(horizon_days), UNIT_PARAMS[unit].drift_q
-    trend_var = h * h * fit.se_b**2 + h * q
     if start_weight is None:
-        return fit.b * h, math.sqrt(2 * fit.sigma**2 + trend_var)
-    return fit.a + fit.b * h - start_weight, math.sqrt(fit.sigma**2 + trend_var)
+        return fit.b * h, math.sqrt(2 * fit.sigma**2 + h * h * fit.var_b + h * q)
+    fitted_var = fit.var_a + 2 * h * fit.cov_ab + h * h * fit.var_b
+    return fit.a + fit.b * h - start_weight, math.sqrt(fit.sigma**2 + fitted_var + h * q)
 
 
 def snap_half(mu: float) -> float:
@@ -152,9 +210,11 @@ def price_over_under(
     sd: float,
     line: float,
     hold: float = DEFAULT_HOLD,
+    df: float | None = None,
     model_inputs: dict[str, Any] | None = None,
 ) -> Pricing:
-    p_over = float(norm.sf((line - mu) / sd))
+    z = (line - mu) / sd
+    p_over = float(norm.sf(z) if df is None else student_t.sf(z, df))
     return price_from_probability(p_over, line=line, hold=hold, model_inputs=model_inputs)
 
 
@@ -174,6 +234,9 @@ def price_weight_change(
         "a": fit.a,
         "b": fit.b,
         "sigma": fit.sigma,
+        "sigma_source": fit.sigma_source,
+        "df": fit.df,
+        "se_a": math.sqrt(fit.var_a),
         "se_b": fit.se_b,
         "n": fit.n,
         "provisional": fit.provisional,
@@ -186,7 +249,7 @@ def price_weight_change(
         "unit": unit,
         "hold": hold,
     }
-    return price_over_under(mu=mu, sd=sd, line=line, hold=hold, model_inputs=inputs)
+    return price_over_under(mu=mu, sd=sd, line=line, hold=hold, df=fit.df, model_inputs=inputs)
 
 
 # ---- count metrics (steps, minutes, kcal) and workouts ---------------------------------

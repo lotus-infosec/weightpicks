@@ -1,10 +1,11 @@
 """Seeded Monte Carlo for props, milestones and futures (BUILD_PLAN §1.4.1 step 5).
 
 Paths follow the same trend + noise model as the line engine: each path draws its
-own slope from N(b, SE_b), the level drifts by N(0, q) per day, and on each day a
-weigh-in happens with the observed rate and reads level + N(0, sigma), rounded to a
-tenth like settlement. Missed days are NaN. Templates are vectorised functions from
-the path matrix to per-path outcomes: 1.0 yes, 0.0 no, NaN push.
+own level and slope jointly from the fit's sampling distribution, the level drifts
+by N(0, q) per day, and on each day a weigh-in happens with the observed rate and
+reads level + N(0, sigma), rounded to a tenth like settlement. Missed days are NaN.
+Templates are vectorised functions from the path matrix to per-path outcomes:
+1.0 yes, 0.0 no, NaN push.
 """
 
 import hashlib
@@ -45,10 +46,11 @@ def simulate_paths(
         raise ValueError("horizon must be at least one day")
     q = UNIT_PARAMS[unit].drift_q if drift_q is None else drift_q
     rng = np.random.default_rng(seed)
-    slopes = rng.normal(fit.b, fit.se_b, size=n_paths)
+    cov = np.array([[fit.var_a, fit.cov_ab], [fit.cov_ab, fit.var_b]])
+    trend = rng.multivariate_normal([fit.a, fit.b], cov, size=n_paths, method="eigh")
     drift = np.cumsum(rng.normal(0.0, math.sqrt(q), size=(n_paths, horizon_days)), axis=1)
     days = np.arange(1, horizon_days + 1, dtype=float)
-    level = fit.a + slopes[:, None] * days + drift
+    level = trend[:, :1] + trend[:, 1:] * days + drift
     readings = np.round(level + rng.normal(0.0, fit.sigma, size=level.shape), 1)
     weighed = rng.random(level.shape) < p_weigh_in
     return np.where(weighed, readings, np.nan)

@@ -15,7 +15,23 @@ from app.domain.montecarlo import (
     streak_reaches,
 )
 
-FIT = WeightFit(a=200.0, b=-0.2, sigma=0.8, se_b=0.05, n=14, provisional=False)
+
+def make_fit(*, var_a: float = 0.04, cov_ab: float = -0.002, var_b: float = 0.0025) -> WeightFit:
+    return WeightFit(
+        a=200.0,
+        b=-0.2,
+        sigma=0.8,
+        var_a=var_a,
+        cov_ab=cov_ab,
+        var_b=var_b,
+        n=14,
+        provisional=False,
+        sigma_source="long",
+        df=None,
+    )
+
+
+FIT = make_fit()
 nan = np.nan
 
 
@@ -37,25 +53,39 @@ def test_paths_reproducible_by_seed() -> None:
     np.testing.assert_allclose(observed, np.round(observed, 1))  # tenths, like settlement
 
 
+SEEDS = range(1, 5)  # 4 x 5,000 paths: sampling error ~0.35 points
+
+
 def test_future_value_matches_closed_form_within_one_point() -> None:
     h = 7
-    paths = simulate_paths(FIT, h, p_weigh_in=1.0, seed=mc_seed(1, 1), unit="lb")
+    runs = [simulate_paths(FIT, h, p_weigh_in=1.0, seed=mc_seed(1, s), unit="lb") for s in SEEDS]
     mean = FIT.a + FIT.b * h
-    sd = math.sqrt(FIT.sigma**2 + h * h * FIT.se_b**2 + h * UNIT_PARAMS["lb"].drift_q)
+    fitted_var = FIT.var_a + 2 * h * FIT.cov_ab + h * h * FIT.var_b
+    sd = math.sqrt(FIT.sigma**2 + fitted_var + h * UNIT_PARAMS["lb"].drift_q)
     for offset in (-1.0, -0.3, 0.0, 0.4, 1.2):
         line = round(mean + offset, 1) + 0.05  # half-tenth line: rounding is unbiased
-        mc = float(np.nanmean(future_value_over(day=h, line=line)(paths)))
         closed = float(norm.sf((line - mean) / sd))
-        assert abs(mc - closed) < 0.01, (offset, mc, closed)
+        each = [float(np.nanmean(future_value_over(day=h, line=line)(p))) for p in runs]
+        assert abs(np.mean(each) - closed) < 0.01, (offset, each, closed)
+        assert all(abs(mc - closed) < 0.02 for mc in each)  # any single 5,000-path price
 
 
 def test_one_day_milestone_matches_closed_form() -> None:
-    fit = WeightFit(a=200.0, b=-0.2, sigma=0.8, se_b=0.0, n=14, provisional=False)
-    paths = simulate_paths(fit, 1, p_weigh_in=1.0, seed=5, unit="lb", drift_q=0.0)
+    fit = make_fit(var_a=0.0, cov_ab=0.0, var_b=0.0)
     threshold = 199.45
-    mc = float(np.mean(milestone_by(threshold, direction="down")(paths)))
     closed = float(norm.cdf((threshold - 199.8) / 0.8))
-    assert abs(mc - closed) < 0.01
+    each = [
+        float(
+            np.mean(
+                milestone_by(threshold, direction="down")(
+                    simulate_paths(fit, 1, p_weigh_in=1.0, seed=s, unit="lb", drift_q=0.0)
+                )
+            )
+        )
+        for s in SEEDS
+    ]
+    assert abs(np.mean(each) - closed) < 0.01
+    assert all(abs(mc - closed) < 0.02 for mc in each)
 
 
 def test_milestone_template_on_hand_made_paths() -> None:
