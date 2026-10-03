@@ -13,6 +13,7 @@ from app.core.config import Settings
 from app.core.db import make_engine
 from app.core.logging import configure_logging
 from app.core.migrations import is_at_head
+from app.services import instance
 from app.services.sim import app_clock
 from app.worker.jobs import INFRA_JOBS, domain_jobs
 from app.worker.registry import Job, run_due
@@ -55,8 +56,8 @@ def main() -> None:
         log.info("waiting_for_schema")
         stop.wait(SCHEMA_POLL_SECONDS)
 
-    jobs = domain_jobs(settings)
     domain_clock = app_clock(settings, engine)
+    jobs = domain_jobs(settings, instance.load(engine, domain_clock, settings))
     seen: dict[str, str] = {}
     log.info(
         "worker_started",

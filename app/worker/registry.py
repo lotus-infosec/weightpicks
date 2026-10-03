@@ -5,6 +5,10 @@ claims `(job, period_key)` in `job_runs` inside one BEGIN IMMEDIATE transaction;
 the unique constraint means a period can only ever be claimed once, so repeated
 ticks, restarts and catch-up never run anything twice. A failed run stays
 recorded as `error` for that period.
+
+A job with `every_tick = True` (e.g. `lock_markets`) is idempotent by itself and runs
+on every tick without a `job_runs` row; it is reported as run when it returns a
+truthy value (it did something).
 """
 
 from collections.abc import Sequence
@@ -37,7 +41,7 @@ class Job(Protocol):
 
     def due(self, now: datetime) -> str | None: ...
 
-    def run(self, ctx: JobContext) -> None: ...
+    def run(self, ctx: JobContext) -> int | None: ...
 
 
 def _claim(engine: Engine, job: str, period_key: str, now: datetime) -> int | None:
@@ -62,6 +66,14 @@ def _finish(engine: Engine, run_id: int, status: str, at: datetime, error: str |
         )
 
 
+def _run_every_tick(job: Job, engine: Engine, clock: Clock, now: datetime) -> bool:
+    try:
+        return bool(job.run(JobContext(engine=engine, clock=clock, now=now, period_key="tick")))
+    except Exception:
+        log.bind(job=job.name).exception("job_failed")
+        return False
+
+
 def run_due(
     jobs: Sequence[Job], engine: Engine, clock: Clock, seen: dict[str, str] | None = None
 ) -> list[str]:
@@ -73,6 +85,10 @@ def run_due(
     ran: list[str] = []
     now = clock.now()
     for job in jobs:
+        if getattr(job, "every_tick", False):
+            if _run_every_tick(job, engine, clock, now):
+                ran.append(job.name)
+            continue
         period_key = job.due(now)
         if period_key is None:
             continue

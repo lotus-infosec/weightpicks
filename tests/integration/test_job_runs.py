@@ -5,6 +5,7 @@ from sqlalchemy import Engine, select
 from app.core.clock import SimClock
 from app.core.config import Settings
 from app.models import Heartbeat, JobRun
+from app.services.instance import InstanceConfig
 from app.worker.jobs import INFRA_JOBS, HeartbeatJob, domain_jobs
 from app.worker.registry import JobContext, run_due
 
@@ -80,10 +81,20 @@ def test_heartbeat_job_upserts_clock_time(migrated_engine: Engine, clock: SimClo
     assert beats == [("worker", clock.now())]
 
 
-def test_registered_jobs_have_unique_names(settings: Settings) -> None:
-    names = [job.name for job in (*INFRA_JOBS, *domain_jobs(settings))]
+def test_registered_jobs_have_unique_names(
+    settings: Settings, instance_config: InstanceConfig
+) -> None:
+    names = [job.name for job in (*INFRA_JOBS, *domain_jobs(settings, instance_config))]
     assert len(names) == len(set(names))
-    assert set(names) == {"heartbeat", "garmin_sync", "demo_daily", "ledger_verify"}
+    assert names == [
+        "heartbeat",
+        "garmin_sync",
+        "daily_drop",
+        "weekly_drop",
+        "monthly_drop",
+        "lock_markets",
+        "ledger_verify",
+    ]
 
 
 def test_seen_cache_skips_repeat_claims_but_not_new_periods(

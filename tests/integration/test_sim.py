@@ -13,6 +13,7 @@ from app.core.config import Settings
 from app.core.db import make_engine
 from app.models import Heartbeat, Observation
 from app.services import sim
+from app.services.instance import InstanceConfig
 from app.services.observations import canonical_weigh_ins
 from app.web.main import create_app
 from app.worker.jobs import INFRA_JOBS, domain_jobs
@@ -60,8 +61,10 @@ def test_advance_set_and_reseed_rules(migrated_engine: Engine, dev: Settings) ->
         sim.reseed(migrated_engine, dev, preset="marathon", seed=1)
 
 
-def test_sync_job_reuses_provider_until_reseed(migrated_engine: Engine, dev: Settings) -> None:
-    job = next(j for j in domain_jobs(dev) if j.name == "garmin_sync")
+def test_sync_job_reuses_provider_until_reseed(
+    migrated_engine: Engine, dev: Settings, instance_config: InstanceConfig
+) -> None:
+    job = next(j for j in domain_jobs(dev, instance_config) if j.name == "garmin_sync")
     sim.advance(migrated_engine, dev, timedelta(hours=1))
     clock = sim.app_clock(dev, migrated_engine)
     from app.worker.registry import JobContext
@@ -92,7 +95,7 @@ def test_reseed_keeps_ingested_history(migrated_engine: Engine, dev: Settings) -
 
 
 def test_heartbeat_uses_real_time_while_sim_clock_is_frozen(
-    migrated_engine: Engine, dev: Settings
+    migrated_engine: Engine, dev: Settings, instance_config: InstanceConfig
 ) -> None:
     sim_clock = sim.app_clock(dev, migrated_engine)
     sim_now = sim_clock.now()
@@ -100,7 +103,7 @@ def test_heartbeat_uses_real_time_while_sim_clock_is_frozen(
     ran = tick(
         migrated_engine,
         infra=INFRA_JOBS,
-        domain=domain_jobs(dev),
+        domain=domain_jobs(dev, instance_config),
         system_clock=SystemClock(),
         domain_clock=sim_clock,
         seen={},
