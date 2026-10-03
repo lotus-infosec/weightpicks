@@ -1,7 +1,6 @@
 """`wp` command line: migrations, health checks, ledger verification, bootstrap and dev tools."""
 
 import argparse
-import getpass
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -15,10 +14,9 @@ from app.core.config import Settings
 from app.core.db import immediate, make_engine
 from app.core.logging import configure_logging
 from app.core.migrations import current_revision, upgrade_to_head
-from app.domain.economy import DEFAULT_ECONOMY
 from app.domain.money import Money
 from app.models import Heartbeat, Observation, SyncRun
-from app.services import auth, ledger, sim
+from app.services import auth, instance, ledger, setup, sim
 from app.services.observations import canonical_weigh_ins, latest_complete_through
 from app.services.users import ensure_player
 
@@ -97,11 +95,11 @@ def _seed(settings: Settings, users: int) -> int:
         print("refusing to seed: APP_ENV must be 'dev'")
         return 2
     clock = SystemClock()
-    grant = DEFAULT_ECONOMY.starting_bankroll_cents
     engine = make_engine(settings.db_url)
     try:
         with immediate(engine) as conn:
             season_id = ledger.active_season_id(conn) or ledger.open_season(conn, clock)
+            grant = instance.economy(conn).starting_bankroll_cents
             for n in range(1, users + 1):
                 user_id = ensure_player(
                     conn, clock, f"player{n:02d}@example.invalid", f"Player {n:02d}"
@@ -202,22 +200,16 @@ def _registration_code(settings: Settings) -> int:
     return 0
 
 
-def _admin_create(settings: Settings, email: str, name: str) -> int:
-    password = getpass.getpass("admin password: ")
-    if password != getpass.getpass("repeat password: "):
-        print("passwords do not match")
-        return 1
+def _setup_token(settings: Settings) -> int:
     engine = make_engine(settings.db_url)
     try:
-        user_id = auth.create_admin(
-            engine, SystemClock(), email=email, display_name=name, password=password
-        )
-    except auth.AuthError as exc:
+        token = setup.issue_token(engine, SystemClock())
+    except setup.SetupError as exc:
         print(f"refused: {exc.message}")
         return 1
     finally:
         engine.dispose()
-    print(f"admin created (user id {user_id})")
+    print(f"SETUP TOKEN: {token}  (valid 24 hours; any previous token no longer works)")
     return 0
 
 
@@ -253,11 +245,7 @@ def main(argv: list[str] | None = None) -> int:
     code_cmd = commands.add_parser("registration-code", help="registration codes")
     code_sub = code_cmd.add_subparsers(dest="code_command", required=True)
     code_sub.add_parser("new", help="replace the registration code and print the new one")
-    admin_cmd = commands.add_parser("admin", help="the instance admin")
-    admin_sub = admin_cmd.add_subparsers(dest="admin_command", required=True)
-    admin_new = admin_sub.add_parser("create", help="create the admin (prompts for a password)")
-    admin_new.add_argument("--email", required=True)
-    admin_new.add_argument("--name", required=True, help="display name")
+    commands.add_parser("setup-token", help="print a fresh one-time /setup token")
     args = parser.parse_args(argv)
 
     if args.command == "health" and args.web:
@@ -276,8 +264,8 @@ def main(argv: list[str] | None = None) -> int:
         return _calibrate(settings, args)
     if args.command == "registration-code":
         return _registration_code(settings)
-    if args.command == "admin":
-        return _admin_create(settings, args.email, args.name)
+    if args.command == "setup-token":
+        return _setup_token(settings)
     return _health_worker(settings)
 
 

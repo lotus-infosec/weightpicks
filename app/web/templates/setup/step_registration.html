@@ -1,0 +1,6 @@
+{% extends "setup/_layout.html" %}
+{% block fields %}
+<p class="muted">Players need this code to create an account. Share it privately.</p>
+<p class="code-big" data-testid="registration-code">{{ draft.registration.code }}</p>
+<button type="submit" name="action" value="regenerate" class="secondary">Make a new code</button>
+{% endblock %}

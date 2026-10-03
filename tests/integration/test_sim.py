@@ -19,6 +19,7 @@ from app.web.main import create_app
 from app.worker.jobs import INFRA_JOBS, domain_jobs
 from app.worker.main import tick
 from tests.integration import web
+from tests.integration.world import mark_setup_done
 
 
 @pytest.fixture
@@ -120,6 +121,7 @@ def test_dev_routes_only_exist_in_dev(
     settings: Settings, dev: Settings, migrated_engine: Engine, tmp_path: Path
 ) -> None:
     prod = Settings(app_env="production", app_secret_key="x" * 40, data_dir=tmp_path)
+    mark_setup_done(migrated_engine, settings)
     with TestClient(create_app(prod)) as client:
         assert client.get("/dev/clock").status_code == 404
     with TestClient(create_app(settings)) as client:  # dev, but garmindb provider
@@ -127,6 +129,7 @@ def test_dev_routes_only_exist_in_dev(
 
 
 def test_dev_clock_page_and_forms(dev: Settings, migrated_engine: Engine) -> None:
+    mark_setup_done(migrated_engine, dev)
     with web.client(create_app(dev)) as client:
         assert client.get("/dev/clock", follow_redirects=False).headers["location"] == "/login"
         web.as_admin(client, migrated_engine)

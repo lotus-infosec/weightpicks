@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Setup · {{ instance.app_name }}{% endblock %}
+{% block content %}
+<section class="card setup">
+  <p class="muted small">First-run setup</p>
+  {% if step %}
+  <ol class="steps" aria-label="Setup steps">
+    {% for s in steps %}
+    <li class="{{ 'current' if s.number == step.number }}{{ ' done' if s.key in draft }}">
+      <a href="/setup/step/{{ s.number }}">{{ s.number }}<span class="step-name"> {{ s.title }}</span></a>
+    </li>
+    {% endfor %}
+  </ol>
+  <h1>{{ step.number }}. {{ step.title }}</h1>
+  {% for key, message in errors.items() if key in ("schedule", "economy", "finish") %}
+  <p class="alert" role="alert">{{ message }}</p>
+  {% endfor %}
+  <form method="post" action="{% block action %}/setup/step/{{ step.number }}{% endblock %}" class="stack" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ form_csrf }}">
+    {% block fields %}{% endblock %}
+    <div class="setup-nav">
+      {% if step.number > 1 %}<button type="submit" name="action" value="back" class="secondary">Back</button>{% endif %}
+      {% block submit %}<button type="submit" name="action" value="next" class="primary">Save and continue</button>{% endblock %}
+    </div>
+  </form>
+  {% endif %}
+  {% block extra %}{% endblock %}
+</section>
+{% endblock %}

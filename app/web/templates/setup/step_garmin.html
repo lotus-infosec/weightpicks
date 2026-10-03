@@ -1,0 +1,8 @@
+{% extends "setup/_layout.html" %}
+{% block fields %}
+<p>Weigh-ins and stats come from Garmin through GarminDB. Until it's connected, the instance runs on simulated data.</p>
+<p class="muted">When you're ready, connect it on the host (prompts for your Garmin password and MFA; the password isn't stored):</p>
+<pre class="code">docker compose run --rm garmin-login</pre>
+<p class="muted small">Status: <strong>not connected</strong> (the real Garmin connection arrives in a later stage).</p>
+<input type="hidden" name="ack" value="1">
+{% endblock %}

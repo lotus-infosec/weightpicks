@@ -1,0 +1,10 @@
+{% extends "setup/_layout.html" %}
+{% block fields %}
+<p class="muted">Weight markets always run. Choose which other Garmin stats get markets.</p>
+<fieldset class="choices">
+  <legend>Stats</legend>
+  {% for key, label in metrics %}
+  <label class="choice"><input type="checkbox" name="metric_{{ key }}"{% if key in values.enabled %} checked{% endif %}> {{ label }}</label>
+  {% endfor %}
+</fieldset>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Setup · {{ instance.app_name }}{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Set up this instance</h1>
+  <p class="muted">Enter the one-time setup token printed in the web container's logs:</p>
+  <pre class="code">docker compose logs web | grep "SETUP TOKEN"</pre>
+  <p class="muted small mb-4">Lost it or older than 24 hours? <code>docker compose exec web wp setup-token</code> prints a new one.</p>
+  {% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+  <form method="post" action="/setup/token" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ form_csrf }}">
+    <label>Setup token <input type="password" name="token" autocomplete="off" required></label>
+    <button type="submit" class="primary">Start setup</button>
+  </form>
+</section>
+{% endblock %}

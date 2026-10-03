@@ -1,0 +1,11 @@
+{% extends "setup/_layout.html" %}
+{% from "setup/_fields.html" import secret %}
+{% block fields %}
+<p class="muted">Optional. Paste a Discord webhook URL for each kind of post; leave any empty to turn it off. URLs are stored encrypted.</p>
+{% if not can_store_secrets %}<p class="alert">APP_SECRET_KEY isn't set, so webhooks can't be saved here. Skip this step for now.</p>{% endif %}
+{% for key, label in webhooks %}
+{% set name = "webhook." ~ key %}
+{{ secret("webhook_" ~ key, label, name in secret_names, can_store_secrets, errors["webhook_" ~ key] or errors[name]) }}
+{% if name in secret_names %}<label class="choice small"><input type="checkbox" name="clear_{{ key }}"> Remove</label>{% endif %}
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,9 @@
+{% extends "setup/_layout.html" %}
+{% from "setup/_fields.html" import field %}
+{% block fields %}
+<p class="muted">The admin runs the instance and is the person being bet on. Admins never bet.</p>
+{{ field("email", "Email", values.email, "email", errors.email, attrs='autocomplete="username"') }}
+{{ field("display_name", "Display name", values.display_name, error=errors.display_name, attrs='maxlength="40"') }}
+{{ field("password", "Password", "", "password", errors.password, "10+ characters" if "admin" not in draft else "leave empty to keep", 'autocomplete="new-password"') }}
+{{ field("confirm", "Repeat password", "", "password", errors.confirm, attrs='autocomplete="new-password"') }}
+{% endblock %}

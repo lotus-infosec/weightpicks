@@ -1,0 +1,10 @@
+{% extends "setup/_layout.html" %}
+{% from "setup/_fields.html" import field, secret %}
+{% block fields %}
+<p class="muted">Optional. Email is only used for password resets. Leave the host empty to skip.</p>
+{{ field("host", "SMTP host", values.host, error=errors.host) }}
+{{ field("port", "Port", values.port, "number", errors.port) }}
+{{ field("username", "Username", values.username) }}
+{{ field("from_address", "From address", values.from_address, "email", errors.from_address) }}
+{{ secret("password", "Password", "smtp.password" in secret_names, can_store_secrets, errors["smtp.password"]) }}
+{% endblock %}
