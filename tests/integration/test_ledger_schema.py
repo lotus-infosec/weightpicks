@@ -60,6 +60,8 @@ def test_append_only_triggers_exist_at_head(migrated_engine: Engine) -> None:
         "trg_ledger_entries_no_delete",
         "trg_ledger_txns_no_update",
         "trg_ledger_txns_no_delete",
+        "trg_observations_no_update",
+        "trg_observations_no_delete",
     } <= triggers
 
 
