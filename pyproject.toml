@@ -67,6 +67,7 @@ addopts = "-ra --strict-markers"
 markers = [
     "perf: wall-clock performance budgets (CI runs them without coverage)",
     "calibration: full line-engine calibration runs (CI runs them without coverage)",
+    "season: simulated-season suite (tests/season); runs in the main test job on every PR",
 ]
 
 [tool.coverage.run]
