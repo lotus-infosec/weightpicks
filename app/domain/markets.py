@@ -2,7 +2,7 @@
 (BUILD_PLAN §1.4.3, §1.4.2, D-009). Pure: callers pass dates, the zone and the data.
 
 A template declares its params schema, how it is priced (line engine only, never AI),
-how it settles (STAGE06), the observations its result depends on (correlation keys)
+how it settles, the observations its result depends on (correlation keys)
 and when it locks: before its last unknown observation can exist.
 """
 
@@ -11,7 +11,7 @@ from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
-from typing import Any, ClassVar, Literal, NoReturn, Protocol
+from typing import Any, ClassVar, Literal, Protocol
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, model_validator
@@ -31,6 +31,7 @@ from app.domain.schedule import (
     last_day_of_month,
     next_local_midnight,
 )
+from app.domain.settlement import Outcome, settle_metric_total, settle_weight_change
 from app.domain.units import Unit
 
 # ---- lifecycle ---------------------------------------------------------------------
@@ -159,6 +160,14 @@ class PricingData:
     complete_through: Mapping[str, date] = field(default_factory=dict)
 
 
+@dataclass(frozen=True, slots=True)
+class SettlementData:
+    """Observations a market settles on, gathered by the service once data is complete."""
+
+    weigh_ins: Mapping[date, int] = field(default_factory=dict)  # canonical, tenths
+    daily_totals: Mapping[date, int | None] = field(default_factory=dict)  # None = no record
+
+
 SETTLE_GRACE = timedelta(hours=24)  # locked past settle_after + this -> admin alert
 
 
@@ -181,7 +190,7 @@ class Template(Protocol):
         self, spec: MarketSpec, data: PricingData, unit: Unit, hold: float = DEFAULT_HOLD
     ) -> Pricing | None: ...
 
-    def settle(self, spec: MarketSpec, observations: Any) -> NoReturn: ...
+    def settle(self, params: Mapping[str, Any], line_x10: int, data: SettlementData) -> Outcome: ...
 
 
 class _Params(BaseModel):
@@ -289,8 +298,9 @@ class WeightChangeOU:
             hold=hold,
         )
 
-    def settle(self, spec: MarketSpec, observations: Any) -> NoReturn:
-        raise NotImplementedError("settlement arrives in STAGE06")
+    def settle(self, params: Mapping[str, Any], line_x10: int, data: SettlementData) -> Outcome:
+        p = WeightChangeParams.model_validate(params)
+        return settle_weight_change(p.d0, p.d1, line_x10, data.weigh_ins)
 
 
 class MetricTotalOU:
@@ -338,8 +348,9 @@ class MetricTotalOU:
             return price_workouts(history, as_of, n_days=len(p.days), hold=hold)
         return price_count_total(p.metric, history, as_of, p.days, hold=hold)
 
-    def settle(self, spec: MarketSpec, observations: Any) -> NoReturn:
-        raise NotImplementedError("settlement arrives in STAGE06")
+    def settle(self, params: Mapping[str, Any], line_x10: int, data: SettlementData) -> Outcome:
+        p = MetricTotalParams.model_validate(params)
+        return settle_metric_total(p.start, p.end, line_x10, data.daily_totals)
 
 
 WEIGHT_CHANGE_OU = WeightChangeOU()
