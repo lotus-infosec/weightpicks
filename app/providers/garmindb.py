@@ -3,7 +3,7 @@
 GarminDB downloads into `<home>/HealthData`; this provider reads the raw JSON it saved
 rather than its SQLite tables, because GarminDB's `weight` table keeps one row per day
 at midnight (no time of day, no manual/scale flag) and its range skips today
-(`weight_recent.json`, written by garmin_recent.py, fills that gap).
+(`weight_recent.json`, written by garmin_recent.py, replaces it for weigh-ins).
 
 Weigh-in times come from `timestampGMT`. Garmin's `date` field is the local wall clock
 encoded as if it were UTC; reading it as UTC would shift every weigh-in by the offset.

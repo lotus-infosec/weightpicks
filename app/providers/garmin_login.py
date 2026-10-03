@@ -62,7 +62,7 @@ def garmindb_config(today: date) -> dict[str, Any]:
             "sleep": False,
             "rhr": False,
             "hrv": False,
-            "weight": True,
+            "weight": False,  # garmin_recent.py fetches weigh-ins (D-038)
             "activities": True,
         },
         "course_views": {"steps": []},

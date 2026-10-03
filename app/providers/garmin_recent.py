@@ -1,10 +1,10 @@
-"""Fetch the last few days of weigh-ins with the saved Garmin token (D-038).
+"""Fetch weigh-ins with the saved Garmin token: one request for the last 120 days (D-038).
 
-GarminDB's download range stops at yesterday, so a weigh-in made this morning would
-not arrive until tomorrow. This runs right after GarminDB on every sync, under
-GarminDB's venv (standard library + garminconnect only), and writes one file that the
-provider reads next to GarminDB's own `weight_YYYY-MM-DD.json` files. GarminDB's
-importer ignores it (its pattern needs a date).
+GarminDB is not used for weight: its download range stops at yesterday (a weigh-in
+made this morning would arrive tomorrow), and it decides where to resume from its own
+weight table, so a subject who rarely weighs in made it re-download every day of
+history on every sync. This runs right after GarminDB, under GarminDB's venv (standard
+library + garminconnect only), and writes the one file the provider reads.
 """
 
 import json
@@ -17,7 +17,7 @@ from typing import Any
 HOME = Path(os.environ.get("HOME", "/garmin"))
 TOKEN_FILE = HOME / ".GarminDb" / "garmin_tokens.json"
 OUT_FILE = HOME / "HealthData" / "Weight" / "weight_recent.json"
-DAYS = 3
+DAYS = 120  # one request, ~0.1 s; the line engine reads at most 84 days
 WEIGHT_URL = "/weight-service/weight/dateRange"
 
 

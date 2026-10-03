@@ -48,7 +48,7 @@ def test_login_stores_a_token_and_never_the_password(tmp_path: Path) -> None:
     config = json.loads(config_file.read_text())
     assert config["credentials"]["user"] == "" and config["credentials"]["password"] == ""
     assert config["data"]["weight_start_date"] == "06/05/2026"  # 120 days back
-    assert config["enabled_stats"]["weight"] and config["enabled_stats"]["monitoring"]
+    assert config["enabled_stats"]["monitoring"] and not config["enabled_stats"]["weight"]
     assert not config["enabled_stats"]["sleep"]
     for path in config_dir.iterdir():
         text = path.read_text()

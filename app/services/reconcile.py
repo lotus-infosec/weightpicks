@@ -60,7 +60,9 @@ def render(reports: list[DayReport], conn: Connection, tz: ZoneInfo, unit: str) 
     def weight(tenths: int | None) -> str:
         return "-" if tenths is None else f"{tenths / 10:.1f} {unit}"
 
-    lines = [f"complete through: {latest_complete_through(conn) or 'no successful sync yet'}"]
+    complete = latest_complete_through(conn)
+    summary = ", ".join(f"{m} {d.isoformat()}" for m, d in sorted(complete.items()))
+    lines = [f"complete through: {summary or 'no successful sync yet'}"]
     for r in reversed(reports):
         lines.append(f"\n{r.day.isoformat()}  canonical weigh-in: {weight(r.canonical)}")
         for at, value, source, in_window in r.weigh_ins:
