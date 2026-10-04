@@ -18,7 +18,9 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.clock import Clock
 from app.core.db import immediate
+from app.domain import parlay
 from app.domain.markets import COMPLETENESS_KEY, TEMPLATES, MarketStatus, SettlementData
+from app.domain.props import EARLY_TEMPLATES
 from app.domain.settlement import ENGINE_VERSION, Outcome, leg_result, readiness
 from app.models import (
     Bet,
@@ -66,12 +68,13 @@ def _days(start: date, end: date) -> list[date]:
 
 
 def settlement_data(
-    conn: Connection, metric: str, start: date, end: date
+    conn: Connection, metric: str, start: date, end: date, *, every_day: bool = False
 ) -> tuple[SettlementData, dict[str, Any]]:
-    """Observations for one market, plus an audit record of exactly what was used."""
+    """Observations for one market, plus an audit record of exactly what was used.
+    Weight markets use the window's two end days, or `every_day` (milestones, streaks)."""
     if metric == "weight":
         canon = canonical_weigh_ins(conn, start, end)
-        used = [c for c in canon if c.local_date in (start, end)]
+        used = canon if every_day else [c for c in canon if c.local_date in (start, end)]
         inputs: dict[str, Any] = {
             "weigh_ins": [
                 {
@@ -132,14 +135,13 @@ def settlement_data(
     return SettlementData(daily_totals=totals), inputs
 
 
-def _current_line(conn: Connection, market_id: int) -> int:
+def _current_line(conn: Connection, market_id: int) -> int | None:
+    """The line of the current odds version; None for yes/no markets."""
     line: int | None = conn.execute(
         select(OddsVersion.line_x10).where(
             OddsVersion.market_id == market_id, OddsVersion.is_current.is_(True)
         )
     ).scalar_one()
-    if line is None:
-        raise ValueError(f"market {market_id} has no line")
     return line
 
 
@@ -154,19 +156,34 @@ def settle_market(engine: Engine, clock: Clock, market_id: int) -> SettleResult:
         complete = latest_complete_through(conn).get(
             "weight" if m.metric == "weight" else COMPLETENESS_KEY[m.metric]
         )
-        blocked = readiness(
-            now=now,
-            settle_after=m.settle_after,
-            window_end=m.window_end,
-            last_ok_sync_finished_at=last_ok_sync_finished_at(conn),
-            complete_through=complete,
-        )
-        if blocked:
-            return SettleResult(market_id, False, blocked)
-
+        template = TEMPLATES[m.template]
+        every_day = m.template in EARLY_TEMPLATES
         line_x10 = _current_line(conn, market_id)
-        data, inputs = settlement_data(conn, m.metric, m.window_start, m.window_end)
-        outcome = TEMPLATES[m.template].settle(m.params, line_x10, data)
+        if every_day and now < m.settle_after:
+            # Early settlement (milestones, streaks): only an outcome already certain from
+            # data that is complete (a successful sync after that day's window closed).
+            if complete is None or complete < m.window_start:
+                return SettleResult(market_id, False, "not_decided")
+            through = min(complete, m.window_end)
+            data, inputs = settlement_data(conn, m.metric, m.window_start, through, every_day=True)
+            early = template.decide_early(m.params, data, through)
+            if early is None:
+                return SettleResult(market_id, False, "not_decided")
+            outcome = early
+        else:
+            blocked = readiness(
+                now=now,
+                settle_after=m.settle_after,
+                window_end=m.window_end,
+                last_ok_sync_finished_at=last_ok_sync_finished_at(conn),
+                complete_through=complete,
+            )
+            if blocked:
+                return SettleResult(market_id, False, blocked)
+            data, inputs = settlement_data(
+                conn, m.metric, m.window_start, m.window_end, every_day=every_day
+            )
+            outcome = template.settle(m.params, line_x10, data)
         try:  # unique market_id: the idempotency backstop (status is checked above too)
             conn.execute(
                 insert(Settlement).values(
@@ -193,7 +210,7 @@ def settle_market(engine: Engine, clock: Clock, market_id: int) -> SettleResult:
     return SettleResult(market_id, True, outcome.reason, bets)
 
 
-def _outcome_json(outcome: Outcome, line_x10: int) -> dict[str, Any]:
+def _outcome_json(outcome: Outcome, line_x10: int | None) -> dict[str, Any]:
     return {
         "winner": outcome.winner,
         "value_x10": outcome.value_x10,
@@ -205,7 +222,8 @@ def _outcome_json(outcome: Outcome, line_x10: int) -> dict[str, Any]:
 def _settle_legs(
     conn: Connection, clock: Clock, market_id: int, outcome: Outcome, now: datetime
 ) -> int:
-    """Singles only (parlays arrive in STAGE12): the leg result is the bet result."""
+    """A single's leg result is the bet result; a parlay leg updates the leg and the
+    parlay is re-evaluated (it may lose now, or resolve once its last leg is in)."""
     legs = conn.execute(
         select(
             BetLeg.id.label("leg_id"),
@@ -223,9 +241,11 @@ def _settle_legs(
         .order_by(BetLeg.id)
     ).all()
     for leg in legs:
-        if leg.kind != "single":
-            raise NotImplementedError("parlay settlement arrives in STAGE12")
         result = leg_result(leg.side, outcome)
+        if leg.kind == "parlay":
+            conn.execute(update(BetLeg).where(BetLeg.id == leg.leg_id).values(status=result))
+            reevaluate_parlay(conn, clock, leg.bet_id, now)
+            continue
         paid = 0
         if result == "won":
             paid = leg.potential_payout_cents
@@ -278,7 +298,10 @@ def settle_due(engine: Engine, clock: Clock) -> SettlePass:
     with engine.connect() as conn:
         due = conn.execute(
             select(Market.id, Market.settle_deadline)
-            .where(locked, Market.settle_after <= now)
+            .where(
+                locked,
+                (Market.settle_after <= now) | Market.template.in_(sorted(EARLY_TEMPLATES)),
+            )
             .order_by(Market.settle_after, Market.id)
         ).all()
         if not due:  # the common case: nothing to do, one more read for the cache
@@ -314,3 +337,66 @@ def settle_due(engine: Engine, clock: Clock) -> SettlePass:
             if season_id is not None:
                 busts.check(conn, clock, season_id)
     return SettlePass(settled, alerts, pending)
+
+
+def reevaluate_parlay(conn: Connection, clock: Clock, bet_id: int, now: datetime) -> str:
+    """Resolve an open parlay from its legs (D-041): any lost leg loses it at once (the
+    other open legs are voided); once every leg is in, pushed/void legs drop out and it
+    pays floor(stake x the product of the won legs' decimal odds), or refunds the stake
+    when every leg dropped out. Same transaction as the leg change; returns the status."""
+    bet = conn.execute(
+        select(Bet.account_id, Bet.user_id, Bet.stake_cents, Bet.status).where(Bet.id == bet_id)
+    ).one()
+    if bet.status != "open":
+        return str(bet.status)
+    legs = conn.execute(
+        select(BetLeg.status, BetLeg.american).where(BetLeg.bet_id == bet_id).order_by(BetLeg.id)
+    ).all()
+    resolution = parlay.resolve(bet.stake_cents, [(leg.status, leg.american) for leg in legs])
+    if resolution.status == "open":
+        return "open"
+    if resolution.status == "lost":
+        conn.execute(
+            update(BetLeg)
+            .where(BetLeg.bet_id == bet_id, BetLeg.status == "open")
+            .values(status="void")
+        )
+    elif resolution.status == "won":
+        ledger.payout(
+            conn,
+            clock,
+            bet.account_id,
+            resolution.payout_cents,
+            idempotency_key=f"bet:{bet_id}:payout",
+            ref_id=bet_id,
+        )
+    else:
+        ledger.refund(
+            conn,
+            clock,
+            bet.account_id,
+            resolution.payout_cents,
+            idempotency_key=f"bet:{bet_id}:refund",
+            ref_id=bet_id,
+        )
+    conn.execute(
+        update(Bet)
+        .where(Bet.id == bet_id)
+        .values(status=resolution.status, payout_cents=resolution.payout_cents, settled_at=now)
+    )
+    enqueue(
+        conn,
+        clock,
+        category=Category.BET_RESULTS,
+        payload={
+            "bet_id": bet_id,
+            "user_id": bet.user_id,
+            "kind": "parlay",
+            "legs": len(legs),
+            "result": resolution.status,
+            "stake_cents": bet.stake_cents,
+            "payout_cents": resolution.payout_cents,
+        },
+        dedupe_key=f"bet_result:{bet_id}",
+    )
+    return resolution.status
