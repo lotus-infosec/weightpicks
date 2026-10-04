@@ -28,11 +28,11 @@
     <tr>
       <td>{{ label }}</td>
       <td data-label="Webhook">{% if key in configured %}<span class="badge good" data-testid="hook-{{ key }}">set</span>{% else %}<span class="muted" data-testid="hook-{{ key }}">off</span>{% endif %}</td>
-      <td data-label="Test">{% if key in configured %}
+      <td>{% if key in configured %}
         <form method="post" action="/admin/discord/test/{{ key }}" class="inline">
           <input type="hidden" name="csrf_token" value="{{ csrf }}">
           <button type="submit" class="small" data-testid="test-{{ key }}">Send test</button>
-        </form>{% else %}<span class="muted">-</span>{% endif %}</td>
+        </form>{% endif %}</td>
     </tr>
     {% endfor %}
     </tbody>
@@ -54,8 +54,8 @@
   </form>
 </section>
 
-<section class="card">
-  <h2>Recent posts</h2>
+<details class="card">
+  <summary><h2 class="inline">Recent posts</h2> <span class="muted small">(latest {{ recent | length }})</span></summary>
   {% if not recent %}<p class="muted">Nothing queued yet.</p>{% endif %}
   <table class="table">
     <thead><tr><th>When</th><th>Kind</th><th>Status</th><th>Note</th></tr></thead>
@@ -63,9 +63,9 @@
     {% for r in recent %}
     <tr><td>{{ r.created_at | local_time }}</td><td data-label="Kind">{{ labels.get(r.category, r.category) }}</td>
         <td data-label="Status"><span class="badge status-{{ r.status }}">{{ r.status }}</span>{% if r.attempts %} <span class="muted small">×{{ r.attempts }}</span>{% endif %}</td>
-        <td data-label="Note" class="small">{{ r.last_error or "" }}</td></tr>
+        {% if r.last_error %}<td data-label="Note" class="small">{{ r.last_error }}</td>{% else %}<td></td>{% endif %}</tr>
     {% endfor %}
     </tbody>
   </table>
-</section>
+</details>
 {% endblock %}

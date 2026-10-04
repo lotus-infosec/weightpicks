@@ -5,7 +5,7 @@
 <h1>Leaderboard</h1>
 {% if season_options | length > 1 %}
 <nav class="tabs" aria-label="Season">
-  {% for s in season_options %}<a href="/leaderboard?season={{ s.season_id }}" class="{{ 'active' if s.season_id == season_id }}">Season {{ s.number }}{% if s.current %} (now){% endif %}</a>{% endfor %}
+  {% for s in season_options %}<a href="/leaderboard?season={{ s.season_id }}" class="tab{{ ' active' if s.season_id == season_id }}">Season {{ s.number }}{% if s.current %} (now){% endif %}</a>{% endfor %}
 </nav>
 {% endif %}
 <p class="muted small">Ranked by profit and loss from bets. Allowances, bailouts and adjustments change balances but not P&amp;L.</p>

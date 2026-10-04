@@ -231,7 +231,7 @@ def audit_page(conn: Connection, page: int, limit: int = PAGE) -> list[Any]:
     )
 
 
-def recent_outbox(conn: Connection, limit: int = 25) -> list[Any]:
+def recent_outbox(conn: Connection, limit: int = 10) -> list[Any]:
     """Latest Discord posts for the admin page: status and error only, never payload URLs."""
     return list(
         conn.execute(

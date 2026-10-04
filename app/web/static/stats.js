@@ -61,9 +61,9 @@
               backgroundColor: alpha(accent, 0.14), spanGaps: true },
             { label: "-1σ", data: lo, borderWidth: 0, pointRadius: 0, fill: false, spanGaps: true },
             { label: "Trend", data: trendY, borderColor: accent, borderWidth: 2, pointRadius: 0,
-              spanGaps: true },
+              pointStyle: "line", spanGaps: true },
             { label: "Projection", data: projY, borderColor: accent, borderWidth: 2,
-              borderDash: [6, 4], pointRadius: 0, spanGaps: true },
+              borderDash: [6, 4], pointRadius: 0, pointStyle: "line", spanGaps: true },
             { label: "Scale", data: scale, showLine: false, pointRadius: 4,
               pointBackgroundColor: text, pointBorderColor: text },
             { label: "Manual", data: manual, showLine: false, pointRadius: 4,
@@ -74,7 +74,7 @@
           maintainAspectRatio: false,
           interaction: { mode: "index", intersect: false },
           plugins: {
-            legend: { labels: { filter: (item) => !item.text.includes("σ"), boxWidth: 12 } },
+            legend: { labels: { filter: (item) => !item.text.includes("σ"), usePointStyle: true, boxWidth: 8 } },
             tooltip: { filter: (item) => item.raw !== null && !item.dataset.label.includes("σ") },
           },
           scales: { x: scaleX, y: { title: { display: true, text: data.unit } } },
@@ -98,7 +98,8 @@
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { x: scaleX, y: { beginAtZero: true } },
+          scales: { x: scaleX, y: { beginAtZero: true,
+                                     ticks: { precision: m.metric === "workouts" ? 0 : undefined } } },
         },
       });
     });

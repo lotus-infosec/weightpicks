@@ -241,10 +241,10 @@ class OpsServer:
 def ops_server(tmp_path: Path) -> Iterator[OpsServer]:
     """A dev instance on the persisted SimClock (so /dev/clock moves time), set up, with an
     admin, two players and bets: one player has staked everything on a losing side."""
-    from sqlalchemy import select
+    from sqlalchemy import select, update
 
     from app.calibration import canonical_tenths
-    from app.models import Market, OddsVersion, Selection
+    from app.models import InstanceSettingsRow, Market, OddsVersion, Selection
     from app.providers.simulated import SimulatedProvider
     from app.services import ledger, sim
     from app.services.bets import place_bet
@@ -271,6 +271,9 @@ def ops_server(tmp_path: Path) -> Iterator[OpsServer]:
         engine, SystemClock(), email=admin_email, display_name="Admin", password=password
     )
     mark_setup_done(engine, settings)
+    with immediate(engine) as conn:  # no allowance, so the all-in loser really goes bust
+        economy = instance.read(conn).economy.to_json() | {"daily_allowance_cents": 0}  # type: ignore[union-attr]
+        conn.execute(update(InstanceSettingsRow).values(economy=economy))
     code = auth.rotate_registration_code(engine, SystemClock())
     ids = [
         auth.register(

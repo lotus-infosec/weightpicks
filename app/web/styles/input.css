@@ -144,6 +144,8 @@
   .tabs { @apply flex-wrap; }
   label.check { @apply flex items-center gap-2 text-base; color: var(--color-text); }
   label.check input { @apply w-auto; }
+  details.card > summary { @apply cursor-pointer; }
+  h2.inline { display: inline; }
 }
 
 @media (max-width: 640px) {

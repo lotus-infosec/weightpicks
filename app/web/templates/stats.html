@@ -16,7 +16,7 @@
 </section>
 
 <nav class="tabs" aria-label="Range">
-  {% for r in data.ranges %}<a href="/stats?days={{ r }}" class="{{ 'active' if r == data.days }}">{{ r }} days</a>{% endfor %}
+  {% for r in data.ranges %}<a href="/stats?days={{ r }}" class="tab{{ ' active' if r == data.days }}">{{ r }} days</a>{% endfor %}
 </nav>
 
 <section class="card">

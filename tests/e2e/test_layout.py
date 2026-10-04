@@ -80,4 +80,17 @@ def test_pages_fit_and_render(browser: Browser, rich_server: RichServer, size: s
     check(page, "my-bets", size, errors)
     page.get_by_role("link", name="Feed").click()
     check(page, "feed", size, errors)
+    page.get_by_role("link", name="Leaders").click()
+    expect(page.get_by_test_id("leaderboard")).to_be_visible()
+    check(page, "leaderboard", size, errors)
+    page.get_by_role("link", name="Stats").click()
+    expect(page.get_by_test_id("stat-strip")).to_be_visible()
+    page.wait_for_function(
+        "() => window.Chart && Chart.getChart(document.getElementById('weight-chart'))"
+    )
+    assert page.locator("canvas.metric-chart").count() >= 1
+    check(page, "stats", size, errors)
+    page.get_by_role("link", name="90 days").click()
+    expect(page).to_have_url(f"{url}/stats?days=90")
+    check(page, "stats-90", size, errors)
     context.close()
