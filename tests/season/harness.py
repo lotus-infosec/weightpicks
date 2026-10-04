@@ -20,14 +20,15 @@ from app.core.config import Settings
 from app.core.db import immediate, make_engine
 from app.core.migrations import upgrade_to_head
 from app.domain.markets import MarketStatus
-from app.models import Account, Market, OddsVersion, Selection, User
-from app.services import admin, auth, ledger, sim
+from app.models import Account, InstanceSettingsRow, Market, OddsVersion, Selection, User
+from app.services import admin, auth, instance, ledger, sim
 from app.services.admin import Actor, AdminError
 from app.services.bets import BetRejected, place_bet
 from app.services.users import ensure_player
 
 NY = ZoneInfo("America/New_York")
 START = date(2026, 10, 1)
+ALLOWANCE = 25  # cents per day, see run_season
 GRANT = 100_000
 BET_TIMES = (time(12, 0), time(19, 0))
 
@@ -99,6 +100,12 @@ def run_season(tmp_path: Path, *, days: int = 60, players: int = 6, seed: int = 
                 conn, SimClock(start), account, GRANT, idempotency_key=f"season:grant:{user}"
             )
             users.append(user)
+        # Setup finished, so the daily allowance runs too (STAGE11). A $50 allowance lands
+        # while an all-in bet is still open, so nobody would ever go bust; 25 cents keeps
+        # allowances flowing daily while busts and bailouts stay testable.
+        config = instance.ensure(conn, SimClock(start), settings)
+        economy = config.economy.to_json() | {"daily_allowance_cents": ALLOWANCE}
+        conn.execute(update(InstanceSettingsRow).values(setup_completed_at=start, economy=economy))
     admin_id = auth.create_admin(
         engine,
         SimClock(start),
