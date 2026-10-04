@@ -6,8 +6,9 @@
           data-title="{{ card.title }}" data-side="{{ s.side }}"
           data-line="{{ card.line_x10 | line(card.metric) }}" data-odds-text="{{ s.odds | odds }}"
           data-american="{{ s.odds or 0 }}" data-selection="{{ s.selection_id }}"
-          data-version="{{ card.odds_version_id }}"{% if s.odds is none %} disabled{% endif %}>
-    <span class="side-name">{{ "Over" if s.side == "over" else "Under" }}</span>
+          data-version="{{ card.odds_version_id }}" data-market="{{ card.market_id }}"
+          data-keys="{{ card.correlation_keys | join(',') }}"{% if s.odds is none %} disabled{% endif %}>
+    <span class="side-name">{{ {"over": "Over", "under": "Under", "yes": "Yes", "no": "No"}[s.side] }}</span>
     <span class="side-odds">{{ s.odds | odds }}</span>
   </button>
   {% endfor %}
@@ -17,34 +18,52 @@
 {% macro slip() -%}
 <aside class="slip" x-show="open" x-cloak data-testid="slip">
   <div class="slip-head">
-    <strong x-text="title"></strong>
+    <strong x-text="headline"></strong>
     <button type="button" class="link" x-on:click="close" aria-label="Close slip">Close</button>
   </div>
-  <p class="slip-pick"><span x-text="sideLabel"></span> <span x-text="line"></span> at <span x-text="oddsText"></span></p>
+  <template x-if="parlayAllowed">
+    <label class="check small slip-toggle"><input type="checkbox" x-model="parlay" x-on:change="toggleParlay" data-testid="parlay-toggle"> Parlay (combine picks)</label>
+  </template>
+  <p class="slip-pick" x-show="single"><span x-text="sideLabel"></span> <span x-text="line"></span> at <span x-text="oddsText"></span></p>
+  <ol class="slip-legs" x-show="parlay" data-testid="slip-legs">
+    <template x-for="leg in legs" x-bind:key="leg.selectionId">
+      <li><span class="leg-title" x-text="leg.title"></span> <strong x-text="leg.pick"></strong>
+        <button type="button" class="link small" x-on:click="removeLeg" x-bind:data-selection="leg.selectionId" aria-label="Remove leg">Remove</button></li>
+    </template>
+  </ol>
+  <p class="muted small" x-show="parlay" data-testid="parlay-odds"><span x-text="legCountText"></span> · combined <strong x-text="combinedText"></strong></p>
   <label class="stake">Stake ($)
     <input type="text" inputmode="decimal" name="stake" x-model="stake" placeholder="25" autocomplete="off" data-testid="stake">
   </label>
   <p class="muted">Returns <span x-text="payoutText" data-testid="payout"></span> if it wins</p>
-  <button type="button" class="primary wide" x-on:click="place" x-bind:disabled="cannotPlace" data-testid="place">Place bet</button>
+  <button type="button" class="primary wide" x-on:click="place" x-bind:disabled="cannotPlace" data-testid="place" x-text="placeLabel">Place bet</button>
   <p class="slip-message" x-show="message" x-text="message" x-bind:class="messageClass" role="status" data-testid="slip-message"></p>
 </aside>
 {%- endmacro %}
 
 {% macro bet_rows(bets, show_name=False) -%}
+{% set sides = {"over": "Over", "under": "Under", "yes": "Yes", "no": "No"} %}
 {% if not bets %}<p class="muted">No bets yet.</p>{% endif %}
 <ul class="bets">
   {% for b in bets %}
   <li class="bet status-{{ b.status }}" data-testid="bet-{{ b.bet_id }}">
     <div class="bet-main">
       {% if show_name %}<strong>{{ b.display_name }}</strong> · {% endif %}
-      <a href="/markets/{{ b.market_id }}">{{ b.title }}</a>
+      {% if b.kind == "parlay" %}<strong>{{ b.title }}</strong>{% else %}<a href="/markets/{{ b.market_id }}">{{ b.title }}</a>{% endif %}
     </div>
     <div class="bet-detail">
-      {{ "Over" if b.side == "over" else "Under" }} {{ b.line_x10 | line(b.metric) }} at {{ b.american | odds }}
+      {% if b.kind == "parlay" %}Combined {{ b.american | odds }}{% else %}{{ sides[b.side] }} {{ b.line_x10 | line(b.metric) }} at {{ b.american | odds }}{% endif %}
       · {{ b.stake_cents | money }}
       · {% if b.status == "open" %}to return {{ b.potential_payout_cents | money }}
         {% elif b.status == "lost" %}lost{% else %}{{ b.status }}, returned {{ b.payout_cents | money }}{% endif %}
     </div>
+    {% if b.kind == "parlay" %}
+    <ol class="legs">
+      {% for leg in b.legs %}
+      <li><a href="/markets/{{ leg.market_id }}">{{ leg.title }}</a>: {{ sides[leg.side] }} {{ leg.line_x10 | line(leg.metric) }} at {{ leg.american | odds }} <span class="badge status-{{ leg.status }}">{{ leg.status }}</span></li>
+      {% endfor %}
+    </ol>
+    {% endif %}
   </li>
   {% endfor %}
 </ul>

@@ -13,7 +13,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.services import auth, board, instance, leaderboard, stats
 from app.services.auth import AuthError, SessionInfo
-from app.services.bets import BetRejected, place_bet
+from app.services.bets import BetRejected, place_bet, place_parlay
 from app.web.security import (
     SESSION_COOKIE,
     Player,
@@ -27,6 +27,7 @@ from app.web.security import (
 )
 
 TABS = ("daily", "weekly", "monthly")
+PROP_TABS = ("prop", "future")  # shown while the props_futures flag is on (D-041)
 BET_MESSAGES = {
     "locked": "This market just locked.",
     "stale_odds": "The odds changed. Refresh the board and try again.",
@@ -41,6 +42,11 @@ BET_MESSAGES = {
     "client_key_conflict": "That slip was already used. Refresh and try again.",
     "invalid_stake": "Enter a stake in dollars and cents.",
     "invalid_client_key": "Refresh the page and try again.",
+    "parlays_off": "Parlays aren't open yet.",
+    "leg_count": "A parlay needs between 2 legs and the maximum allowed.",
+    "same_market": "A parlay can't use the same market twice.",
+    "correlated": "Two of those legs depend on the same weigh-in or day; they can't be combined.",
+    "over_cap": "That parlay would pay more than 100x the stake. Use fewer or safer legs.",
 }
 
 
@@ -178,12 +184,21 @@ def build_router() -> APIRouter:
             return RedirectResponse("/login", status_code=303)
         if session.role == "admin":
             return RedirectResponse("/admin", status_code=303)
-        tab = tab if tab in TABS else "daily"
         state = request.app.state
+        flags = state.live.config.flags if state.live.config else {}
+        tabs = TABS + (PROP_TABS if flags.get("props_futures") else ())
+        tab = tab if tab in tabs else "daily"
         with state.engine.connect() as conn:
             cards = board.open_markets(conn, tab, state.domain_clock.now())
             wallet = board.wallet(conn, session.user_id)
-        context = {"tab": tab, "tabs": TABS, "cards": cards, "wallet": wallet}
+        context = {
+            "tab": tab,
+            "tabs": tabs,
+            "cards": cards,
+            "wallet": wallet,
+            "parlays": bool(flags.get("parlays")),
+            "max_legs": state.live.config.economy.max_parlay_legs if state.live.config else 6,
+        }
         if "HX-Request" in request.headers:
             return render(request, "_board_tab.html", context)
         return render(request, "board.html", context)
@@ -279,6 +294,40 @@ def build_router() -> APIRouter:
                 "ok": True,
                 "bet_id": placed.bet_id,
                 "american": placed.american,
+                "stake_cents": placed.stake_cents,
+                "potential_payout_cents": placed.potential_payout_cents,
+                "replayed": placed.replayed,
+            }
+        )
+
+    @router.post("/api/bets/parlay")
+    async def place_parlay_route(request: Request, session: Player) -> Response:
+        try:
+            body = await request.json()
+            legs = [(int(leg["selection_id"]), int(leg["odds_version_id"])) for leg in body["legs"]]
+            stake, key = body["stake_cents"], str(body["client_key"])
+        except (ValueError, KeyError, TypeError):
+            return JSONResponse({"ok": False, "reason": "invalid", "message": "Bad request."}, 400)
+        state = request.app.state
+        try:
+            placed = await run_in_threadpool(
+                lambda: place_parlay(
+                    state.engine,
+                    state.domain_clock,
+                    user_id=session.user_id,
+                    legs=legs,
+                    stake_cents=stake,
+                    client_key=key,
+                )
+            )
+        except BetRejected as exc:
+            message = BET_MESSAGES.get(exc.reason, "That parlay couldn't be placed.")
+            return JSONResponse({"ok": False, "reason": exc.reason, "message": message}, 409)
+        return JSONResponse(
+            {
+                "ok": True,
+                "bet_id": placed.bet_id,
+                "american": placed.combined_american,
                 "stake_cents": placed.stake_cents,
                 "potential_payout_cents": placed.potential_payout_cents,
                 "replayed": placed.replayed,

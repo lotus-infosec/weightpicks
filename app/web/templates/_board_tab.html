@@ -3,7 +3,7 @@
 <div class="tabs" role="tablist">
   {% for t in tabs %}
   <a href="/?tab={{ t }}" hx-get="/?tab={{ t }}" hx-target="#board" hx-push-url="true"
-     class="tab {{ 'active' if t == tab }}" role="tab" aria-selected="{{ 'true' if t == tab else 'false' }}">{{ t | capitalize }}</a>
+     class="tab {{ 'active' if t == tab }}" role="tab" aria-selected="{{ 'true' if t == tab else 'false' }}">{{ {"prop": "Props", "future": "Futures"}.get(t, t | capitalize) }}</a>
   {% endfor %}
 </div>
 {% if not cards %}<p class="muted empty">No open {{ tab }} markets right now. New lines drop at 11:00.</p>{% endif %}
