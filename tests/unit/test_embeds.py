@@ -137,3 +137,28 @@ def test_money_and_numbers() -> None:
     assert embeds.money(-1250) == "-$12.50" and embeds.signed_money(500) == "+$5.00"
     assert embeds.number(79995) == "7,999.5" and embeds.number(80000) == "8,000"
     assert embeds.american(150) == "+150" and embeds.american(None) == "-"
+
+
+def test_parlay_posts() -> None:
+    placed = embeds.build(
+        "bets_placed",
+        {"kind": "parlay", "user_id": 3, "legs": 3, "american": 596, "stake_cents": 1000},
+        ctx(),
+    )
+    assert (
+        "3-leg parlay" in placed["embeds"][0]["description"]
+        and "+596" in placed["embeds"][0]["description"]
+    )
+    won = embeds.build(
+        "bet_results",
+        {
+            "kind": "parlay",
+            "user_id": 3,
+            "legs": 3,
+            "result": "won",
+            "stake_cents": 1000,
+            "payout_cents": 6960,
+        },
+        ctx(),
+    )
+    assert "3-leg parlay" in won["embeds"][0]["description"]

@@ -1,18 +1,22 @@
 {% extends "base.html" %}
 {% from "admin/_reauth.html" import password %}
-{% block title %}Discord · Admin{% endblock %}
+{% block title %}Settings · Admin{% endblock %}
 {% block content %}
-<h1>Discord</h1>
+<h1>Settings &amp; Discord</h1>
 {% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
 
 <section class="card">
-  <h2>Posting</h2>
+  <h2>Features</h2>
   <form method="post" action="/admin/discord/flags" class="stack">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
     <label class="check"><input type="checkbox" name="discord_public" {{ "checked" if flags.discord_public }}>
       Public posts on <span class="muted">(when off, only admin alerts post)</span></label>
     <label class="check"><input type="checkbox" name="registration_open" {{ "checked" if flags.registration_open }}>
       Registration open <span class="muted">(when off, the register page says invites are closed)</span></label>
+    <label class="check"><input type="checkbox" name="props_futures" {{ "checked" if flags.props_futures }}>
+      Props and futures <span class="muted">(Props/Futures tabs and Admin → Props)</span></label>
+    <label class="check"><input type="checkbox" name="parlays" {{ "checked" if flags.parlays }}>
+      Parlays <span class="muted">(when off, the slip takes single bets only)</span></label>
     <button type="submit">Save</button>
   </form>
 </section>

@@ -114,6 +114,13 @@ def _embed(
 
 def _bet_placed(category: str, p: dict[str, Any], ctx: Context) -> dict[str, Any]:
     who = safe(ctx.user_name(p.get("user_id")))
+    if p.get("kind") == "parlay":
+        title = "High roller parlay!" if category == "high_roller" else "New parlay"
+        text = (
+            f"**{who}** bet {money(p.get('stake_cents'))} on a **{p.get('legs')}-leg parlay** "
+            f"at {american(p.get('american'))}"
+        )
+        return _embed(ctx, category, title, text, GOLD if category == "high_roller" else BLURPLE)
     market = safe(ctx.market_title(p.get("market_id")))
     side = str(p.get("side", "")).upper()
     line = f" {number(p['line_x10'])}" if p.get("line_x10") is not None else ""
@@ -138,6 +145,8 @@ def _bet_result(category: str, p: dict[str, Any], ctx: Context) -> dict[str, Any
     else:
         detail = f"got the {money(stake)} stake back"
     reason = f" ({safe(p['reason'])})" if p.get("reason") else ""
+    if p.get("kind") == "parlay":
+        market = f"{p.get('legs')}-leg parlay"
     title = f"Bet {RESULT_WORDS.get(result, result)}: {result.upper()}"
     text = f"**{who}** {detail}{reason}" + (f"\n{market}" if market else "")
     colour = RESULT_COLOURS.get(result, GREY)

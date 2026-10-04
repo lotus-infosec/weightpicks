@@ -22,8 +22,10 @@ from app.core.migrations import upgrade_to_head
 from app.domain.markets import MarketStatus
 from app.models import Account, InstanceSettingsRow, Market, OddsVersion, Selection, User
 from app.services import admin, auth, instance, ledger, sim
+from app.services import props as props_service
 from app.services.admin import Actor, AdminError
-from app.services.bets import BetRejected, place_bet
+from app.services.bets import BetRejected, place_bet, place_parlay
+from app.services.observations import canonical_weigh_ins
 from app.services.users import ensure_player
 
 NY = ZoneInfo("America/New_York")
@@ -43,6 +45,8 @@ class SeasonRun:
     rejected: Counter[str] = field(default_factory=Counter)
     expected_rejections: Counter[str] = field(default_factory=Counter)
     bailouts: int = 0
+    parlays: int = 0
+    props: Counter[str] = field(default_factory=Counter)
 
 
 def _open_selections(engine: Engine, now: datetime) -> list[tuple[int, int, str]]:
@@ -56,6 +60,84 @@ def _open_selections(engine: Engine, now: datetime) -> list[tuple[int, int, str]
             .order_by(Selection.id)
         ).all()
     return [(s, v, side) for s, v, side, odds in rows if odds.get(side) is not None]
+
+
+def _open_legs(engine: Engine, now: datetime) -> list[tuple[int, int, int, frozenset[str]]]:
+    """(selection, version, market, correlation keys) for every bettable side."""
+    with engine.connect() as conn:
+        rows = conn.execute(
+            select(
+                Selection.id,
+                OddsVersion.id,
+                Market.id,
+                Market.correlation_keys,
+                Selection.side,
+                OddsVersion.odds,
+            )
+            .join(Market, Market.id == Selection.market_id)
+            .join(OddsVersion, (OddsVersion.market_id == Market.id) & OddsVersion.is_current)
+            .where(Market.status == MarketStatus.OPEN.value, Market.lock_at > now)
+            .order_by(Selection.id)
+        ).all()
+    return [
+        (s, v, m, frozenset(keys))
+        for s, v, m, keys, side, odds in rows
+        if odds.get(side) is not None
+    ]
+
+
+def _pick_parlay(
+    legs: list[tuple[int, int, int, frozenset[str]]], rng: np.random.Generator, n: int
+) -> list[tuple[int, int]] | None:
+    """n legs on different markets whose correlation keys don't intersect."""
+    chosen: list[tuple[int, int, int, frozenset[str]]] = []
+    for i in rng.permutation(len(legs)):
+        leg = legs[int(i)]
+        if all(leg[2] != c[2] and not (leg[3] & c[3]) for c in chosen):
+            chosen.append(leg)
+            if len(chosen) == n:
+                return [(c[0], c[1]) for c in chosen]
+    return None
+
+
+def _create_props(
+    engine: Engine, clock: SimClock, actor: Actor, day: int, run: "SeasonRun"
+) -> None:
+    """The admin's prop routine (D-041): milestones, streaks, week vs week, futures."""
+    today = clock.now().astimezone(NY).date()
+    with engine.connect() as conn:
+        canon = canonical_weigh_ins(conn, today - timedelta(days=5), today)
+        current, _ = props_service._streak(conn, today, "weigh_in")
+    plans: list[tuple[str, list[dict[str, str]]]] = []
+    if day % 3 == 1 and canon:
+        latest = canon[-1].value / 10
+        deadline = (today + timedelta(days=7)).isoformat()
+        plans.append(
+            (
+                "milestone_by",
+                [
+                    {"threshold": f"{latest - x / 2:.1f}", "deadline": deadline}
+                    for x in range(1, 13)
+                ],
+            )
+        )
+    if day % 4 == 0:
+        deadline = (today + timedelta(days=7)).isoformat()
+        plans.append(
+            ("streak_reaches", [{"kind": "weigh_in", "n": str(current + 3), "deadline": deadline}])
+        )
+    if today.weekday() == 3:
+        plans.append(("beat_last_week", [{"metric": "steps"}]))
+    if day % 10 == 2:
+        plans.append(("future_total_change", [{"day": (today + timedelta(days=30)).isoformat()}]))
+    for template, forms in plans:
+        for form in forms:
+            try:
+                props_service.create(engine, clock, actor, template, form)
+            except props_service.PropError:
+                continue
+            run.props[template] += 1
+            break
 
 
 def _locked_selection(engine: Engine) -> tuple[int, int] | None:
@@ -78,7 +160,9 @@ def _balance(engine: Engine, user: int) -> int:
     return value
 
 
-def run_season(tmp_path: Path, *, days: int = 60, players: int = 6, seed: int = 11) -> SeasonRun:
+def run_season(
+    tmp_path: Path, *, days: int = 60, players: int = 6, seed: int = 11, v2: bool = False
+) -> SeasonRun:
     settings = Settings(
         app_env="dev",
         data_dir=tmp_path,
@@ -105,7 +189,12 @@ def run_season(tmp_path: Path, *, days: int = 60, players: int = 6, seed: int = 
         # allowances flowing daily while busts and bailouts stay testable.
         config = instance.ensure(conn, SimClock(start), settings)
         economy = config.economy.to_json() | {"daily_allowance_cents": ALLOWANCE}
-        conn.execute(update(InstanceSettingsRow).values(setup_completed_at=start, economy=economy))
+        flags = config.flags | ({"props_futures": True, "parlays": True} if v2 else {})
+        conn.execute(
+            update(InstanceSettingsRow).values(
+                setup_completed_at=start, economy=economy, flags=flags
+            )
+        )
     admin_id = auth.create_admin(
         engine,
         SimClock(start),
@@ -138,13 +227,33 @@ def run_season(tmp_path: Path, *, days: int = 60, players: int = 6, seed: int = 
                 run.expected_rejections[exc.reason] += 1
                 assert exc.reason == expect, (exc.reason, expect)
 
+    def attempt_parlay(user: int, picks: list[tuple[int, int]], stake: int, key: str) -> None:
+        try:
+            place_parlay(
+                engine, SimClock(now), user_id=user, legs=picks, stake_cents=stake, client_key=key
+            )
+            run.parlays += 1
+        except BetRejected as exc:
+            run.rejected[exc.reason] += 1
+
     for day in range(days):
         local_day = START + timedelta(days=day)
         for k, wall in enumerate(BET_TIMES):
             target = datetime.combine(local_day, wall, tzinfo=NY).astimezone(UTC)
             sim.advance(engine, settings, target - now)
             now = target
+            if v2 and k == 0:
+                _create_props(engine, SimClock(now), admin_actor, day, run)
             options = _open_selections(engine, now)
+            if v2:
+                legs = _open_legs(engine, now)
+                for user in users[:-1]:
+                    if rng.random() > 0.35:
+                        continue
+                    picks = _pick_parlay(legs, rng, int(rng.integers(2, 4)))
+                    if picks:
+                        stake = max(100, int(_balance(engine, user) * 0.03))
+                        attempt_parlay(user, picks, stake, f"p{day}t{k}u{user}")
             frozen = users[-1] if day > days // 2 or (day == days // 2 and k == 1) else None
             for user in users:
                 if user == frozen or not options or rng.random() > 0.6:

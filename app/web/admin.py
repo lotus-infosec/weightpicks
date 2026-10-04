@@ -1,6 +1,7 @@
 """Admin panel I (BUILD_PLAN §1.5, CONCEPT §8, D-037). Every route requires the admin;
 destructive and money actions re-prompt for the admin's password."""
 
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -12,11 +13,14 @@ from sqlalchemy import select
 from app.core.security import verify_password
 from app.domain import setup as setup_steps
 from app.domain.economy import VIG_PRESETS, Economy
-from app.models import User
+from app.models import Market, User
 from app.services import admin, admin_views, board, instance
+from app.services import props as props_service
 from app.services import secrets as secret_store
+from app.services import stats as stats_service
 from app.services.admin import Actor, AdminError
 from app.services.auth import SessionInfo
+from app.services.observations import canonical_weigh_ins
 from app.web.security import Admin, client_ip, read_form, require_admin
 from app.web.setup import WEBHOOK_LABELS
 
@@ -32,6 +36,7 @@ MESSAGES = {
     "webhook": "Webhook saved.",
     "test": "Test post queued. It should appear in Discord within a minute.",
     "flags": "Settings saved.",
+    "prop": "Prop posted. Players can bet on it until tonight's lock.",
 }
 REAUTH_FAILED_MESSAGE = "That's not your password. Nothing was changed."
 
@@ -350,6 +355,117 @@ def build_router() -> APIRouter:
             "admin/registration.html",
             {"code": code, "error": None, "active": "registration"},
         )
+
+    # ---- props and futures (D-041) ---------------------------------------------------------
+
+    def props_page(
+        request: Request,
+        template: str,
+        form: dict[str, str] | None = None,
+        preview: Any = None,
+        error: str | None = None,
+        status: int = 200,
+    ) -> Response:
+        state = request.app.state
+        template = template if template in props_service.PROP_TEMPLATES else "milestone_by"
+        now = state.domain_clock.now()
+        with state.engine.connect() as conn:
+            config = instance.read(conn)
+            tz = config.tz if config else state.settings.tz
+            today = now.astimezone(tz).date()
+            canon = canonical_weigh_ins(conn, today - timedelta(days=13), today)
+            open_props = list(
+                conn.execute(
+                    select(Market.id.label("market_id"), Market.title, Market.status)
+                    .where(
+                        Market.origin == "admin",
+                        Market.status.in_(("open", "locked")),
+                    )
+                    .order_by(Market.id.desc())
+                    .limit(30)
+                ).all()
+            )
+        unit = config.unit if config else state.settings.wp_unit
+        latest = canon[-1].value / 10 if canon else None
+        metrics = [
+            (m, stats_service.METRIC_LABELS[m]) for m in (config.enabled_metrics if config else ())
+        ]
+        return render(
+            request,
+            "admin/props.html",
+            {
+                "enabled": bool(config and config.flags.get("props_futures")),
+                "templates": list(props_service.LABELS.items()),
+                "labels": props_service.LABELS,
+                "short": {
+                    "milestone_by": "Milestone",
+                    "streak_reaches": "Streak",
+                    "beat_last_week": "Week vs week",
+                    "future_total_change": "Future",
+                },
+                "template": template,
+                "form": form or {},
+                "preview": preview,
+                "error": error,
+                "unit": unit,
+                "trend_text": f"latest weigh-in {latest:.1f} {unit}"
+                if latest
+                else "no recent weigh-ins",
+                "suggest_threshold": f"{(latest or 0) - 1:.1f}" if latest else "",
+                "suggest_deadline": (today + timedelta(days=7)).isoformat(),
+                "min_day": (today + timedelta(days=2)).isoformat(),
+                "max_day": (today + timedelta(days=28)).isoformat(),
+                "suggest_future": (today + timedelta(days=30)).isoformat(),
+                "min_future": (today + timedelta(days=2)).isoformat(),
+                "max_future": (today + timedelta(days=120)).isoformat(),
+                "metrics": metrics,
+                "open_props": open_props,
+                "active": "props",
+            },
+            status,
+        )
+
+    @router.get("/props")
+    def props(request: Request, session: Admin, template: str = "milestone_by") -> Response:
+        return props_page(request, template)
+
+    @router.post("/props/preview")
+    async def props_preview(request: Request, session: Admin) -> Response:
+        form = await read_form(request)
+        state = request.app.state
+        template = form.get("template", "")
+        try:
+            with state.engine.connect() as conn:
+                config = instance.read(conn)
+                if config is None:
+                    raise props_service.PropError("Finish setup first.")
+                today = state.domain_clock.now().astimezone(config.tz).date()
+                result = props_service.preview(conn, config, today, template, dict(form))
+        except props_service.PropError as exc:
+            return props_page(request, template, dict(form), error=exc.message, status=400)
+        return props_page(request, template, dict(form), preview=result)
+
+    @router.post("/props/create")
+    async def props_create(request: Request, session: Admin) -> Response:
+        form = await read_form(request)
+        state = request.app.state
+        template = form.get("template", "")
+        if not await reauth(request, session, form, "market.create_prop"):
+            return props_page(
+                request, template, dict(form), error=REAUTH_FAILED_MESSAGE, status=403
+            )
+        try:
+            await run_in_threadpool(
+                props_service.create,
+                state.engine,
+                state.domain_clock,
+                actor(request, session),
+                template,
+                dict(form),
+            )
+        except props_service.PropError as exc:
+            return props_page(request, template, dict(form), error=exc.message, status=400)
+        return RedirectResponse(f"/admin/props?template={template}&ok=prop", status_code=303)
 
     # ---- discord and flags -----------------------------------------------------------------------
 

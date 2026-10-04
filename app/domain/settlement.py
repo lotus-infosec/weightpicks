@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Literal
 
-Side = Literal["over", "under"]
+Side = Literal["over", "under", "yes", "no"]
 LegResult = Literal["won", "lost", "push"]
 ENGINE_VERSION = "settle-1"
 

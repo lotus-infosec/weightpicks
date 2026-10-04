@@ -116,7 +116,7 @@ def insert_market(
     now: datetime,
     origin: str = "core",
 ) -> int:
-    """Insert an open core market with its two selections and odds version 1."""
+    """Insert an open market with its two selections and odds version 1."""
     status = transition(MarketStatus.DRAFT, MarketStatus.OPEN)
     market_id = conn.execute(
         insert(Market)
@@ -142,7 +142,7 @@ def insert_market(
         )
         .returning(Market.id)
     ).scalar_one()
-    sides = ("over", "under")
+    sides = spec.sides
     conn.execute(insert(Selection), [{"market_id": market_id, "side": s} for s in sides])
     inputs: dict[str, Any] = pricing.model_inputs | {
         "p_over": pricing.p_over,

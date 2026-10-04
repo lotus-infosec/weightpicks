@@ -165,6 +165,7 @@ def rich_server(tmp_path: Path) -> Iterator[RichServer]:
     with engine.connect() as conn:
         assert ledger.verify(conn).ok
     mark_setup_done(engine, settings)
+    _props_and_parlays(engine, clock)
     engine.dispose()
 
     port = _free_port()
@@ -340,3 +341,47 @@ def ops_server(tmp_path: Path) -> Iterator[OpsServer]:
     yield OpsServer(f"http://127.0.0.1:{port}", admin_email, password, ids[0], ids[1])
     server.should_exit = True
     thread.join(timeout=10)
+
+
+def _props_and_parlays(engine: Any, clock: SimClock) -> None:
+    """Turn props/futures and parlays on and post one engine-priced milestone (STAGE12)."""
+    from datetime import timedelta
+
+    from sqlalchemy import select, update
+
+    from app.models import InstanceSettingsRow
+    from app.services import props
+    from app.services.admin import Actor
+    from app.services.observations import canonical_weigh_ins
+
+    with immediate(engine) as conn:
+        flags = conn.execute(select(InstanceSettingsRow.flags)).scalar_one() or {}
+        conn.execute(
+            update(InstanceSettingsRow).values(
+                flags=dict(flags) | {"props_futures": True, "parlays": True}
+            )
+        )
+    admin_id = auth.create_admin(
+        engine,
+        SystemClock(),
+        email="admin@example.invalid",
+        display_name="Admin",
+        password="correct horse battery",
+    )
+    today = clock.now().date()
+    with engine.connect() as conn:
+        latest = canonical_weigh_ins(conn, today - timedelta(days=5), today)[-1].value / 10
+    deadline = (today + timedelta(days=7)).isoformat()
+    for tenths in range(5, 120, 5):
+        try:
+            props.create(
+                engine,
+                clock,
+                Actor(user_id=admin_id),
+                "milestone_by",
+                {"threshold": f"{latest - tenths / 10:.1f}", "deadline": deadline},
+            )
+            return
+        except props.PropError:
+            continue
+    raise AssertionError("no priceable milestone for the e2e server")

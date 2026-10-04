@@ -34,6 +34,7 @@ from app.services import instance as instance_service
 from app.services import secrets as secret_store
 from app.services.markets import set_status
 from app.services.outbox import Category, enqueue
+from app.services.settlement import reevaluate_parlay
 
 log = structlog.get_logger()
 
@@ -141,6 +142,17 @@ def void_market(engine: Engine, clock: Clock, actor: Actor, market_id: int, reas
             .order_by(Bet.id)
         ).all()
         voided = _void_bets(conn, clock, list(bets), "market voided")
+        # In a parlay only this leg is voided: it drops out and the parlay is re-evaluated.
+        parlay_legs = conn.execute(
+            select(BetLeg.id, BetLeg.bet_id)
+            .join(Bet, Bet.id == BetLeg.bet_id)
+            .where(BetLeg.market_id == market_id, BetLeg.status == "open", Bet.kind == "parlay")
+            .order_by(BetLeg.id)
+        ).all()
+        for leg_id, bet_id in parlay_legs:
+            conn.execute(update(BetLeg).where(BetLeg.id == leg_id).values(status="void"))
+            reevaluate_parlay(conn, clock, bet_id, clock.now())
+        voided += len(parlay_legs)
         set_status(conn, [market_id], MarketStatus(market.status), MarketStatus.VOIDED, clock.now())
         enqueue(
             conn,
@@ -435,7 +447,7 @@ __all__ = ["Actor", "AdminError"]
 
 # ---- Discord and flags (STAGE11, D-040) ----------------------------------------------
 
-ADMIN_FLAGS = ("registration_open", "discord_public")  # toggled from /admin/discord
+ADMIN_FLAGS = ("registration_open", "discord_public", "props_futures", "parlays")  # /admin/discord
 
 
 def set_webhook(

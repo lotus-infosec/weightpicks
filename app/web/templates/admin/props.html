@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "admin/_reauth.html" import password %}
+{% block title %}Props · Admin{% endblock %}
+{% block content %}
+<h1>Props and futures</h1>
+{% if not enabled %}<p class="alert">Props and futures are turned off. Turn them on in <a href="/admin/discord">Settings</a>.</p>{% endif %}
+{% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+<p class="muted">Pick a template and its parameters. The engine sets the odds; nobody prices by hand. Props open now, lock tonight at the bet lock and settle on their own (milestones and streaks as soon as they're decided).</p>
+
+<nav class="tabs" aria-label="Template">
+  {% for key, label in templates %}<a href="/admin/props?template={{ key }}" class="tab{{ ' active' if key == template }}">{{ short[key] }}</a>{% endfor %}
+</nav>
+
+<section class="card">
+  <h2>{{ labels[template] }}</h2>
+  <form method="post" action="/admin/props/preview" class="stack" data-testid="prop-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <input type="hidden" name="template" value="{{ template }}">
+    {% if template == "milestone_by" %}
+      <label>Weight ({{ unit }}) <span class="muted">({{ trend_text }})</span>
+        <input type="number" step="0.1" name="threshold" value="{{ form.threshold or suggest_threshold }}" required></label>
+      <label>By (deadline) <input type="date" name="deadline" value="{{ form.deadline or suggest_deadline }}" min="{{ min_day }}" max="{{ max_day }}" required></label>
+    {% elif template == "streak_reaches" %}
+      <label>Kind <select name="kind">
+        <option value="weigh_in" {{ "selected" if form.kind != "down" }}>Weigh-in every day</option>
+        <option value="down" {{ "selected" if form.kind == "down" }}>Each weigh-in lower than the day before</option></select></label>
+      <label>Streak length <input type="number" name="n" min="2" max="28" value="{{ form.n or 5 }}" required></label>
+      <label>By (deadline) <input type="date" name="deadline" value="{{ form.deadline or suggest_deadline }}" min="{{ min_day }}" max="{{ max_day }}" required></label>
+    {% elif template == "beat_last_week" %}
+      <label>Metric <select name="metric">{% for m, label in metrics %}<option value="{{ m }}" {{ "selected" if form.metric == m }}>{{ label }}</option>{% endfor %}</select></label>
+      <p class="muted small">Compares next week (from Monday) with the week before.</p>
+    {% else %}
+      <label>Date <input type="date" name="day" value="{{ form.day or suggest_future }}" min="{{ min_future }}" max="{{ max_future }}" required></label>
+    {% endif %}
+    <button type="submit" {{ "disabled" if not enabled }}>Preview the price</button>
+  </form>
+</section>
+
+{% if preview %}
+<section class="card" data-testid="prop-preview">
+  <h2>Preview</h2>
+  <p><strong>{{ preview.spec.title }}</strong></p>
+  <p>{% if preview.pricing.line_x10 is not none %}Line {{ preview.pricing.line_x10 | line(preview.spec.metric) }} · {% endif %}
+     {{ "Over" if preview.spec.sides[0] == "over" else "Yes" }} {{ preview.pricing.odds_over | odds }} ·
+     {{ "Under" if preview.spec.sides[1] == "under" else "No" }} {{ preview.pricing.odds_under | odds }}
+     <span class="muted small">(fair chance {{ "%.0f"|format(preview.pricing.p_over * 100) }}%)</span></p>
+  <p class="muted small">Locks {{ preview.spec.lock_at | local_time }} · settles after {{ preview.spec.settle_after | local_time }}</p>
+  <form method="post" action="/admin/props/create" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <input type="hidden" name="template" value="{{ template }}">
+    {% for k, v in form.items() %}{% if k not in ("csrf_token", "template", "admin_password") %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+    {{ password() }}
+    <button type="submit" class="primary">Post this prop</button>
+  </form>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Open props and futures</h2>
+  {% if not open_props %}<p class="muted">None yet.</p>{% endif %}
+  <ul class="plain">{% for m in open_props %}<li><a href="/admin/markets/{{ m.market_id }}">{{ m.title }}</a> <span class="badge status-{{ m.status }}">{{ m.status }}</span></li>{% endfor %}</ul>
+</section>
+{% endblock %}

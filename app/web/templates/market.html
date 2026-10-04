@@ -5,7 +5,7 @@
 <div x-data="slip">
   <section class="card">
     <h1>{{ card.title }}</h1>
-    <p class="market-line">O/U <strong>{{ card.line_x10 | line(card.metric) }}</strong> · {{ card.status }}</p>
+    <p class="market-line">{% if card.line_x10 is not none %}O/U <strong>{{ card.line_x10 | line(card.metric) }}</strong>{% else %}Yes or no{% endif %} · {{ card.status }}</p>
     {% if open %}
       {{ side_buttons(card) }}
       <p class="muted small">Locks {{ card.lock_at | local_time }}</p>

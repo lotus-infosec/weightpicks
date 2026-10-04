@@ -254,7 +254,14 @@ def test_params_are_validated() -> None:
 
 
 def test_registry_templates_settle_their_markets() -> None:
-    assert set(TEMPLATES) == {"weight_change_ou", "metric_total_ou"}
+    assert set(TEMPLATES) == {
+        "weight_change_ou",
+        "metric_total_ou",
+        "milestone_by",
+        "streak_reaches",
+        "beat_last_week",
+        "future_total_change",
+    }
     weight, steps = specs(Timeframe.DAILY, date(2026, 10, 5))[:2]
     data = SettlementData(
         weigh_ins={date(2026, 10, 5): 2000, date(2026, 10, 6): 1990},
