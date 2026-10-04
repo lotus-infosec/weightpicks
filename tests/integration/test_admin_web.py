@@ -6,11 +6,12 @@ import pytest
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.core.clock import SystemClock
+from app.core.db import immediate
 from app.domain.markets import Timeframe
-from app.models import AuditEntry, Command, Market, OutboxMessage, User
+from app.models import AuditEntry, Command, InstanceSettingsRow, Market, OutboxMessage, User
 from app.services import admin, auth, instance, markets, secrets
 from app.services.sync import record_failure
 from app.web.main import create_app
@@ -278,6 +279,8 @@ def test_discord_page_webhooks_tests_and_flags(
 
 
 def test_register_page_is_closed_when_the_flag_is_off(world: World) -> None:
+    with immediate(world.engine) as conn:
+        conn.execute(update(InstanceSettingsRow).values(flags={"registration_open": False}))
     c = web.client(create_app(world.settings, domain_clock=world.clock))
     with c:
         page = c.get("/register").text
