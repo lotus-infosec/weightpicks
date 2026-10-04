@@ -2,7 +2,7 @@
 
 `dedupe_key` is unique, so a retried business transaction can never queue the same
 notification twice. Payloads carry ids and display values only: never emails,
-webhook URLs or secrets. Delivery arrives in STAGE11.
+webhook URLs or secrets. app/notify/dispatcher.py delivers them.
 """
 
 from enum import StrEnum
@@ -22,6 +22,12 @@ class Category(StrEnum):
     MARKET_SETTLEMENTS = "market_settlements"
     ADMIN_ALERTS = "admin_alerts"
     BUSTS = "busts"
+    NEW_MARKETS = "new_markets"
+    WEEKLY_STANDINGS = "weekly_standings"
+    PARLAY_RESULTS = "parlay_results"
+    SPECIAL_EVENTS = "special_events"
+    HYPE = "hype"
+    GOAL_REACHED = "goal_reached"
 
 
 def enqueue(

@@ -9,7 +9,7 @@ from app.core.clock import SimClock
 from app.core.config import Settings
 from app.core.db import immediate
 from app.domain.markets import InvalidTransition, MarketStatus, Timeframe
-from app.models import InstanceSettingsRow, JobRun, Market, OddsVersion, Selection
+from app.models import InstanceSettingsRow, JobRun, Market, OddsVersion, OutboxMessage, Selection
 from app.providers.base import WeighIn
 from app.services import instance, markets, sim
 from app.services.ledger import open_season
@@ -366,3 +366,16 @@ def test_fourteen_simulated_days_drop_and_lock_on_schedule(
         r.window_start for r in rows if r.timeframe == "daily" and r.metric == "weight"
     )
     assert daily_weight == [date(2026, 10, 26) + timedelta(days=k) for k in range(14)]
+
+
+def test_a_drop_announces_its_markets_once(world: World) -> None:
+    w = world
+    created = markets.drop(w.engine, w.clock, w.config, Timeframe.DAILY, DAY).created
+    markets.drop(w.engine, w.clock, w.config, Timeframe.DAILY, DAY)  # repeat: nothing new
+    with w.engine.connect() as conn:
+        (payload,) = conn.execute(
+            select(OutboxMessage.payload).where(OutboxMessage.category == "new_markets")
+        ).scalars()
+    assert payload["timeframe"] == "daily" and payload["day"] == DAY.isoformat()
+    assert [m["market_id"] for m in payload["markets"]] == created
+    assert all(m["title"] and "odds_over" in m for m in payload["markets"])

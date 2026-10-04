@@ -2,6 +2,7 @@
 
 import signal
 import threading
+import time
 from collections.abc import Sequence
 from types import FrameType
 
@@ -13,14 +14,17 @@ from app.core.config import Settings
 from app.core.db import make_engine
 from app.core.logging import configure_logging
 from app.core.migrations import is_at_head
+from app.notify.dispatcher import Dispatcher
 from app.services import instance
 from app.services.instance import InstanceConfig
 from app.services.sim import app_clock
 from app.worker.jobs import INFRA_JOBS, domain_jobs
 from app.worker.jobs.commands import CommandsJob
+from app.worker.jobs.outbox import OutboxDispatchJob
 from app.worker.registry import Job, run_due
 
 TICK_SECONDS = 60
+FAST_SECONDS = 2  # outbox fast loop while rows are waiting (BUILD_PLAN §1.4.5)
 SCHEMA_POLL_SECONDS = 2
 
 log = structlog.get_logger()
@@ -76,7 +80,8 @@ def main() -> None:
     domain_clock = app_clock(settings, engine)
     config = instance.load(engine, domain_clock, settings)
     jobs: Sequence[Job] = domain_jobs(settings, config)
-    infra: tuple[Job, ...] = (*INFRA_JOBS, CommandsJob(settings, domain_clock))
+    dispatch = OutboxDispatchJob(Dispatcher(settings, clock, domain_clock))
+    infra: tuple[Job, ...] = (*INFRA_JOBS, CommandsJob(settings, domain_clock), dispatch)
     seen: dict[str, str] = {}
     log.info(
         "worker_started",
@@ -84,20 +89,25 @@ def main() -> None:
         jobs=[j.name for j in (*infra, *jobs)],
         sim_clock=settings.sim_clock,
     )
+    next_tick = 0.0
     while not stop.is_set():
         try:
-            config, jobs = reload_if_changed(engine, domain_clock, settings, config, jobs)
-            tick(
-                engine,
-                infra=infra,
-                domain=jobs,
-                system_clock=clock,
-                domain_clock=domain_clock,
-                seen=seen,
-            )
+            if time.monotonic() >= next_tick:
+                next_tick = time.monotonic() + TICK_SECONDS
+                config, jobs = reload_if_changed(engine, domain_clock, settings, config, jobs)
+                tick(
+                    engine,
+                    infra=infra,
+                    domain=jobs,
+                    system_clock=clock,
+                    domain_clock=domain_clock,
+                    seen=seen,
+                )
+            else:  # fast loop: only the outbox, while posts are still waiting
+                run_due([dispatch], engine, clock)
         except Exception:
             log.exception("tick_failed")
-        stop.wait(TICK_SECONDS)
+        stop.wait(FAST_SECONDS if dispatch.more else max(0.0, next_tick - time.monotonic()))
     engine.dispose()
     log.info("worker_stopped")
 

@@ -37,6 +37,7 @@ from app.services import instance
 from app.services.instance import InstanceConfig
 from app.services.ledger import active_season_id
 from app.services.observations import canonical_weigh_ins, latest_complete_through
+from app.services.outbox import Category, enqueue
 
 log = structlog.get_logger()
 
@@ -233,12 +234,35 @@ def drop(
         existing = set(
             conn.execute(select(Market.dedupe_key).where(Market.dedupe_key.in_(keys))).scalars()
         )
+        announced: list[dict[str, object]] = []
         for spec, pricing in priced:
             if spec.dedupe_key in existing:
                 result.skipped[spec.dedupe_key] = "exists"
                 continue
-            result.created.append(
-                insert_market(conn, season_id=season_id, spec=spec, pricing=pricing, now=now)
+            market_id = insert_market(
+                conn, season_id=season_id, spec=spec, pricing=pricing, now=now
+            )
+            result.created.append(market_id)
+            announced.append(
+                {
+                    "market_id": market_id,
+                    "title": spec.title,
+                    "line_x10": pricing.line_x10,
+                    "odds_over": pricing.odds_over,
+                    "odds_under": pricing.odds_under,
+                }
+            )
+        if announced:
+            enqueue(
+                conn,
+                clock,
+                category=Category.NEW_MARKETS,
+                payload={
+                    "timeframe": timeframe.value,
+                    "day": day.isoformat(),
+                    "markets": announced,
+                },
+                dedupe_key=f"new_markets:{timeframe.value}:{day.isoformat()}",
             )
     log.info(
         "market_drop",
