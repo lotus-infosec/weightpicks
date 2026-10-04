@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% from "admin/_reauth.html" import password %}
+{% block title %}Discord · Admin{% endblock %}
+{% block content %}
+<h1>Discord</h1>
+{% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+
+<section class="card">
+  <h2>Posting</h2>
+  <form method="post" action="/admin/discord/flags" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label class="check"><input type="checkbox" name="discord_public" {{ "checked" if flags.discord_public }}>
+      Public posts on <span class="muted">(when off, only admin alerts post)</span></label>
+    <label class="check"><input type="checkbox" name="registration_open" {{ "checked" if flags.registration_open }}>
+      Registration open <span class="muted">(when off, the register page says invites are closed)</span></label>
+    <button type="submit">Save</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Webhooks</h2>
+  {% if not can_store %}<p class="alert">APP_SECRET_KEY isn't set, so webhooks can't be stored or sent.</p>{% endif %}
+  <p class="muted">One Discord webhook per kind of post (Server settings → Integrations → Webhooks → Copy URL). Leave a kind empty to turn it off. URLs are stored encrypted and never shown again.</p>
+  <table class="table">
+    <thead><tr><th>Kind</th><th>Webhook</th><th>Test</th></tr></thead>
+    <tbody>
+    {% for key, label in categories %}
+    <tr>
+      <td>{{ label }}</td>
+      <td data-label="Webhook">{% if key in configured %}<span class="badge good" data-testid="hook-{{ key }}">set</span>{% else %}<span class="muted" data-testid="hook-{{ key }}">off</span>{% endif %}</td>
+      <td data-label="Test">{% if key in configured %}
+        <form method="post" action="/admin/discord/test/{{ key }}" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          <button type="submit" class="small" data-testid="test-{{ key }}">Send test</button>
+        </form>{% else %}<span class="muted">-</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Set or clear a webhook</h2>
+  <form method="post" action="/admin/discord/webhook" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>Kind of post
+      <select name="category">{% for key, label in categories %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select>
+    </label>
+    <label>Webhook URL <span class="muted">(leave empty to turn this kind off)</span>
+      <input type="url" name="url" autocomplete="off" spellcheck="false" placeholder="https://discord.com/api/webhooks/...">
+    </label>
+    {{ password() }}
+    <button type="submit" class="primary">Save webhook</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Recent posts</h2>
+  {% if not recent %}<p class="muted">Nothing queued yet.</p>{% endif %}
+  <table class="table">
+    <thead><tr><th>When</th><th>Kind</th><th>Status</th><th>Note</th></tr></thead>
+    <tbody>
+    {% for r in recent %}
+    <tr><td>{{ r.created_at | local_time }}</td><td data-label="Kind">{{ labels.get(r.category, r.category) }}</td>
+        <td data-label="Status"><span class="badge status-{{ r.status }}">{{ r.status }}</span>{% if r.attempts %} <span class="muted small">×{{ r.attempts }}</span>{% endif %}</td>
+        <td data-label="Note" class="small">{{ r.last_error or "" }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

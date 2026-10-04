@@ -3,6 +3,10 @@
 {% block content %}
 <section class="card narrow">
   <h1>Create an account</h1>
+  {% if closed %}
+  <p class="notice" data-testid="invite-closed">Invites are closed right now. Ask the person running this game when sign-ups open.</p>
+  <p><a href="/login">Log in</a></p>
+  {% else %}
   {% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
   <form method="post" action="/api/auth/register" class="stack">
     <input type="hidden" name="csrf_token" value="{{ form_csrf }}">
@@ -15,5 +19,6 @@
     <button type="submit" class="primary">Create account</button>
   </form>
   <p class="muted">Already registered? <a href="/login">Log in</a></p>
+  {% endif %}
 </section>
 {% endblock %}

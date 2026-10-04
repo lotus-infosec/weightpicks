@@ -5,12 +5,13 @@ from typing import Any
 import pytest
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from sqlalchemy import select
 
 from app.core.clock import SystemClock
 from app.domain.markets import Timeframe
-from app.models import AuditEntry, Command, Market, User
-from app.services import auth, markets
+from app.models import AuditEntry, Command, Market, OutboxMessage, User
+from app.services import auth, instance, markets, secrets
 from app.services.sync import record_failure
 from app.web.main import create_app
 from tests.integration import web
@@ -59,7 +60,7 @@ def admin_routes(app: object) -> set[tuple[str, str]]:
 def test_permission_matrix(clients: tuple[TestClient, TestClient, World]) -> None:
     admin_c, player_c, w = clients
     routes = admin_routes(admin_c.app)
-    assert len(routes) == 18
+    assert len(routes) == 22
     anon = web.client(create_app(w.settings, domain_clock=w.clock))
     with anon:
         for method, path in sorted(routes):
@@ -207,3 +208,91 @@ def test_dashboard_shows_why_sync_failed(clients: tuple[TestClient, TestClient, 
     assert "Garmin login failed: rerun garmin-login" in page and "nothing settles" in page
     admin_c.__exit__(None, None, None)
     player_c.__exit__(None, None, None)
+
+
+HOOK = "https://discord.com/api/webhooks/123456/secret-token_value"
+
+
+def test_discord_page_webhooks_tests_and_flags(
+    clients: tuple[TestClient, TestClient, World],
+) -> None:
+    admin_c, player_c, w = clients
+    keyed = w.settings.model_copy(update={"app_secret_key": SecretStr("k" * 48)})
+    admin_c.app.state.settings = keyed  # type: ignore[attr-defined]
+    page = "/admin/discord"
+    assert 'data-testid="hook-busts">off' in admin_c.get(page).text
+    wrong = post(
+        admin_c,
+        page,
+        f"{page}/webhook",
+        {"category": "busts", "url": HOOK, "admin_password": "nope"},
+    )
+    assert wrong.status_code == 403
+    bad = post(
+        admin_c,
+        page,
+        f"{page}/webhook",
+        {"category": "busts", "url": "https://x.test", "admin_password": web.PASSWORD},
+    )
+    assert bad.status_code == 400
+    ok = post(
+        admin_c,
+        page,
+        f"{page}/webhook",
+        {"category": "busts", "url": HOOK, "admin_password": web.PASSWORD},
+    )
+    assert ok.headers["location"] == f"{page}?ok=webhook"
+    text = admin_c.get(page).text
+    assert 'data-testid="hook-busts">set' in text and "secret-token_value" not in text
+    with w.engine.connect() as conn:
+        stored = secrets.get(conn, "k" * 48, "webhook.busts")
+        audit_rows = conn.execute(select(AuditEntry.action, AuditEntry.after)).all()
+    assert stored == HOOK
+    assert "secret-token_value" not in str(audit_rows)
+    assert ("discord.webhook_set", {"category": "busts", "set": True}) in audit_rows
+    # Test button queues a test post for that category.
+    assert post(admin_c, page, f"{page}/test/busts", {}).headers["location"] == f"{page}?ok=test"
+    with w.engine.connect() as conn:
+        test_row = conn.execute(
+            select(OutboxMessage.category, OutboxMessage.payload).where(
+                OutboxMessage.dedupe_key.like("test:%")
+            )
+        ).one()
+    assert test_row == ("busts", {"kind": "test"})
+    # Flags: both on, then registration closed again.
+    post(admin_c, page, f"{page}/flags", {"discord_public": "on", "registration_open": "on"})
+    post(admin_c, page, f"{page}/flags", {"discord_public": "on"})
+    with w.engine.connect() as conn:
+        flags = instance.read(conn).flags  # type: ignore[union-attr]
+    assert flags["discord_public"] and not flags["registration_open"]
+    # Clearing a webhook turns the category off.
+    post(
+        admin_c,
+        page,
+        f"{page}/webhook",
+        {"category": "busts", "url": "", "admin_password": web.PASSWORD},
+    )
+    assert 'data-testid="hook-busts">off' in admin_c.get(page).text
+    admin_c.__exit__(None, None, None)
+    player_c.__exit__(None, None, None)
+
+
+def test_register_page_is_closed_when_the_flag_is_off(world: World) -> None:
+    c = web.client(create_app(world.settings, domain_clock=world.clock))
+    with c:
+        page = c.get("/register").text
+        assert 'data-testid="invite-closed"' in page and 'name="code"' not in page
+        meta = c.get("/login").text
+        token = re.search(r'name="csrf_token" value="([^"]+)"', meta)
+        assert token
+        refused = c.post(
+            "/api/auth/register",
+            data={
+                "csrf_token": token.group(1),
+                "code": "X",
+                "email": "a@b.invalid",
+                "display_name": "A",
+                "password": "x" * 12,
+            },
+        )
+        assert refused.status_code == 403 and 'data-testid="invite-closed"' in refused.text

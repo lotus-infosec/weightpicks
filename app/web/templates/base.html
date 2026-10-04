@@ -25,7 +25,7 @@
   </header>
   {% if session.role == "admin" %}
   <nav class="nav">
-    {% for key, label, href in (("dashboard", "Dashboard", "/admin"), ("markets", "Markets", "/admin/markets"), ("users", "Users", "/admin/users"), ("bank", "Bank", "/admin/bank"), ("registration", "Registration", "/admin/registration"), ("audit", "Audit", "/admin/audit")) %}
+    {% for key, label, href in (("dashboard", "Dashboard", "/admin"), ("markets", "Markets", "/admin/markets"), ("users", "Users", "/admin/users"), ("bank", "Bank", "/admin/bank"), ("registration", "Registration", "/admin/registration"), ("discord", "Discord", "/admin/discord"), ("audit", "Audit", "/admin/audit")) %}
     <a href="{{ href }}" class="{{ 'active' if active == key }}">{{ label }}</a>
     {% endfor %}
     {% if dev_tools %}<a href="/dev/clock">Dev clock</a>{% endif %}

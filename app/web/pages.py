@@ -11,7 +11,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app.services import auth, board
+from app.services import auth, board, instance
 from app.services.auth import AuthError, SessionInfo
 from app.services.bets import BetRejected, place_bet
 from app.web.security import (
@@ -107,17 +107,31 @@ def build_router() -> APIRouter:
         set_session_cookie(response, request, new.token, new.info.role)
         return response
 
+    def registration_open(request: Request) -> bool:
+        with request.app.state.engine.connect() as conn:
+            config = instance.read(conn)
+        return bool(config and config.flags.get("registration_open"))
+
     @router.get("/register")
     def register_page(request: Request) -> Response:
         session = current_session(request)
         if session is not None:
             return RedirectResponse(_home_for(session), status_code=303)
-        return anon_form(request, "register.html", {"error": None, "form": {}})
+        context: dict[str, Any] = {
+            "error": None,
+            "form": {},
+            "closed": not registration_open(request),
+        }
+        return anon_form(request, "register.html", context)
 
     @router.post("/api/auth/register")
     async def register(request: Request) -> Response:
         form = await read_form(request)
         state = request.app.state
+        if not registration_open(request):  # BUILD_PLAN §4.2: invite closed
+            return anon_form(
+                request, "register.html", {"error": None, "form": {}, "closed": True}, 403
+            )
         ip = client_ip(request)
         try:
             await run_in_threadpool(
