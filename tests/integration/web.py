@@ -4,9 +4,11 @@ import re
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine
+from sqlalchemy import Engine, select, update
 
 from app.core.clock import SystemClock
+from app.core.db import immediate
+from app.models import InstanceSettingsRow
 from app.services import auth
 
 PASSWORD = "correct horse battery"
@@ -19,7 +21,19 @@ def client(app: FastAPI) -> TestClient:
     return TestClient(app, base_url="https://testserver")
 
 
+def open_registration(engine: Engine) -> None:
+    """Registration is closed by default (flag `registration_open`, BUILD_PLAN §4.2)."""
+    with immediate(engine) as conn:
+        flags = conn.execute(select(InstanceSettingsRow.flags)).scalar_one_or_none()
+        if flags is not None:
+            conn.execute(
+                update(InstanceSettingsRow).values(flags=dict(flags) | {"registration_open": True})
+            )
+
+
 def form_csrf(c: TestClient, path: str) -> str:
+    if path == "/register":
+        open_registration(c.app.state.engine)  # type: ignore[attr-defined]
     page = c.get(path)
     match = _CSRF.search(page.text)
     assert match, f"no csrf field on {path}"

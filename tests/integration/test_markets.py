@@ -9,12 +9,15 @@ from app.core.clock import SimClock
 from app.core.config import Settings
 from app.core.db import immediate
 from app.domain.markets import InvalidTransition, MarketStatus, Timeframe
-from app.models import InstanceSettingsRow, JobRun, Market, OddsVersion, Selection
+from app.models import InstanceSettingsRow, JobRun, Market, OddsVersion, OutboxMessage, Selection
+from app.providers.base import WeighIn
 from app.services import instance, markets, sim
 from app.services.ledger import open_season
+from app.services.sync import run_sync
 from app.worker.jobs import domain_jobs
 from app.worker.jobs.markets import RECHECK, DueCache, LockMarketsJob
 from app.worker.registry import Job, JobContext, run_due
+from tests.integration.test_sync import ScriptedProvider
 from tests.integration.world import DAY, NY, World, local, sync_sim
 
 
@@ -135,6 +138,29 @@ def test_counts_without_history_are_skipped(migrated_engine: Engine, settings: S
     # Weight still drops from the provisional prior; counts need history.
     assert len(result.created) == 1
     assert list(result.skipped.values()) == ["no_history"] * 4
+
+
+def test_provisional_weight_lines_drop_daily_only(
+    migrated_engine: Engine, settings: Settings
+) -> None:
+    """D-039: with fewer than 7 weigh-ins the weekly and monthly weight lines are skipped."""
+    clock = SimClock(local(2026, 10, 4, 19))  # Sunday: weekly drop day
+    provider = ScriptedProvider()
+    provider.weigh_ins = [WeighIn("w1", local(2026, 10, 4, 7), 90_000, "scale")]
+    run_sync(migrated_engine, clock, provider, tz=NY, unit="lb")
+    with immediate(migrated_engine) as conn:
+        open_season(conn, clock)
+        config = instance.ensure(conn, clock, settings)
+    sunday = date(2026, 10, 4)
+    daily = markets.drop(migrated_engine, clock, config, Timeframe.DAILY, sunday)
+    weekly = markets.drop(migrated_engine, clock, config, Timeframe.WEEKLY, sunday)
+    assert "provisional" not in daily.skipped.values()
+    assert list(weekly.skipped.values()).count("provisional") == 1
+    with migrated_engine.connect() as conn:
+        weight_markets = (
+            conn.execute(select(Market.timeframe).where(Market.metric == "weight")).scalars().all()
+        )
+    assert weight_markets == ["daily"]
 
 
 def test_enabled_metrics_setting_is_respected(world: World) -> None:
@@ -319,7 +345,9 @@ def test_fourteen_simulated_days_drop_and_lock_on_schedule(
     by_kind = Counter((r.timeframe, r.metric) for r in rows)
     assert by_kind[("daily", "weight")] == 14
     assert by_kind[("weekly", "weight")] == 2
-    assert by_kind[("monthly", "weight")] == 1
+    # The sim starts on Oct 26: fewer than 7 weigh-ins by the Oct 31 monthly drop, so the
+    # provisional monthly weight line is skipped (D-039); weekly ones have enough by Nov 1.
+    assert by_kind[("monthly", "weight")] == 0
     # Day 1 has no completed count history yet; every later day prices 4 daily counts.
     for metric in ("steps", "active_minutes", "intensity_minutes", "kcal"):
         assert by_kind[("daily", metric)] == 13
@@ -338,3 +366,16 @@ def test_fourteen_simulated_days_drop_and_lock_on_schedule(
         r.window_start for r in rows if r.timeframe == "daily" and r.metric == "weight"
     )
     assert daily_weight == [date(2026, 10, 26) + timedelta(days=k) for k in range(14)]
+
+
+def test_a_drop_announces_its_markets_once(world: World) -> None:
+    w = world
+    created = markets.drop(w.engine, w.clock, w.config, Timeframe.DAILY, DAY).created
+    markets.drop(w.engine, w.clock, w.config, Timeframe.DAILY, DAY)  # repeat: nothing new
+    with w.engine.connect() as conn:
+        (payload,) = conn.execute(
+            select(OutboxMessage.payload).where(OutboxMessage.category == "new_markets")
+        ).scalars()
+    assert payload["timeframe"] == "daily" and payload["day"] == DAY.isoformat()
+    assert [m["market_id"] for m in payload["markets"]] == created
+    assert all(m["title"] and "odds_over" in m for m in payload["markets"])

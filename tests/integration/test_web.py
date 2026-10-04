@@ -332,7 +332,9 @@ def test_place_bet_through_the_api(app_and_code: tuple[TestClient, World, str]) 
     assert junk.status_code == 400
     with w.engine.connect() as conn:
         assert len(conn.execute(select(Bet.id)).all()) == 1
-        assert conn.execute(select(OutboxMessage.category)).scalars().all() == ["bets_placed"]
+        assert conn.execute(
+            select(OutboxMessage.category).where(OutboxMessage.category != "new_markets")
+        ).scalars().all() == ["bets_placed"]
     mine = c.get("/bets/mine")
     assert "$25.00" in mine.text and "$975.00" in mine.text
     feed = c.get("/bets/feed")

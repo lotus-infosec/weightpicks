@@ -12,6 +12,7 @@
   <script src="/static/app.js" defer></script>
   <script src="/static/vendor/htmx-2.0.11.min.js" defer></script>
   <script src="/static/vendor/alpine-csp-3.17.4.min.js" defer></script>
+  {% block head %}{% endblock %}
 </head>
 <body class="app" hx-headers='{{ {"X-CSRF-Token": csrf} | tojson }}'>
   {% if session %}
@@ -25,7 +26,7 @@
   </header>
   {% if session.role == "admin" %}
   <nav class="nav">
-    {% for key, label, href in (("dashboard", "Dashboard", "/admin"), ("markets", "Markets", "/admin/markets"), ("users", "Users", "/admin/users"), ("bank", "Bank", "/admin/bank"), ("registration", "Registration", "/admin/registration"), ("audit", "Audit", "/admin/audit")) %}
+    {% for key, label, href in (("dashboard", "Dashboard", "/admin"), ("markets", "Markets", "/admin/markets"), ("users", "Users", "/admin/users"), ("bank", "Bank", "/admin/bank"), ("registration", "Registration", "/admin/registration"), ("discord", "Discord", "/admin/discord"), ("audit", "Audit", "/admin/audit")) %}
     <a href="{{ href }}" class="{{ 'active' if active == key }}">{{ label }}</a>
     {% endfor %}
     {% if dev_tools %}<a href="/dev/clock">Dev clock</a>{% endif %}
@@ -36,6 +37,8 @@
     <a href="/" class="{{ 'active' if active == 'board' }}">Board</a>
     <a href="/bets/mine" class="{{ 'active' if active == 'mine' }}">My bets</a>
     <a href="/bets/feed" class="{{ 'active' if active == 'feed' }}">Feed</a>
+    <a href="/leaderboard" class="{{ 'active' if active == 'leaderboard' }}">Leaders</a>
+    <a href="/stats" class="{{ 'active' if active == 'stats' }}">Stats</a>
   </nav>
   {% endif %}
   {% else %}

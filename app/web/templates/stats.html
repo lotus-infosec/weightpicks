@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% set active = "stats" %}
+{% block title %}Stats · {{ instance.app_name }}{% endblock %}
+{% block head %}
+  <script src="/static/vendor/chart-4.5.1.umd.min.js" defer></script>
+  <script src="/static/stats.js" defer></script>
+{% endblock %}
+{% block content %}
+<h1>Stats</h1>
+{% set s = data.strip %}
+<section class="strip" data-testid="stat-strip">
+  <div><span class="muted small">Current</span><strong>{{ "%.1f"|format(s.current) ~ " " ~ data.unit if s.current is not none else "-" }}</strong></div>
+  <div><span class="muted small">7-day change</span><strong>{{ ("%+.1f"|format(s.change_7d) ~ " " ~ data.unit) if s.change_7d is not none else "-" }}</strong></div>
+  <div><span class="muted small">To goal</span><strong>{{ ("%.1f"|format(s.to_goal) ~ " " ~ data.unit) if s.to_goal is not none else "-" }}</strong></div>
+  <div><span class="muted small">Weigh-in streak</span><strong>{{ s.streak }} day{{ "" if s.streak == 1 else "s" }}</strong></div>
+</section>
+
+<nav class="tabs" aria-label="Range">
+  {% for r in data.ranges %}<a href="/stats?days={{ r }}" class="tab{{ ' active' if r == data.days }}">{{ r }} days</a>{% endfor %}
+</nav>
+
+<section class="card">
+  <h2>Weigh-ins</h2>
+  {% if not data.weigh_ins %}<p class="muted" data-testid="no-weigh-ins">No weigh-ins in this range yet.</p>{% endif %}
+  {% if data.provisional and data.weigh_ins %}<p class="muted small"><span class="badge">provisional</span> Fewer than 7 recent weigh-ins: the trend assumes no change until there's more data.</p>{% endif %}
+  <div class="chart"><canvas id="weight-chart" aria-label="Weigh-ins with the trend line, a ±1σ band and the 7-day projection" role="img"></canvas></div>
+  <p class="muted small">Dots: weigh-ins (filled = scale, open = manual). Line: the trend the odds use. Band: ±1σ. Dashed: the projection behind open lines.</p>
+</section>
+
+{% for m in data.metrics %}
+<section class="card">
+  <h2>{{ m.label }}</h2>
+  <div class="chart small"><canvas class="metric-chart" data-index="{{ loop.index0 }}" aria-label="{{ m.label }} per day with a 7-day average" role="img"></canvas></div>
+</section>
+{% endfor %}
+<script type="application/json" id="stats-data">{{ data | tojson }}</script>
+{% endblock %}

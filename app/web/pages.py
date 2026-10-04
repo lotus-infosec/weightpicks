@@ -11,7 +11,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app.services import auth, board
+from app.services import auth, board, instance, leaderboard, stats
 from app.services.auth import AuthError, SessionInfo
 from app.services.bets import BetRejected, place_bet
 from app.web.security import (
@@ -107,17 +107,31 @@ def build_router() -> APIRouter:
         set_session_cookie(response, request, new.token, new.info.role)
         return response
 
+    def registration_open(request: Request) -> bool:
+        with request.app.state.engine.connect() as conn:
+            config = instance.read(conn)
+        return bool(config and config.flags.get("registration_open"))
+
     @router.get("/register")
     def register_page(request: Request) -> Response:
         session = current_session(request)
         if session is not None:
             return RedirectResponse(_home_for(session), status_code=303)
-        return anon_form(request, "register.html", {"error": None, "form": {}})
+        context: dict[str, Any] = {
+            "error": None,
+            "form": {},
+            "closed": not registration_open(request),
+        }
+        return anon_form(request, "register.html", context)
 
     @router.post("/api/auth/register")
     async def register(request: Request) -> Response:
         form = await read_form(request)
         state = request.app.state
+        if not registration_open(request):  # BUILD_PLAN §4.2: invite closed
+            return anon_form(
+                request, "register.html", {"error": None, "form": {}, "closed": True}, 403
+            )
         ip = client_ip(request)
         try:
             await run_in_threadpool(
@@ -211,6 +225,34 @@ def build_router() -> APIRouter:
             wallet = board.wallet(conn, session.user_id)
         name = "_feed.html" if "HX-Request" in request.headers else "feed.html"
         return render(request, name, {"bets": bets, "wallet": wallet})
+
+    @router.get("/leaderboard")
+    def leaderboard_page(request: Request, session: Player, season: int | None = None) -> Response:
+        with request.app.state.engine.connect() as conn:
+            options = leaderboard.seasons(conn)
+            ids = {o.season_id for o in options}
+            current = next((o.season_id for o in options if o.current), None)
+            chosen = (
+                season if season in ids else current or (options[0].season_id if options else None)
+            )
+            rows = leaderboard.standings(conn, chosen)
+            wallet = board.wallet(conn, session.user_id)
+        return render(
+            request,
+            "leaderboard.html",
+            {"rows": rows, "season_options": options, "season_id": chosen, "wallet": wallet},
+        )
+
+    @router.get("/stats")
+    def stats_page(request: Request, session: Player, days: int = 30) -> Response:
+        state = request.app.state
+        live = state.live
+        metrics = live.config.enabled_metrics if live.config else ()
+        as_of = state.domain_clock.now().astimezone(live.tz).date()
+        with state.engine.connect() as conn:
+            data = stats.build(conn, as_of, days, live.unit, metrics)
+            wallet = board.wallet(conn, session.user_id)
+        return render(request, "stats.html", {"data": data, "wallet": wallet})
 
     @router.post("/api/bets")
     async def place(request: Request, session: Player) -> Response:

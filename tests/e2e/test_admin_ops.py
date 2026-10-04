@@ -111,6 +111,9 @@ def test_operate_a_week_from_the_admin_ui(
         re.compile(r"^\w{4}-\w{4}-\w{4}$")
     )
     check(page, "admin-registration", size, errors)
+    page.goto(f"{url}/admin/discord")
+    expect(page.get_by_test_id("hook-busts")).to_have_text("off")
+    check(page, "admin-discord", size, errors)
     page.goto(f"{url}/admin/audit")
     log = page.locator("table")
     for action in (

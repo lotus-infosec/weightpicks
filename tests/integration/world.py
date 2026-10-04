@@ -35,7 +35,8 @@ def sync_sim(engine: Engine, clock: SimClock) -> None:
 
 
 def mark_setup_done(engine: Engine, settings: Settings) -> None:
-    """Pretend /setup already ran: the settings row exists with setup_completed_at."""
+    """Pretend /setup already ran: the settings row exists with setup_completed_at, and
+    registration is open (the admin's `registration_open` flag, off by default)."""
     from sqlalchemy import update
 
     from app.core.db import immediate
@@ -45,4 +46,8 @@ def mark_setup_done(engine: Engine, settings: Settings) -> None:
     clock = SimClock(local(2026, 10, 1, 9))
     with immediate(engine) as conn:
         instance.ensure(conn, clock, settings)
-        conn.execute(update(InstanceSettingsRow).values(setup_completed_at=clock.now()))
+        conn.execute(
+            update(InstanceSettingsRow).values(
+                setup_completed_at=clock.now(), flags={"registration_open": True}
+            )
+        )

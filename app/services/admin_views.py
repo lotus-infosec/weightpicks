@@ -229,3 +229,21 @@ def audit_page(conn: Connection, page: int, limit: int = PAGE) -> list[Any]:
             .limit(limit + 1)
         ).all()
     )
+
+
+def recent_outbox(conn: Connection, limit: int = 10) -> list[Any]:
+    """Latest Discord posts for the admin page: status and error only, never payload URLs."""
+    return list(
+        conn.execute(
+            select(
+                OutboxMessage.created_at,
+                OutboxMessage.category,
+                OutboxMessage.status,
+                OutboxMessage.attempts,
+                OutboxMessage.last_error,
+            )
+            .where(OutboxMessage.channel == "discord")
+            .order_by(OutboxMessage.id.desc())
+            .limit(limit)
+        ).all()
+    )

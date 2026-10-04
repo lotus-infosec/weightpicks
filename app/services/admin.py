@@ -14,6 +14,7 @@ from sqlalchemy import Connection, Engine, insert, select, update
 from app.core.clock import Clock
 from app.core.db import immediate
 from app.core.security import hash_password
+from app.domain import setup as setup_steps
 from app.domain.economy import Economy
 from app.domain.ledger import AccountKind, InsufficientFunds
 from app.domain.markets import MarketStatus
@@ -30,6 +31,7 @@ from app.models import (
 )
 from app.services import audit, auth, busts, ledger
 from app.services import instance as instance_service
+from app.services import secrets as secret_store
 from app.services.markets import set_status
 from app.services.outbox import Category, enqueue
 
@@ -429,3 +431,84 @@ def request_sync(engine: Engine, clock: Clock, actor: Actor) -> int:
 
 
 __all__ = ["Actor", "AdminError"]
+
+
+# ---- Discord and flags (STAGE11, D-040) ----------------------------------------------
+
+ADMIN_FLAGS = ("registration_open", "discord_public")  # toggled from /admin/discord
+
+
+def set_webhook(
+    engine: Engine, clock: Clock, actor: Actor, app_secret_key: str, category: str, url: str
+) -> None:
+    """Store (or, with an empty url, clear) one category's webhook, encrypted. The audit
+    row says what changed, never the URL."""
+    if category not in secret_store.WEBHOOK_CATEGORIES:
+        raise AdminError("unknown_category", "Unknown Discord category.")
+    url = url.strip()
+    if url:
+        problem = setup_steps.webhook_problem(url)
+        if problem:
+            raise AdminError("bad_webhook", problem)
+        if not app_secret_key:
+            raise AdminError("no_key", "APP_SECRET_KEY isn't set, so webhooks can't be stored.")
+    name = f"webhook.{category}"
+    with immediate(engine) as conn:
+        had = name in secret_store.names(conn)
+        if url:
+            secret_store.put(conn, clock, app_secret_key, name, url)
+        elif had:
+            secret_store.remove(conn, name)
+        else:
+            return
+        audit.record(
+            conn,
+            clock,
+            actor_id=actor.user_id,
+            ts=actor.acted_at,
+            action="discord.webhook_set" if url else "discord.webhook_cleared",
+            target=None,
+            before={"category": category, "set": had},
+            after={"category": category, "set": bool(url)},
+            ip=actor.ip,
+        )
+
+
+def send_test(engine: Engine, domain_clock: Clock, actor: Actor, category: str) -> None:
+    if category not in secret_store.WEBHOOK_CATEGORIES:
+        raise AdminError("unknown_category", "Unknown Discord category.")
+    with immediate(engine) as conn:
+        enqueue(
+            conn,
+            domain_clock,
+            category=Category(category),
+            payload={"kind": "test"},
+            dedupe_key=f"test:{category}:{(actor.acted_at or domain_clock.now()).isoformat()}",
+        )
+
+
+def set_flag(engine: Engine, clock: Clock, actor: Actor, flag: str, value: bool) -> None:
+    if flag not in ADMIN_FLAGS:
+        raise AdminError("unknown_flag", "That setting can't be changed here.")
+    with immediate(engine) as conn:
+        flags = dict(conn.execute(select(InstanceSettingsRow.flags)).scalar_one() or {})
+        before = bool(flags.get(flag, False))
+        if before == value:
+            return
+        flags[flag] = value
+        conn.execute(
+            update(InstanceSettingsRow)
+            .where(InstanceSettingsRow.id == 1)
+            .values(flags=flags, updated_at=clock.now())
+        )
+        audit.record(
+            conn,
+            clock,
+            actor_id=actor.user_id,
+            ts=actor.acted_at,
+            action="settings.flag",
+            target=("settings", 1),
+            before={flag: before},
+            after={flag: value},
+            ip=actor.ip,
+        )
