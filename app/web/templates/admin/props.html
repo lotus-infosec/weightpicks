@@ -17,7 +17,7 @@
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
     <input type="hidden" name="template" value="{{ template }}">
     {% if template == "milestone_by" %}
-      <label>Weight ({{ unit }}) <span class="muted">(current trend {{ trend_text }})</span>
+      <label>Weight ({{ unit }}) <span class="muted">({{ trend_text }})</span>
         <input type="number" step="0.1" name="threshold" value="{{ form.threshold or suggest_threshold }}" required></label>
       <label>By (deadline) <input type="date" name="deadline" value="{{ form.deadline or suggest_deadline }}" min="{{ min_day }}" max="{{ max_day }}" required></label>
     {% elif template == "streak_reaches" %}

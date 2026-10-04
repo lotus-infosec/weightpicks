@@ -408,7 +408,9 @@ def build_router() -> APIRouter:
                 "preview": preview,
                 "error": error,
                 "unit": unit,
-                "trend_text": f"latest {latest:.1f} {unit}" if latest else "no recent weigh-ins",
+                "trend_text": f"latest weigh-in {latest:.1f} {unit}"
+                if latest
+                else "no recent weigh-ins",
                 "suggest_threshold": f"{(latest or 0) - 1:.1f}" if latest else "",
                 "suggest_deadline": (today + timedelta(days=7)).isoformat(),
                 "min_day": (today + timedelta(days=2)).isoformat(),

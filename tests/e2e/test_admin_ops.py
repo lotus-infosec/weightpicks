@@ -113,7 +113,13 @@ def test_operate_a_week_from_the_admin_ui(
     check(page, "admin-registration", size, errors)
     page.goto(f"{url}/admin/discord")
     expect(page.get_by_test_id("hook-busts")).to_have_text("off")
+    page.get_by_label("Props and futures").check()
+    page.get_by_role("button", name="Save").first.click()
+    expect(page.get_by_role("status")).to_contain_text("Settings saved")
     check(page, "admin-discord", size, errors)
+    page.get_by_role("link", name="Props").click()
+    expect(page.get_by_test_id("prop-form")).to_be_visible()
+    check(page, "admin-props", size, errors)
     page.goto(f"{url}/admin/audit")
     log = page.locator("table")
     for action in (
@@ -126,6 +132,7 @@ def test_operate_a_week_from_the_admin_ui(
         "bank.bailout",
         "user.ban",
         "registration.rotate",
+        "settings.flag",
     ):
         expect(log).to_contain_text(action)
     check(page, "admin-audit", size, errors)

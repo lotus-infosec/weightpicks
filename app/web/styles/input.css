@@ -61,8 +61,8 @@
   .badge { @apply text-xs rounded-full px-2 py-0.5; background: var(--color-raised); color: var(--color-muted); }
   .sides { @apply grid grid-cols-2 gap-3 my-3; }
   .side { @apply flex flex-col items-center justify-center rounded-xl py-4 min-h-16 font-semibold; background: var(--color-raised); border: 2px solid var(--color-line); color: var(--color-text); }
-  .side-over { border-color: var(--color-over); }
-  .side-under { border-color: var(--color-under); }
+  .side-over, .side-yes { border-color: var(--color-over); }
+  .side-under, .side-no { border-color: var(--color-under); }
   .side:disabled { @apply opacity-40; }
   .side-odds { @apply text-lg tabular-nums; }
   .empty { @apply text-center py-8; }
