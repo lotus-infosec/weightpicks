@@ -75,6 +75,8 @@ class Timeframe(StrEnum):
     DAILY = "daily"
     WEEKLY = "weekly"
     MONTHLY = "monthly"
+    PROP = "prop"  # admin-created props (milestones, streaks, week vs week), D-041
+    FUTURE = "future"
 
 
 # ---- schedule (D-009 defaults; edited in /setup from STAGE08) ----------------------
@@ -148,6 +150,7 @@ class MarketSpec:
     settle_deadline: datetime
     correlation_keys: tuple[str, ...]
     dedupe_key: str
+    sides: tuple[str, str] = ("over", "under")  # yes/no markets: ("yes", "no")
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,7 +193,21 @@ class Template(Protocol):
         self, spec: MarketSpec, data: PricingData, unit: Unit, hold: float = DEFAULT_HOLD
     ) -> Pricing | None: ...
 
-    def settle(self, params: Mapping[str, Any], line_x10: int, data: SettlementData) -> Outcome: ...
+    def settle(
+        self, params: Mapping[str, Any], line_x10: int | None, data: SettlementData
+    ) -> Outcome: ...
+
+    def decide_early(
+        self, params: Mapping[str, Any], data: SettlementData, through: date
+    ) -> Outcome | None:
+        """An outcome already certain from data complete through `through`, else None."""
+        ...
+
+
+def _line(line_x10: int | None) -> int:
+    if line_x10 is None:
+        raise ValueError("an over/under market needs a line")
+    return line_x10
 
 
 class _Params(BaseModel):
@@ -235,6 +252,7 @@ def _build(
     lock_at: datetime,
     settle_after: datetime,
     keys: list[str],
+    sides: tuple[str, str] = ("over", "under"),
 ) -> MarketSpec:
     data = params.model_dump(mode="json")
     return MarketSpec(
@@ -250,6 +268,7 @@ def _build(
         settle_deadline=settle_after + SETTLE_GRACE,
         correlation_keys=tuple(keys),
         dedupe_key=dedupe_key(template, data),
+        sides=sides,
     )
 
 
@@ -298,9 +317,16 @@ class WeightChangeOU:
             hold=hold,
         )
 
-    def settle(self, params: Mapping[str, Any], line_x10: int, data: SettlementData) -> Outcome:
+    def settle(
+        self, params: Mapping[str, Any], line_x10: int | None, data: SettlementData
+    ) -> Outcome:
         p = WeightChangeParams.model_validate(params)
-        return settle_weight_change(p.d0, p.d1, line_x10, data.weigh_ins)
+        return settle_weight_change(p.d0, p.d1, _line(line_x10), data.weigh_ins)
+
+    def decide_early(
+        self, params: Mapping[str, Any], data: SettlementData, through: date
+    ) -> Outcome | None:
+        return None
 
 
 class MetricTotalOU:
@@ -348,14 +374,21 @@ class MetricTotalOU:
             return price_workouts(history, as_of, n_days=len(p.days), hold=hold)
         return price_count_total(p.metric, history, as_of, p.days, hold=hold)
 
-    def settle(self, params: Mapping[str, Any], line_x10: int, data: SettlementData) -> Outcome:
+    def settle(
+        self, params: Mapping[str, Any], line_x10: int | None, data: SettlementData
+    ) -> Outcome:
         p = MetricTotalParams.model_validate(params)
-        return settle_metric_total(p.start, p.end, line_x10, data.daily_totals)
+        return settle_metric_total(p.start, p.end, _line(line_x10), data.daily_totals)
+
+    def decide_early(
+        self, params: Mapping[str, Any], data: SettlementData, through: date
+    ) -> Outcome | None:
+        return None
 
 
 WEIGHT_CHANGE_OU = WeightChangeOU()
 METRIC_TOTAL_OU = MetricTotalOU()
-TEMPLATES: Mapping[str, Template] = {t.name: t for t in (WEIGHT_CHANGE_OU, METRIC_TOTAL_OU)}
+CORE_TEMPLATES: tuple[Template, ...] = (WEIGHT_CHANGE_OU, METRIC_TOTAL_OU)
 
 # ---- drops ---------------------------------------------------------------------------
 
@@ -391,3 +424,10 @@ def drop_specs(
         params = MetricTotalParams(metric=metric, start=start, end=end)
         specs.append(METRIC_TOTAL_OU.spec(params, timeframe, schedule, tz, unit))
     return specs
+
+
+# Props and futures build on the pieces above (app/domain/props.py imports this module),
+# so the full registry is assembled last.
+from app.domain.props import PROP_TEMPLATES  # noqa: E402
+
+TEMPLATES: Mapping[str, Template] = {t.name: t for t in (*CORE_TEMPLATES, *PROP_TEMPLATES)}
