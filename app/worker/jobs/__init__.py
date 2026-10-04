@@ -1,6 +1,7 @@
 from app.core.config import Settings
 from app.domain.markets import Timeframe
 from app.services.instance import InstanceConfig
+from app.worker.jobs.economy import DailyAllowanceJob, WeeklyStandingsJob
 from app.worker.jobs.garmin_sync import GarminSyncJob
 from app.worker.jobs.heartbeat import HeartbeatJob
 from app.worker.jobs.ledger_verify import LedgerVerifyJob
@@ -23,6 +24,8 @@ def domain_jobs(settings: Settings, config: InstanceConfig) -> tuple[Job, ...]:
         DropJob(Timeframe.MONTHLY, config, locks),
         LockMarketsJob(locks, settles),
         SettleMarketsJob(settles),
+        DailyAllowanceJob(config),
+        WeeklyStandingsJob(config),
         LedgerVerifyJob(),
     )
 
