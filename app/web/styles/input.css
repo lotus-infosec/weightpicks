@@ -134,6 +134,16 @@
   .stack-details summary { @apply cursor-pointer font-medium py-1; }
   .stack-details form { @apply mt-3; }
   .bailout { @apply rounded-xl p-3 mb-3; background: var(--color-raised); }
+  /* STAGE11: leaderboard, stats, Discord admin */
+  .table tr.me td { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
+  .strip { @apply grid grid-cols-2 gap-3 mb-4 sm:grid-cols-4; }
+  .strip > div { @apply rounded-2xl p-3 flex flex-col gap-1; background: var(--color-surface); border: 1px solid var(--color-line); }
+  .strip strong { @apply text-lg; }
+  .chart { position: relative; height: 260px; }
+  .chart.small { height: 170px; }
+  .tabs { @apply flex-wrap; }
+  label.check { @apply flex items-center gap-2 text-base; color: var(--color-text); }
+  label.check input { @apply w-auto; }
 }
 
 @media (max-width: 640px) {

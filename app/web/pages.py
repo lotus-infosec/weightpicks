@@ -11,7 +11,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app.services import auth, board, instance, leaderboard
+from app.services import auth, board, instance, leaderboard, stats
 from app.services.auth import AuthError, SessionInfo
 from app.services.bets import BetRejected, place_bet
 from app.web.security import (
@@ -242,6 +242,17 @@ def build_router() -> APIRouter:
             "leaderboard.html",
             {"rows": rows, "season_options": options, "season_id": chosen, "wallet": wallet},
         )
+
+    @router.get("/stats")
+    def stats_page(request: Request, session: Player, days: int = 30) -> Response:
+        state = request.app.state
+        live = state.live
+        metrics = live.config.enabled_metrics if live.config else ()
+        as_of = state.domain_clock.now().astimezone(live.tz).date()
+        with state.engine.connect() as conn:
+            data = stats.build(conn, as_of, days, live.unit, metrics)
+            wallet = board.wallet(conn, session.user_id)
+        return render(request, "stats.html", {"data": data, "wallet": wallet})
 
     @router.post("/api/bets")
     async def place(request: Request, session: Player) -> Response:
