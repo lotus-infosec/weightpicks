@@ -175,12 +175,13 @@ class Dispatcher:
         stale_before = self.domain_clock.now() - STALE_AFTER
         for row in rows:
             url = hooks.get(row.category)
+            is_test = row.payload.get("kind") == "test"
             reason = None
             if url is None:
                 reason = "no webhook for this category"
-            elif not public and row.category != Category.ADMIN_ALERTS:
-                reason = "discord_public is off"
-            elif row.created_at < stale_before and row.payload.get("kind") != "test":
+            elif not public and row.category != Category.ADMIN_ALERTS and not is_test:
+                reason = "discord_public is off"  # the admin's own test posts always go
+            elif row.created_at < stale_before and not is_test:
                 reason = "stale (older than 24 h)"
             if reason or url is None:
                 self._finish(engine, row.id, "skipped", reason)

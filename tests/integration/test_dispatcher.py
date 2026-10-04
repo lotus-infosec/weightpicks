@@ -246,3 +246,15 @@ def test_worker_job_drives_the_fast_loop(
     assert run_due([job], engine, clock) == ["outbox_dispatch"]
     assert job.more  # 5 sent, 2 held back by the 5-per-2-s bucket
     assert len(discord.requests) == 5
+
+
+def test_admin_test_posts_go_even_while_public_posts_are_off(
+    env: tuple[Engine, Settings, SimClock], discord: FakeDiscord
+) -> None:
+    engine, settings, clock = env
+    hook(engine, clock, "busts", discord.url())
+    queue(engine, clock, "busts", "test:busts:1", kind="test")
+    queue(engine, clock, "busts", "b1", user_id=None)
+    result = dispatcher(settings, clock).run_pass(engine)
+    assert (result.sent, result.skipped) == (1, 1)
+    assert discord.bodies[0]["embeds"][0]["title"] == "Webhook test"
