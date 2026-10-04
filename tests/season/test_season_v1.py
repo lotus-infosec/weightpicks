@@ -150,3 +150,30 @@ def test_busts_and_bailouts_are_consistent(season: SeasonRun) -> None:
         if bailed:
             assert bailed - busted_at >= timedelta(days=2)  # cooldown honoured
     # P&L excludes bailouts: covered by test_pnl_counts_only_betting_entries.
+
+
+def test_leaderboard_equals_ledger_pnl(season: SeasonRun) -> None:
+    """STAGE11: the leaderboard ranks by P&L recomputed from betting entries alone."""
+    from app.services import leaderboard
+    from app.services.ledger import active_season_id
+
+    with season.engine.connect() as conn:
+        season_id = active_season_id(conn)
+        rows = leaderboard.standings(conn, season_id)
+        derived = dict(
+            conn.execute(
+                select(Account.user_id, func.coalesce(func.sum(LedgerEntry.amount_cents), 0))
+                .outerjoin(
+                    LedgerEntry,
+                    (LedgerEntry.account_id == Account.id)
+                    & LedgerEntry.kind.in_([k.value for k in BETTING_KINDS]),
+                )
+                .where(Account.season_id == season_id, Account.user_id.is_not(None))
+                .group_by(Account.user_id)
+            ).all()
+        )
+    assert len(rows) == len(season.players)
+    assert {r.user_id: r.pnl_cents for r in rows} == {u: derived[u] for u in season.players}
+    assert [r.pnl_cents for r in rows] == sorted((r.pnl_cents for r in rows), reverse=True)
+    assert [r.rank for r in rows] == list(range(1, len(rows) + 1))
+    assert any(r.pnl_cents != 0 for r in rows)

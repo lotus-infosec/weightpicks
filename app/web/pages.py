@@ -11,7 +11,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app.services import auth, board, instance
+from app.services import auth, board, instance, leaderboard
 from app.services.auth import AuthError, SessionInfo
 from app.services.bets import BetRejected, place_bet
 from app.web.security import (
@@ -225,6 +225,23 @@ def build_router() -> APIRouter:
             wallet = board.wallet(conn, session.user_id)
         name = "_feed.html" if "HX-Request" in request.headers else "feed.html"
         return render(request, name, {"bets": bets, "wallet": wallet})
+
+    @router.get("/leaderboard")
+    def leaderboard_page(request: Request, session: Player, season: int | None = None) -> Response:
+        with request.app.state.engine.connect() as conn:
+            options = leaderboard.seasons(conn)
+            ids = {o.season_id for o in options}
+            current = next((o.season_id for o in options if o.current), None)
+            chosen = (
+                season if season in ids else current or (options[0].season_id if options else None)
+            )
+            rows = leaderboard.standings(conn, chosen)
+            wallet = board.wallet(conn, session.user_id)
+        return render(
+            request,
+            "leaderboard.html",
+            {"rows": rows, "season_options": options, "season_id": chosen, "wallet": wallet},
+        )
 
     @router.post("/api/bets")
     async def place(request: Request, session: Player) -> Response:
