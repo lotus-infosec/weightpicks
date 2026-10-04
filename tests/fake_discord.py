@@ -52,10 +52,10 @@ def _handler(fake: FakeDiscord) -> type[BaseHTTPRequestHandler]:
 
 
 @contextmanager
-def running(port: int = 0) -> Iterator[FakeDiscord]:
+def running(port: int = 0, host: str = "127.0.0.1") -> Iterator[FakeDiscord]:
     fake = FakeDiscord()
-    server = ThreadingHTTPServer(("127.0.0.1", port), _handler(fake))
-    fake.base = f"http://127.0.0.1:{server.server_address[1]}"
+    server = ThreadingHTTPServer((host, port), _handler(fake))
+    fake.base = f"http://{host}:{server.server_address[1]}"
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -66,7 +66,9 @@ def running(port: int = 0) -> Iterator[FakeDiscord]:
 
 
 if __name__ == "__main__":  # fake receiver for local runs: prints each post's title
-    with running(int(sys.argv[1]) if len(sys.argv) > 1 else 8099) as fake:
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8099
+    host = sys.argv[2] if len(sys.argv) > 2 else "127.0.0.1"
+    with running(port, host) as fake:
         print(f"fake Discord listening on {fake.base}", flush=True)
         seen = 0
         try:

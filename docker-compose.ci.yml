@@ -1,0 +1,18 @@
+# Fake Discord receiver for end-to-end checks of the worker's real dispatcher (STAGE11).
+# It prints every post's title and text; nothing leaves the machine.
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.ci.yml up --build -d
+#   docker compose ... logs -f fake-discord
+# Point a category at it from inside the stack: http://fake-discord:8099/api/webhooks/1/test
+# (the admin page only accepts real discord.com URLs, so tests store it directly).
+
+services:
+  fake-discord:
+    image: python:3.12-slim-bookworm@sha256:54c85f3c47607a77f32adec749d3c81d1348bf25833671f512b26a9b6d778cb3
+    command: ["python", "-u", "-m", "tests.fake_discord", "8099", "0.0.0.0"]
+    working_dir: /src
+    volumes:
+      - ./tests/__init__.py:/src/tests/__init__.py:ro
+      - ./tests/fake_discord.py:/src/tests/fake_discord.py:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
