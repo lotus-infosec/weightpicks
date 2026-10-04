@@ -211,6 +211,15 @@ def drop(
         if pricing is None:
             result.skipped[spec.dedupe_key] = "no_history"
             continue
+        if (
+            spec.metric == "weight"
+            and timeframe is not Timeframe.DAILY
+            and pricing.model_inputs.get("provisional")
+        ):
+            # A provisional prior (slope 0) over 7-28 days makes "under" nearly free for
+            # a subject who is losing weight; only the daily line is offered (D-039).
+            result.skipped[spec.dedupe_key] = "provisional"
+            continue
         priced.append((spec, pricing))
 
     with immediate(engine) as conn:
