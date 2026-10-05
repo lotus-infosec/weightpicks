@@ -11,7 +11,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app.services import auth, board, instance, leaderboard, stats
+from app.services import auth, board, instance, leaderboard, pools, stats
 from app.services.auth import AuthError, SessionInfo
 from app.services.bets import BetRejected, place_bet, place_parlay
 from app.web.security import (
@@ -28,6 +28,7 @@ from app.web.security import (
 
 TABS = ("daily", "weekly", "monthly")
 PROP_TABS = ("prop", "future")  # shown while the props_futures flag is on (D-041)
+EVENT_TABS = ("events",)  # shown while the special_events flag is on (D-043)
 BET_MESSAGES = {
     "locked": "This market just locked.",
     "stale_odds": "The odds changed. Refresh the board and try again.",
@@ -186,15 +187,22 @@ def build_router() -> APIRouter:
             return RedirectResponse("/admin", status_code=303)
         state = request.app.state
         flags = state.live.config.flags if state.live.config else {}
-        tabs = TABS + (PROP_TABS if flags.get("props_futures") else ())
+        tabs = (
+            TABS
+            + (PROP_TABS if flags.get("props_futures") else ())
+            + (EVENT_TABS if flags.get("special_events") else ())
+        )
         tab = tab if tab in tabs else "daily"
+        now = state.domain_clock.now()
         with state.engine.connect() as conn:
-            cards = board.open_markets(conn, tab, state.domain_clock.now())
+            cards = board.open_markets(conn, tab, now) if tab != "events" else []
+            pool_cards = board.pools(conn, session.user_id, now) if tab == "events" else []
             wallet = board.wallet(conn, session.user_id)
         context = {
             "tab": tab,
             "tabs": tabs,
             "cards": cards,
+            "pools": pool_cards,
             "wallet": wallet,
             "parlays": bool(flags.get("parlays")),
             "max_legs": state.live.config.economy.max_parlay_legs if state.live.config else 6,
@@ -226,12 +234,20 @@ def build_router() -> APIRouter:
         )
 
     @router.get("/bets/mine")
-    def my_bets(request: Request, session: Player) -> Response:
+    def my_bets(request: Request, session: Player, season: int | None = None) -> Response:
         with request.app.state.engine.connect() as conn:
-            bets = board.my_bets(conn, session.user_id)
+            options = leaderboard.seasons(conn)
+            ids = {o.season_id for o in options}
+            current = next((o.season_id for o in options if o.current), None)
+            chosen = season if season in ids else current
+            bets = board.my_bets(conn, session.user_id, chosen)
             wallet = board.wallet(conn, session.user_id)
         name = "_my_bets.html" if "HX-Request" in request.headers else "bets_mine.html"
-        return render(request, name, {"bets": bets, "wallet": wallet})
+        return render(
+            request,
+            name,
+            {"bets": bets, "wallet": wallet, "season_options": options, "season_id": chosen},
+        )
 
     @router.get("/bets/feed")
     def feed(request: Request, session: Player) -> Response:
@@ -268,6 +284,49 @@ def build_router() -> APIRouter:
             data = stats.build(conn, as_of, days, live.unit, metrics)
             wallet = board.wallet(conn, session.user_id)
         return render(request, "stats.html", {"data": data, "wallet": wallet})
+
+    @router.post("/api/pools/{pool_id}/enter")
+    async def enter_pool(request: Request, pool_id: int, session: Player) -> Response:
+        """Join a pool or change your guess (HTMX form; re-renders the Events tab)."""
+        form = await read_form(request)
+        state = request.app.state
+        message, ok, status = "", False, 200
+        try:
+            guess = pools.parse_guess(form.get("guess", ""))
+            new = await run_in_threadpool(
+                lambda: pools.enter(
+                    state.engine,
+                    state.domain_clock,
+                    user_id=session.user_id,
+                    pool_id=pool_id,
+                    guess_x10=guess,
+                )
+            )
+            message, ok = ("You're in. Good luck!" if new else "Guess updated."), True
+        except pools.PoolError as exc:
+            message, status = exc.message, 409
+        flags = state.live.config.flags if state.live.config else {}
+        tabs = (
+            TABS
+            + (PROP_TABS if flags.get("props_futures") else ())
+            + (EVENT_TABS if flags.get("special_events") else ())
+        )
+        now = state.domain_clock.now()
+        with state.engine.connect() as conn:
+            context = {
+                "tab": "events",
+                "tabs": tabs,
+                "cards": [],
+                "pools": board.pools(conn, session.user_id, now),
+                "wallet": board.wallet(conn, session.user_id),
+                "pool_message": message,
+                "pool_ok": ok,
+                "pool_id": pool_id,
+                "parlays": bool(flags.get("parlays")),
+                "max_legs": 6,
+            }
+        name = "_board_tab.html" if "HX-Request" in request.headers else "board.html"
+        return render(request, name, context, status if name == "board.html" else 200)
 
     @router.post("/api/bets")
     async def place(request: Request, session: Player) -> Response:

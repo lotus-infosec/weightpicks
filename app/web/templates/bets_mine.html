@@ -3,6 +3,11 @@
 {% block title %}My bets · {{ instance.app_name }}{% endblock %}
 {% block content %}
 <h1>My bets</h1>
+{% if season_options | length > 1 %}
+<nav class="tabs" aria-label="Season" data-testid="season-switcher">
+  {% for s in season_options %}<a href="/bets/mine?season={{ s.season_id }}" class="tab{{ ' active' if s.season_id == season_id }}">Season {{ s.number }}{% if s.current %} (now){% endif %}</a>{% endfor %}
+</nav>
+{% endif %}
 {% if wallet %}<p class="muted">Balance {{ wallet.balance_cents | money }} · P&amp;L {{ wallet.pnl_cents | signed_money }}</p>{% endif %}
-<div id="my-bets" hx-get="/bets/mine" hx-trigger="bet-placed from:body, every 60s">{% include "_my_bets.html" %}</div>
+<div id="my-bets" hx-get="/bets/mine{{ '?season=' ~ season_id if season_id else '' }}" hx-trigger="bet-placed from:body, every 60s">{% include "_my_bets.html" %}</div>
 {% endblock %}

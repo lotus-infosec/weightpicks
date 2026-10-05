@@ -3,9 +3,35 @@
 <div class="tabs" role="tablist">
   {% for t in tabs %}
   <a href="/?tab={{ t }}" hx-get="/?tab={{ t }}" hx-target="#board" hx-push-url="true"
-     class="tab {{ 'active' if t == tab }}" role="tab" aria-selected="{{ 'true' if t == tab else 'false' }}">{{ {"prop": "Props", "future": "Futures"}.get(t, t | capitalize) }}</a>
+     class="tab {{ 'active' if t == tab }}" role="tab" aria-selected="{{ 'true' if t == tab else 'false' }}">{{ {"prop": "Props", "future": "Futures", "events": "Events"}.get(t, t | capitalize) }}</a>
   {% endfor %}
 </div>
+{% if tab == "events" %}
+{% if not pools %}<p class="muted empty">No special events yet. Watch this space.</p>{% endif %}
+<div class="cards" data-testid="events">
+  {% for p in pools %}
+  <article class="market pool" data-testid="pool-{{ p.pool_id }}">
+    <header><span class="market-title">{{ p.title }}</span> <span class="badge status-{{ p.status }}">{{ p.status }}</span></header>
+    <p>{{ p.question }}</p>
+    <p class="small">Weight on <strong>{{ p.target_date.strftime("%a %b %-d") }}</strong> · buy-in <strong>{{ p.buy_in_cents | money }}</strong> · {{ p.entries }} in · pot <strong data-testid="pot">{{ p.pot_cents | money }}</strong></p>
+    {% if pool_message and pool_id == p.pool_id %}<p class="{{ 'notice' if pool_ok else 'alert' }}" role="status" data-testid="pool-message">{{ pool_message }}</p>{% endif %}
+    {% if p.open %}
+    <form hx-post="/api/pools/{{ p.pool_id }}/enter" hx-target="#board" method="post" action="/api/pools/{{ p.pool_id }}/enter" class="pool-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <label>Your guess ({{ instance.unit }})
+        <input type="text" inputmode="decimal" name="guess" value="{{ '%.1f'|format(p.my_guess_x10 / 10) if p.my_guess_x10 else '' }}" required data-testid="guess"></label>
+      <button type="submit" class="primary" data-testid="enter">{{ "Change guess" if p.my_guess_x10 else "Buy in for " ~ (p.buy_in_cents | money) }}</button>
+    </form>
+    <p class="muted small">Closest without going over wins. You can change your guess for free until {{ p.lock_at | local_time }}. Other guesses stay hidden until then.</p>
+    {% else %}
+    {% if p.my_guess_x10 %}<p class="small">Your guess: <strong>{{ "%.1f"|format(p.my_guess_x10 / 10) }}</strong></p>{% endif %}
+    {% if p.result_x10 %}<p class="small">The scale said <strong>{{ "%.1f"|format(p.result_x10 / 10) }}</strong>.</p>{% elif p.status == "refunded" %}<p class="small">Everyone was refunded.</p>{% endif %}
+    {% if p.guesses %}<ul class="plain small guesses">{% for name, guess, paid in p.guesses %}<li>{{ name }}: {{ "%.1f"|format(guess / 10) }}{% if paid and p.status == "settled" %} <span class="badge status-won">won {{ paid | money }}</span>{% endif %}</li>{% endfor %}</ul>{% endif %}
+    {% endif %}
+  </article>
+  {% endfor %}
+</div>
+{% else %}
 {% if not cards %}<p class="muted empty">No open {{ tab }} markets right now. New lines drop at 11:00.</p>{% endif %}
 <div class="cards">
   {% for c in cards %}
@@ -21,3 +47,4 @@
   </article>
   {% endfor %}
 </div>
+{% endif %}
