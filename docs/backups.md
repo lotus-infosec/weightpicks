@@ -41,7 +41,7 @@ Check the copies now and then: `wp backup verify NAME` works on any copied file 
 
 A restore never swaps the database under a running app. Instead:
 
-1. **Stage it.** Pick a backup in Admin → System and choose **Restore this backup**, or upload a backup file there. Confirm with your password. From the CLI: `docker compose exec worker wp maintenance restore NAME`, then `docker compose restart`.
+1. **Stage it.** Pick a backup in Admin → System and choose **Restore this backup**, or upload a backup file there (up to 256 MB; for bigger ones, copy the file into `backups/` and use the CLI). Confirm with your password. From the CLI: `docker compose exec worker wp maintenance restore NAME`, then `docker compose restart`.
 2. **Checks first.** The file's checksums and contents are verified. A backup from a *newer* version than the one you're running is refused, so upgrade first.
 3. **The app restarts.** The worker finishes its tick and stops. On start, the web container moves the current database aside as `backups/pre-restore-<time>.db` (your uploads go alongside it), puts the backup in place, and runs any pending migrations.
 4. **Log in again.** Everything is as it was when the backup was made.
