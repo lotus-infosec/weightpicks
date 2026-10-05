@@ -97,6 +97,7 @@ def test_registered_jobs_have_unique_names(
         "ai_hype",
         "lock_markets",
         "settle_markets",
+        "pools_tick",
         "daily_allowance",
         "weekly_standings",
         "ledger_verify",

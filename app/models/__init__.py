@@ -9,6 +9,7 @@ from app.models.ledger import Account, LedgerEntry, LedgerTxn, Season, User
 from app.models.markets import Market, OddsVersion, Selection
 from app.models.observations import Observation, SimState, SyncRun
 from app.models.outbox import OutboxMessage
+from app.models.pools import Pool, PoolEntry
 from app.models.settings import InstanceSettingsRow, Secret, SetupDraft, SetupToken
 from app.models.system import Heartbeat, JobRun
 
@@ -34,6 +35,8 @@ __all__ = [
     "Observation",
     "OddsVersion",
     "OutboxMessage",
+    "Pool",
+    "PoolEntry",
     "RegistrationCode",
     "Season",
     "Secret",

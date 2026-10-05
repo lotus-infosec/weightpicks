@@ -47,6 +47,7 @@
     {{ field("max_bet", "Maximum bet ($)", values.max_bet, error=errors.max_bet, hint="empty = no maximum") }}
     {{ field("max_parlay_legs", "Max parlay legs", values.max_parlay_legs, "number", errors.max_parlay_legs) }}
     {{ field("high_roller", "High-roller threshold ($)", values.high_roller, error=errors.high_roller) }}
+    {{ field("pool_buyin", "Default special-event buy-in ($, up to half the starting bankroll)", values.pool_buyin, error=errors.pool_buyin) }}
     {{ password() }}
     <button type="submit" class="primary">Save economy</button>
   </form>

@@ -263,6 +263,7 @@ def build_router() -> APIRouter:
             "max_bet": setup_steps.money_text(economy.max_bet_cents),
             "max_parlay_legs": economy.max_parlay_legs,
             "high_roller": setup_steps.money_text(economy.high_roller_cents),
+            "pool_buyin": setup_steps.money_text(economy.pool_buyin_cents),
         }
         return render(
             request,

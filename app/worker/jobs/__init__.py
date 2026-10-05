@@ -7,6 +7,7 @@ from app.worker.jobs.garmin_sync import GarminSyncJob
 from app.worker.jobs.heartbeat import HeartbeatJob
 from app.worker.jobs.ledger_verify import LedgerVerifyJob
 from app.worker.jobs.markets import DropJob, DueCache, LockMarketsJob, SettleMarketsJob
+from app.worker.jobs.pools import PoolsJob
 from app.worker.registry import Job
 
 # Infrastructure jobs always run on real time (the container health check compares
@@ -28,6 +29,7 @@ def domain_jobs(settings: Settings, config: InstanceConfig) -> tuple[Job, ...]:
         AiHypeJob(settings, config),
         LockMarketsJob(locks, settles),
         SettleMarketsJob(settles),
+        PoolsJob(),
         DailyAllowanceJob(config),
         WeeklyStandingsJob(config),
         LedgerVerifyJob(),
@@ -43,6 +45,7 @@ __all__ = [
     "HeartbeatJob",
     "LedgerVerifyJob",
     "LockMarketsJob",
+    "PoolsJob",
     "SettleMarketsJob",
     "domain_jobs",
 ]

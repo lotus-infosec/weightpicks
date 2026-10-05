@@ -195,8 +195,16 @@ def economy(form: Mapping[str, str]) -> Result:
     vig = form.get("vig", "")
     if vig not in VIG_PRESETS:
         errors["vig"] = "Choose a vig."
+    # Optional (the /setup wizard doesn't ask): blank means the default, clamped (D-043).
+    pool_raw = form.get("pool_buyin", "").strip()
+    pool_buyin = _cents(pool_raw) if pool_raw else None
+    if pool_raw and (pool_buyin is None or pool_buyin < 100):
+        errors["pool_buyin"] = "Enter a dollar amount of at least 1."
     if errors:
         return {}, errors
+    default = Economy()
+    if pool_buyin is None:
+        pool_buyin = min(default.pool_buyin_cents, max(100, money["starting_bankroll"] // 2))
     try:
         result = Economy(
             starting_bankroll_cents=money["starting_bankroll"],
@@ -207,6 +215,7 @@ def economy(form: Mapping[str, str]) -> Result:
             max_bet_cents=max_bet,
             max_parlay_legs=ints["max_parlay_legs"],
             high_roller_cents=money["high_roller"],
+            pool_buyin_cents=pool_buyin,
         )
     except ValueError as exc:
         return {}, {"economy": str(exc).capitalize() + "."}

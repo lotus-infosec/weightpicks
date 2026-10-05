@@ -1,6 +1,7 @@
 """Busts (A9, A11): a player is bust when their balance is under $1 and they have no
-open bets. A bust stays active until a bailout or until the balance recovers another
-way; every bust counts toward the season's shame badge and starts the bailout cooldown.
+open bets or open pool entries. A bust stays active until a bailout or until the balance
+recovers another way; every bust counts toward the season's shame badge and starts the
+bailout cooldown.
 """
 
 from datetime import datetime
@@ -9,7 +10,7 @@ from sqlalchemy import Connection, exists, func, insert, select, update
 
 from app.core.clock import Clock
 from app.domain.ledger import AccountKind
-from app.models import Account, Bet, Bust, User
+from app.models import Account, Bet, Bust, Pool, PoolEntry, User
 from app.services.outbox import Category, enqueue
 
 BUST_BELOW_CENTS = 100  # $1, the minimum bet (A9)
@@ -20,6 +21,11 @@ def check(conn: Connection, clock: Clock, season_id: int) -> list[int]:
     Returns the new bust ids."""
     now = clock.now()
     open_bet = exists().where(Bet.account_id == Account.id, Bet.status == "open")
+    open_pool = exists().where(  # money in a pot that hasn't paid out yet (D-043)
+        PoolEntry.account_id == Account.id,
+        PoolEntry.pool_id == Pool.id,
+        Pool.status.in_(("open", "locked")),
+    )
     active_for_user = exists().where(
         Bust.user_id == Account.user_id,
         Bust.season_id == season_id,
@@ -35,6 +41,7 @@ def check(conn: Connection, clock: Clock, season_id: int) -> list[int]:
             Account.balance_cents < BUST_BELOW_CENTS,
             User.status != "banned",
             ~open_bet,
+            ~open_pool,
             ~active_for_user,
         )
     ).all()

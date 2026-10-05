@@ -30,6 +30,7 @@ class EntryKind(StrEnum):
     POOL_BUYIN = "pool_buyin"
     POOL_PAYOUT = "pool_payout"
     POOL_REFUND = "pool_refund"
+    SEASON_CARRY = "season_carry"  # last season's balance, minted into the new season (D-043)
 
 
 # The single definition of what counts toward P&L.
