@@ -28,6 +28,7 @@ class Category(StrEnum):
     SPECIAL_EVENTS = "special_events"
     HYPE = "hype"
     GOAL_REACHED = "goal_reached"
+    ACCOUNT_EMAIL = "account_email"  # channel "email": password resets, SMTP tests
 
 
 def enqueue(

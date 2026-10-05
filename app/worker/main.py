@@ -15,10 +15,11 @@ from app.core.db import make_engine
 from app.core.logging import configure_logging
 from app.core.migrations import is_at_head
 from app.notify.dispatcher import Dispatcher
-from app.services import instance
+from app.services import instance, maintenance
 from app.services.instance import InstanceConfig
 from app.services.sim import app_clock
 from app.worker.jobs import INFRA_JOBS, domain_jobs
+from app.worker.jobs.backup import AutoBackupJob
 from app.worker.jobs.commands import CommandsJob
 from app.worker.jobs.outbox import OutboxDispatchJob
 from app.worker.registry import Job, run_due
@@ -59,6 +60,16 @@ def reload_if_changed(
     return latest, domain_jobs(settings, latest)
 
 
+def restart_container() -> None:
+    """In production this process is PID 1, so exiting restarts the container. Under the
+    dev file watcher, PID 1 is the watcher: stop it too, or the worker would stay down."""
+    import os
+    from pathlib import Path
+
+    if Path("/.dockerenv").exists() and os.getpid() != 1:
+        os.kill(1, signal.SIGTERM)
+
+
 def main() -> None:
     settings = Settings()
     configure_logging(settings.log_level, settings.log_format)
@@ -81,7 +92,12 @@ def main() -> None:
     config = instance.load(engine, domain_clock, settings)
     jobs: Sequence[Job] = domain_jobs(settings, config)
     dispatch = OutboxDispatchJob(Dispatcher(settings, clock, domain_clock))
-    infra: tuple[Job, ...] = (*INFRA_JOBS, CommandsJob(settings, domain_clock), dispatch)
+    infra: tuple[Job, ...] = (
+        *INFRA_JOBS,
+        CommandsJob(settings, domain_clock),
+        dispatch,
+        AutoBackupJob(settings, config.tz),
+    )
     seen: dict[str, str] = {}
     log.info(
         "worker_started",
@@ -91,6 +107,9 @@ def main() -> None:
     )
     next_tick = 0.0
     while not stop.is_set():
+        if maintenance.worker_should_stop(settings):  # restore/reset staged: hand over
+            restart_container()
+            break
         try:
             if time.monotonic() >= next_tick:
                 next_tick = time.monotonic() + TICK_SECONDS

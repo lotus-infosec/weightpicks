@@ -1,5 +1,6 @@
 """FastAPI app factory: security headers, CSRF, sessions, pages and health checks."""
 
+import contextlib
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -9,7 +10,13 @@ from zoneinfo import ZoneInfo
 import structlog
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import Engine
@@ -20,7 +27,7 @@ from app.core.config import Settings
 from app.core.db import make_engine
 from app.core.logging import configure_logging
 from app.core.migrations import is_at_head
-from app.services import instance
+from app.services import instance, maintenance
 from app.services import setup as setup_service
 from app.services.instance import InstanceConfig
 from app.web import format as fmt
@@ -86,6 +93,15 @@ class LiveInstance:
         return self.config.palette if self.config else "ember"
 
     @property
+    def brand_version(self) -> str:
+        """Changes when an Appearance logo is uploaded or removed (cache-busting)."""
+        logo = self.settings.data_dir / "uploads" / "logo.png"
+        try:
+            return str(int(logo.stat().st_mtime))
+        except OSError:
+            return "default"
+
+    @property
     def frozen(self) -> bool:
         return bool(self.config and self.config.state == "frozen")
 
@@ -108,8 +124,40 @@ def _is_setup_path(path: str) -> bool:
     return path == "/setup" or path.startswith("/setup/")
 
 
-UNGATED_PATHS = frozenset({"/healthz", "/robots.txt"})
+MAINTENANCE_PAGE = (
+    "<!doctype html><html lang=en><meta charset=utf-8>"
+    "<meta name=viewport content='width=device-width, initial-scale=1'>"
+    "<meta name=robots content='noindex, nofollow'><title>Back soon</title>"
+    "<body style='font-family:system-ui;background:#0e1116;color:#e6e6e6;padding:2rem'>"
+    "<h1>Back in a minute</h1><p>The app is restoring a backup or resetting. "
+    "This page will work again shortly.</p></body></html>"
+)
+UNGATED_PATHS = frozenset({"/healthz", "/robots.txt", "/manifest.webmanifest"})
+# /brand/<name> -> the default file in static/brand (an Appearance upload overrides it).
+BRAND_FILES = {
+    "logo.png": "logo-512.png",
+    "logo-192.png": "logo-192.png",
+    "favicon.png": "favicon-32.png",  # names match services/appearance.BRAND_SIZES
+    "apple-touch-icon.png": "apple-touch-icon.png",
+    "mark.png": "mark-64.png",
+}
 FROZEN_BLOCKED = ("/api/bets", "/api/pools")
+
+
+def restart_container() -> None:
+    """Stop this container so the restart policy brings it back and the entrypoint applies
+    the staged restore/reset. PID 1 is the server (the entrypoint `exec`s it). Outside a
+    container this only logs: restart the app yourself."""
+    import os
+    import signal
+    import time
+
+    if Path("/.dockerenv").exists():
+        time.sleep(1)  # let the response reach the browser first
+        log.warning("restarting_for_maintenance")
+        os.kill(1, signal.SIGTERM)
+    else:
+        log.warning("restart_required", hint="restart the app to apply the staged action")
 
 
 def announce_setup_token(engine: Engine, clock: Clock) -> None:
@@ -140,6 +188,9 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log.info("web_started", app_env=settings.app_env)
+        # After a restore/reset, log it in the new database (no schema yet in some tests).
+        with contextlib.suppress(OperationalError):
+            maintenance.record_done(engine, settings, app.state.auth_clock)
         announce_setup_token(engine, app.state.auth_clock)
         yield
         engine.dispose()
@@ -160,6 +211,7 @@ def create_app(
     app.state.domain_clock = domain_clock or LazyAppClock(settings, engine)
     app.state.live = live
     app.state.setup_done = False  # cached once true; only a factory reset undoes it
+    app.state.restart = restart_container  # after staging a restore/reset (tests replace it)
 
     def refresh() -> bool | None:
         """Load the settings row; None if the schema isn't ready yet."""
@@ -178,8 +230,12 @@ def create_app(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
         path = request.url.path
-        if path.startswith("/static/") or path in UNGATED_PATHS:
+        if path.startswith(("/static/", "/brand/")) or path in UNGATED_PATHS:
             return await call_next(request)
+        if maintenance.pending_action(settings) is not None:
+            # A restore or reset is staged: nothing touches the database until it's applied
+            # at the next start (BUILD_PLAN §1.5).
+            return HTMLResponse(MAINTENANCE_PAGE, status_code=503, headers={"Retry-After": "30"})
         done = await run_in_threadpool(refresh)
         if done is None:
             return await call_next(request)
@@ -202,7 +258,7 @@ def create_app(
     ) -> Response:
         response = await call_next(request)
         response.headers.update(SECURITY_HEADERS)
-        if not request.url.path.startswith("/static/"):
+        if not request.url.path.startswith(("/static/", "/brand/")):
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -250,6 +306,38 @@ def create_app(
                 return FileResponse(candidate, media_type="text/css")
         return Response(
             "/* stylesheet not built: run scripts/build-css.sh */\n", media_type="text/css"
+        )
+
+    @app.get("/brand/{name}", include_in_schema=False)
+    def brand(name: str) -> Response:
+        """The instance's uploaded logo and icons (Appearance), else the project defaults."""
+        default = BRAND_FILES.get(name)
+        if default is None:
+            return PlainTextResponse("Not found", status_code=404)
+        uploaded = settings.data_dir / "uploads" / name
+        path = uploaded if uploaded.is_file() else STATIC_DIR / "brand" / default
+        return FileResponse(
+            path,
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=300", "X-Content-Type-Options": "nosniff"},
+        )
+
+    @app.get("/manifest.webmanifest", include_in_schema=False)
+    def manifest() -> JSONResponse:
+        return JSONResponse(
+            {
+                "name": live.app_name,
+                "short_name": live.app_name[:12],
+                "start_url": "/",
+                "display": "standalone",
+                "background_color": "#0e1116",
+                "theme_color": "#0e1116",
+                "icons": [
+                    {"src": "/brand/logo-192.png", "sizes": "192x192", "type": "image/png"},
+                    {"src": "/brand/logo.png", "sizes": "512x512", "type": "image/png"},
+                ],
+            },
+            media_type="application/manifest+json",
         )
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

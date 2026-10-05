@@ -19,6 +19,8 @@
       Parlays <span class="muted">(when off, the slip takes single bets only)</span></label>
     <label class="check"><input type="checkbox" name="special_events" {{ "checked" if flags.special_events }}>
       Special events <span class="muted">(Price Is Right pools: Events tab and Admin → Events)</span></label>
+    <label class="check"><input type="checkbox" name="backup_ui" {{ "checked" if flags.backup_ui }}>
+      Backups <span class="muted">(backup, download and restore screens in Admin → System)</span></label>
     <label class="check"><input type="checkbox" name="ai_props" {{ "checked" if flags.ai_props }}>
       AI props <span class="muted">(Workers AI suggests props after each drop; Admin → Props)</span></label>
     <label class="check"><input type="checkbox" name="ai_hype" {{ "checked" if flags.ai_hype }}>
@@ -77,6 +79,33 @@
     {{ password() }}
     <button type="submit" class="primary" {{ "disabled" if not can_store }}>Save Workers AI</button>
   </form>
+</section>
+
+<section class="card" data-testid="smtp">
+  <h2>Email (SMTP)</h2>
+  <p>Status: {% if smtp.configured %}<span class="badge good" data-testid="smtp-status">on</span> {{ smtp.host }}:{{ smtp.port }} ({{ smtp.tls or "starttls" }}){% else %}<span class="muted" data-testid="smtp-status">off</span>{% endif %}</p>
+  <p class="muted">Optional. With email on, players can reset a forgotten password by email. Without it, you reset passwords from Users. The password is stored encrypted; leave it blank to keep the saved one.</p>
+  <form method="post" action="/admin/discord/smtp" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <div class="row wrap">
+      <label>Server <input type="text" name="host" value="{{ smtp.host or '' }}" autocomplete="off" spellcheck="false"></label>
+      <label>Port <input type="number" name="port" value="{{ smtp.port or 587 }}" min="1" max="65535"></label>
+    </div>
+    <label>Security <select name="tls">
+      {% for v, label in (("starttls", "STARTTLS (usually port 587)"), ("ssl", "SSL/TLS (usually port 465)"), ("none", "None (local test server only)")) %}<option value="{{ v }}" {{ "selected" if (smtp.tls or "starttls") == v }}>{{ label }}</option>{% endfor %}
+    </select></label>
+    <label>Username <input type="text" name="username" value="{{ smtp.username or '' }}" autocomplete="off" spellcheck="false"></label>
+    <label>Password {% if smtp_password %}<span class="muted small">(saved)</span>{% endif %} <input type="password" name="password" autocomplete="new-password" {{ "disabled" if not can_store }}></label>
+    <label>From address <input type="email" name="from_address" value="{{ smtp.from_address or '' }}"></label>
+    <label class="check"><input type="checkbox" name="clear"> Turn email off and clear these settings</label>
+    {{ password() }}
+    <button type="submit" class="primary">Save email settings</button>
+  </form>
+  {% if smtp.configured %}
+  <form method="post" action="/admin/discord/smtp/test" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <button type="submit" class="ghost" data-testid="smtp-test">Send a test email to me</button>
+  </form>{% endif %}
 </section>
 
 <details class="card">

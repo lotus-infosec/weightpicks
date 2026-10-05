@@ -100,10 +100,18 @@ class RichServer:
 def rich_server(tmp_path: Path) -> Iterator[RichServer]:
     """A lived-in instance at Sun Oct 4, 19:00: settled and open bets from two players,
     and open daily and weekly markets."""
+    from pydantic import SecretStr
+
     from app.services import ledger, settlement
     from app.services.bets import place_bet
 
-    settings = Settings(app_env="dev", data_dir=tmp_path, log_format="console", log_level="WARNING")
+    settings = Settings(
+        app_env="dev",
+        data_dir=tmp_path,
+        log_format="console",
+        log_level="WARNING",
+        app_secret_key=SecretStr("e2e-" + "k" * 40),  # a placeholder, not a credential
+    )
     engine = make_engine(settings.db_url)
     upgrade_to_head(engine, tmp_path / ".migrate.lock")
     clock = SimClock(local(2026, 10, 3, 12))
@@ -168,6 +176,7 @@ def rich_server(tmp_path: Path) -> Iterator[RichServer]:
     _props_and_parlays(engine, clock)
     _ai_props(engine, clock)
     _special_event(engine, clock)
+    _stage15(engine)
     engine.dispose()
 
     port = _free_port()
@@ -477,3 +486,26 @@ def _special_event(engine: Any, clock: SimClock) -> None:
     }
     pool_id = pools.create(engine, clock, pools.validate(config, clock.now(), raw), actor_id=None)
     pools.enter(engine, clock, user_id=alex, pool_id=pool_id, guess_x10=2185)
+
+
+def _stage15(engine: Any) -> None:
+    """STAGE15: the Backups screens on and email set up (so password reset shows)."""
+    from sqlalchemy import select, update
+
+    from app.models import InstanceSettingsRow
+
+    with immediate(engine) as conn:
+        flags = conn.execute(select(InstanceSettingsRow.flags)).scalar_one() or {}
+        conn.execute(
+            update(InstanceSettingsRow).values(
+                flags=dict(flags) | {"backup_ui": True},
+                smtp={
+                    "configured": True,
+                    "host": "127.0.0.1",
+                    "port": 2525,
+                    "tls": "none",
+                    "username": "",
+                    "from_address": "wp@example.invalid",
+                },
+            )
+        )

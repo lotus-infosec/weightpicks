@@ -15,13 +15,15 @@ from typing import Any
 
 import httpx
 import structlog
+from cryptography.fernet import InvalidToken
 from sqlalchemy import Engine, or_, select, update
 
 from app.core.clock import Clock
 from app.core.config import Settings
+from app.core.crypto import SecretKeyMissing, derive_fernet
 from app.core.db import immediate
 from app.models import Market, OutboxMessage, User
-from app.notify import embeds
+from app.notify import email, embeds
 from app.services import instance, secrets
 from app.services.outbox import Category, enqueue
 
@@ -34,6 +36,9 @@ BURST, BURST_WINDOW = 5, 2.0  # per webhook URL
 PER_MINUTE = 30  # one channel per webhook
 TIMEOUT = 10.0
 REMOVED_PLAYER = "Removed player"
+# One email per pass (the fast loop runs every 2 s while anything waits): providers such as
+# Mailtrap answer 550 to back-to-back sends, which would dead-letter the message.
+EMAILS_PER_PASS = 1
 
 
 @dataclass(slots=True)
@@ -146,6 +151,7 @@ class Dispatcher:
     def run_pass(self, engine: Engine) -> PassResult:
         result = PassResult()
         now = self.clock.now()
+        self._email_pass(engine, result, now)
         with engine.connect() as conn:
             rows = conn.execute(
                 select(OutboxMessage)
@@ -193,6 +199,94 @@ class Dispatcher:
             body = embeds.build(row.category, row.payload, ctx)
             self._send(engine, row, url, body, result)
         return result
+
+    # ---- email (STAGE15): password resets and SMTP tests --------------------------------
+
+    def _email_pass(self, engine: Engine, result: PassResult, now: datetime) -> None:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                select(OutboxMessage)
+                .where(
+                    OutboxMessage.channel == "email",
+                    OutboxMessage.status == "pending",
+                    OutboxMessage.next_attempt_at <= now,
+                )
+                .order_by(OutboxMessage.id)
+                .limit(EMAILS_PER_PASS + 1)
+            ).all()
+            if not rows:
+                return
+            if len(rows) > EMAILS_PER_PASS:  # the rest go on the next (2 s) fast-loop pass
+                result.waiting += len(rows) - EMAILS_PER_PASS
+                rows = rows[:EMAILS_PER_PASS]
+            cfg = email.load(conn, self.settings)
+            config = instance.read(conn)
+            users = {
+                uid: (addr, name, status)
+                for uid, addr, name, status in conn.execute(
+                    select(User.id, User.email, User.display_name, User.status).where(
+                        User.id.in_({r.payload.get("user_id") for r in rows})
+                    )
+                )
+            }
+        app_name = config.app_name if config else "WeightPicks"
+        for row in rows:
+            user = users.get(row.payload.get("user_id"))
+            if cfg is None:
+                self._finish(engine, row.id, "skipped", "SMTP isn't set up")
+                result.skipped += 1
+                continue
+            if user is None or user[2] == "banned":
+                self._finish(engine, row.id, "skipped", "no such account")
+                result.skipped += 1
+                continue
+            try:
+                msg = self._email_message(row.payload, cfg, app_name, user[0], user[1])
+            except ValueError as exc:
+                self._dead(engine, row, str(exc), result)
+                continue
+            try:
+                email.send(cfg, msg)
+            except email.EmailError as exc:
+                if exc.permanent:
+                    self._dead(engine, row, exc.reason, result)
+                else:
+                    self._retry(engine, row, exc.reason, result)
+                continue
+            clean = {k: v for k, v in row.payload.items() if k != "sealed"}  # drop the token
+            with immediate(engine) as conn:
+                conn.execute(
+                    update(OutboxMessage)
+                    .where(OutboxMessage.id == row.id)
+                    .values(status="sent", payload=clean, last_error=None, sent_at=self.clock.now())
+                )
+            result.sent += 1
+            log.info("email_sent", outbox_id=row.id, kind=row.payload.get("kind"))
+
+    def _email_message(
+        self, payload: dict[str, Any], cfg: Any, app_name: str, to: str, name: str
+    ) -> Any:
+        kind = payload.get("kind")
+        base = self.settings.wp_base_url.rstrip("/")
+        if kind == "password_reset":
+            try:
+                token = (
+                    derive_fernet(self.settings.app_secret_key.get_secret_value())
+                    .decrypt(str(payload["sealed"]).encode())
+                    .decode()
+                )
+            except (KeyError, InvalidToken, SecretKeyMissing) as exc:
+                raise ValueError("the reset link can't be read (APP_SECRET_KEY changed?)") from exc
+            text = (
+                f"Hi {name},\n\nSomeone (hopefully you) asked to reset your {app_name} password. "
+                f"Open this link within an hour to choose a new one:\n\n{base}/reset/{token}\n\n"
+                "If you didn't ask, ignore this email: your password stays the same.\n"
+            )
+            return email.build(cfg, app_name, to, f"Reset your {app_name} password", text)
+        if kind == "smtp_test":
+            text = f"Hi {name},\n\nThis is a test email from {app_name}. Email works.\n"
+            return email.build(cfg, app_name, to, f"{app_name}: test email", text)
+        raise ValueError(f"unknown email kind {kind!r}")
 
     def _send(
         self, engine: Engine, row: Any, url: str, body: dict[str, Any], result: PassResult

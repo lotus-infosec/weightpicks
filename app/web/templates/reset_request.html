@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Reset your password · {{ instance.app_name }}{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Reset your password</h1>
+  {% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+  {% if sent %}
+  <p class="notice" role="status" data-testid="reset-sent">If that address has an account, a link is on its way. It works for one hour.</p>
+  <p><a href="/login">Back to log in</a></p>
+  {% else %}
+  <p class="muted">Enter your account's email address and we'll send a link to choose a new password.</p>
+  <form method="post" action="/api/auth/reset" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ form_csrf }}">
+    <label>Email <input type="email" name="email" autocomplete="username" required></label>
+    <button type="submit" class="primary">Send the link</button>
+  </form>
+  <p class="muted small"><a href="/login">Back to log in</a></p>
+  {% endif %}
+</section>
+{% endblock %}

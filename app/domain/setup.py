@@ -263,12 +263,16 @@ def smtp(form: Mapping[str, str]) -> Result:
     sender = form.get("from_address", "").strip()
     if "@" not in sender:
         errors["from_address"] = "Enter the From address."
+    tls = form.get("tls", "starttls") or "starttls"
+    if tls not in ("starttls", "ssl", "none"):
+        errors["tls"] = "Choose STARTTLS, SSL/TLS or none."
     if errors:
         return {}, errors
     return {
         "configured": True,
         "host": host,
         "port": port,
+        "tls": tls,
         "username": form.get("username", "").strip(),
         "from_address": sender,
     }, {}

@@ -1,8 +1,10 @@
+<p align="center"><img src="docs/assets/logo-readme.png" alt="WeightPicks: over/under challenges" width="240"></p>
+
 # WeightPicks
 
 Self-hosted, fake-money, pick'em-style betting on one person's Garmin weigh-ins and health stats. Friends and family bet against an automated house; lines come from math, bets settle from Garmin data, Discord carries the trash talk.
 
-> **Status:** Pre-build (STAGE00 complete). Environment and repository tooling are in place; application code begins in STAGE01.
+> **Status:** In development, running locally. Core betting, real Garmin data, Discord, AI props, special events, Goal Reached and seasons are built; backups, appearance and email are next. Self-host instructions arrive with the release.
 
 ## Built with AI — fully vibe-coded
 
@@ -15,11 +17,15 @@ Planning documents (concept, build plan, stage checklists, progress, decision an
 ## Layout
 
 ```text
+app/                     The application: domain logic, services, web, worker, AI, notify
+migrations/              Alembic migrations (SQLite)
+tests/                   Unit, integration, season simulations and browser (e2e) tests
+docker/                  Dockerfile and entrypoint; docker-compose*.yml at the root
+scripts/                 Dev helpers (CSS build, browser for e2e, brand icons)
+docs/                    Guides (Garmin, Discord, AI, seasons), ADRs, calibration, logo
 SECURITY.md              Vulnerability reporting + security baseline
-docs/adr/                Architecture decision records (from STAGE01)
-docs/calibration/        Line-engine calibration reports (from STAGE04)
-.github/                 Dependabot config, PR template (CI arrives in STAGE01)
-.pre-commit-config.yaml  Hygiene hooks, gitleaks, noreply-identity guard
+.github/                 CI workflow, Dependabot config, PR template
+.pre-commit-config.yaml  Hygiene hooks, gitleaks, noreply-identity guard, ruff, mypy
 ```
 
 ## Workflow in one paragraph

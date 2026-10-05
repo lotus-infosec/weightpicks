@@ -172,3 +172,106 @@ def notes(conn: Connection, today: date) -> list[dict[str, Any]]:
 def runs_view(conn: Connection, real_now: datetime, cap: int, limit: int = 50) -> dict[str, Any]:
     rows = conn.execute(select(AiRun).order_by(AiRun.id.desc()).limit(limit)).all()
     return {"used": quota.used_today(conn, real_now), "cap": cap, "runs": rows}
+
+
+def audit_simple(
+    engine: Engine, clock: Clock, actor: Actor, action: str, after: dict[str, Any]
+) -> None:
+    with immediate(engine) as conn:
+        audit.record(
+            conn,
+            clock,
+            actor_id=actor.user_id,
+            ts=actor.acted_at,
+            ip=actor.ip,
+            action=action,
+            after=after,
+        )
+
+
+def clear_secrets(engine: Engine, clock: Clock, actor: Actor) -> int:
+    """Delete every stored secret (they can't be decrypted with this APP_SECRET_KEY)."""
+    with immediate(engine) as conn:
+        removed = secret_store.clear_all(conn)
+        audit.record(
+            conn,
+            clock,
+            actor_id=actor.user_id,
+            ts=actor.acted_at,
+            ip=actor.ip,
+            action="secrets.clear",
+            after={"removed": removed},
+        )
+    return removed
+
+
+# ---- SMTP (STAGE15) -------------------------------------------------------------------------
+
+
+def set_smtp(
+    engine: Engine,
+    clock: Clock,
+    actor: Actor,
+    app_secret_key: str,
+    form: dict[str, str],
+    clear: bool = False,
+) -> dict[str, str]:
+    """Save (or clear) the SMTP settings; the password is stored encrypted and a blank
+    password keeps the stored one. Returns field errors ({} = saved)."""
+    from app.domain import setup as setup_rules
+    from app.models import InstanceSettingsRow
+
+    values: dict[str, Any] = {"configured": False}
+    if not clear:
+        values, errors = setup_rules.smtp(form)
+        if errors:
+            return errors
+        if not values.get("configured"):
+            return {"host": "Enter the SMTP server, or tick Clear to turn email off."}
+    with immediate(engine) as conn:
+        conn.execute(
+            update(InstanceSettingsRow)
+            .where(InstanceSettingsRow.id == 1)
+            .values(smtp=values, updated_at=clock.now())
+        )
+        password = form.get("password", "")
+        if clear:
+            secret_store.remove(conn, "smtp.password")
+        elif password:
+            try:
+                secret_store.put(conn, clock, app_secret_key, "smtp.password", password)
+            except (SecretKeyMissing, WrongSecretKey) as exc:
+                raise AdminError("no_key", "APP_SECRET_KEY is missing or wrong.") from exc
+        audit.record(
+            conn,
+            clock,
+            actor_id=actor.user_id,
+            ts=actor.acted_at,
+            ip=actor.ip,
+            action="integrations.smtp",
+            target=("settings", 1),
+            after={k: v for k, v in values.items() if k != "username"}
+            | {"credential_changed": bool(password) and not clear},
+        )
+    return {}
+
+
+def send_smtp_test(engine: Engine, clock: Clock, actor: Actor) -> bool:
+    """Queue a test email to the admin's own address. False if SMTP isn't set up."""
+    from secrets import token_hex
+
+    from app.notify import email
+    from app.services.outbox import Category, enqueue
+
+    with immediate(engine) as conn:
+        if not email.configured(conn):
+            return False
+        enqueue(
+            conn,
+            clock,
+            category=Category.ACCOUNT_EMAIL,
+            channel="email",
+            payload={"kind": "smtp_test", "user_id": actor.user_id},
+            dedupe_key=f"smtp_test:{clock.now().isoformat()}:{token_hex(4)}",
+        )
+    return True

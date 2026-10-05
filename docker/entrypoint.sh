@@ -7,12 +7,16 @@ role="${1:-web}"
 
 case "$role" in
   web)
-    # Migrate (file-locked) before serving; extra args (e.g. --reload in dev) go to uvicorn.
+    # Apply a staged restore/reset first (waits for the worker to stop), then migrate
+    # (file-locked) before serving; extra args (e.g. --reload in dev) go to uvicorn.
+    wp maintenance apply
     wp migrate
     exec uvicorn app.web.main:create_app --factory \
       --host 0.0.0.0 --port 8000 --no-server-header "$@"
     ;;
   worker)
+    # Never open the database while a restore/reset is staged (BUILD_PLAN §1.5).
+    wp maintenance wait
     if [ "${1:-}" = "--reload" ]; then
       exec watchfiles --filter python "python -m app.worker.main" /app/app
     fi

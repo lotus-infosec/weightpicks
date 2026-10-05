@@ -8,10 +8,10 @@ from typing import Any
 
 from fastapi import APIRouter, Request, Response
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app.services import auth, board, instance, leaderboard, pools, stats
+from app.services import auth, board, instance, leaderboard, password_reset, pools, stats
 from app.services.auth import AuthError, SessionInfo
 from app.services.bets import BetRejected, place_bet, place_parlay
 from app.web.security import (
@@ -86,7 +86,17 @@ def build_router() -> APIRouter:
         if session is not None:
             return RedirectResponse(_home_for(session), status_code=303)
         welcome = request.query_params.get("welcome") == "1"
-        return anon_form(request, "login.html", {"error": None, "email": "", "welcome": welcome})
+        return anon_form(
+            request,
+            "login.html",
+            {
+                "error": None,
+                "email": "",
+                "welcome": welcome,
+                "reset_done": request.query_params.get("reset") == "1",
+                "can_reset": reset_enabled(request),
+            },
+        )
 
     @router.post("/api/auth/login")
     async def login(request: Request) -> Response:
@@ -107,12 +117,91 @@ def build_router() -> APIRouter:
             return anon_form(
                 request,
                 "login.html",
-                {"error": exc.message, "email": form.get("email", "")},
+                {
+                    "error": exc.message,
+                    "email": form.get("email", ""),
+                    "can_reset": reset_enabled(request),
+                },
                 status,
             )
         response = RedirectResponse(_home_for(new.info), status_code=303)
         set_session_cookie(response, request, new.token, new.info.role)
         return response
+
+    # ---- password reset by email (only while SMTP is set up) -----------------------------
+
+    def reset_enabled(request: Request) -> bool:
+        state = request.app.state
+        with state.engine.connect() as conn:
+            return password_reset.enabled(conn, state.settings)
+
+    @router.get("/reset")
+    def reset_request_page(request: Request) -> Response:
+        if not reset_enabled(request):
+            return PlainTextResponse("Not found", status_code=404)
+        return anon_form(request, "reset_request.html", {"sent": False, "error": None})
+
+    @router.post("/api/auth/reset")
+    async def reset_request(request: Request) -> Response:
+        form = await read_form(request)
+        state = request.app.state
+        if not reset_enabled(request):
+            return PlainTextResponse("Not found", status_code=404)
+        try:
+            await run_in_threadpool(
+                lambda: password_reset.request(
+                    state.engine,
+                    state.auth_clock,
+                    state.settings,
+                    address=form.get("email", ""),
+                    ip=client_ip(request),
+                )
+            )
+        except password_reset.ResetError as exc:
+            return anon_form(
+                request, "reset_request.html", {"sent": False, "error": exc.message}, 429
+            )
+        return anon_form(request, "reset_request.html", {"sent": True, "error": None})
+
+    @router.get("/reset/{token}")
+    def reset_form(request: Request, token: str) -> Response:
+        state = request.app.state
+        if not reset_enabled(request):
+            return PlainTextResponse("Not found", status_code=404)
+        ok = password_reset.check(state.engine, state.auth_clock, token)
+        return anon_form(
+            request,
+            "reset_password.html",
+            {"token": token, "usable": ok, "error": None},
+            200 if ok else 410,
+        )
+
+    @router.post("/api/auth/reset/complete")
+    async def reset_complete(request: Request) -> Response:
+        form = await read_form(request)
+        state = request.app.state
+        if not reset_enabled(request):
+            return PlainTextResponse("Not found", status_code=404)
+        token = form.get("token", "")
+        try:
+            await run_in_threadpool(
+                lambda: password_reset.complete(
+                    state.engine,
+                    state.auth_clock,
+                    token=token,
+                    password=form.get("password", ""),
+                    confirm=form.get("confirm", ""),
+                )
+            )
+        except password_reset.ResetError as exc:
+            usable = exc.code != "expired"
+            return anon_form(
+                request,
+                "reset_password.html",
+                {"token": token, "usable": usable, "error": exc.message},
+                400,
+            )
+        return RedirectResponse("/login?reset=1", status_code=303)
 
     def registration_open(request: Request) -> bool:
         with request.app.state.engine.connect() as conn:
