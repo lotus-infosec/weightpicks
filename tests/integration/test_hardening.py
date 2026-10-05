@@ -1,6 +1,7 @@
 """STAGE16 security review: one regression test per finding (GitHub issues #18-#24)."""
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -126,3 +127,43 @@ def test_cross_site_and_sibling_site_posts_are_refused(player: TestClient) -> No
         follow_redirects=False,
     )
     assert ok.status_code == 303
+
+
+# ---- S3 (#20): request logs carry route templates, never raw paths -------------------------
+
+
+def test_request_log_uses_the_route_template(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    secret = "reset-secret-" + "q" * 30
+    with web.client(create_app(world.settings, domain_clock=world.clock)) as c:
+        capsys.readouterr()
+        r = c.get(f"/reset/{secret}")
+        c.get(f"/no/such/{secret}")
+    out = capsys.readouterr().out
+    assert r.headers["X-Request-ID"] in out
+    assert "/reset/{token}" in out and "<unmatched>" in out
+    assert secret not in out
+
+
+def test_entrypoint_turns_off_the_raw_access_log() -> None:
+    assert "--no-access-log" in Path("docker/entrypoint.sh").read_text()
+
+
+# ---- S5 (#22): warn once when requests bypass the tunnel (R13) ------------------------------
+
+
+def test_missing_tunnel_header_is_logged_once_in_production(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    prod = world.settings.model_copy(update={"app_env": "production"})
+    with web.client(create_app(prod, domain_clock=world.clock)) as c:
+        c.get("/healthz")
+        c.get("/login", headers={"CF-Connecting-IP": "203.0.113.5"})
+        assert "cf_header_missing" not in capsys.readouterr().out
+        c.get("/login")
+        c.get("/login")
+    assert capsys.readouterr().out.count("cf_header_missing") == 1
+    with web.client(create_app(world.settings, domain_clock=world.clock)) as dev:
+        dev.get("/login")
+    assert "cf_header_missing" not in capsys.readouterr().out

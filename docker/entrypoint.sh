@@ -9,10 +9,11 @@ case "$role" in
   web)
     # Apply a staged restore/reset first (waits for the worker to stop), then migrate
     # (file-locked) before serving; extra args (e.g. --reload in dev) go to uvicorn.
+    # The app logs each request itself (route templates only), so the access log is off.
     wp maintenance apply
     wp migrate
     exec uvicorn app.web.main:create_app --factory \
-      --host 0.0.0.0 --port 8000 --no-server-header "$@"
+      --host 0.0.0.0 --port 8000 --no-server-header --no-access-log "$@"
     ;;
   worker)
     # Never open the database while a restore/reset is staged (BUILD_PLAN §1.5).
