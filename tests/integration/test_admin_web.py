@@ -12,7 +12,7 @@ from app.core.clock import SystemClock
 from app.core.db import immediate
 from app.domain.markets import Timeframe
 from app.models import AuditEntry, Command, InstanceSettingsRow, Market, OutboxMessage, User
-from app.services import admin, auth, instance, markets, secrets
+from app.services import admin, audit, auth, instance, markets, secrets
 from app.services.sync import record_failure
 from app.web.main import create_app
 from tests.integration import web
@@ -303,7 +303,7 @@ def test_leaderboard_page(clients: tuple[TestClient, TestClient, World]) -> None
     assert "Player 1" in page and "Player 2" in page and ">you<" in page
     with w.engine.connect() as conn:
         second = conn.execute(select(User.id).where(User.display_name == "Player 2")).scalar_one()
-    admin.ban(w.engine, w.clock, admin.Actor(user_id=1), second, "test")
+    admin.ban(w.engine, w.clock, audit.Actor(user_id=1), second, "test")
     page = player_c.get("/leaderboard").text
     assert "Player 2" not in page  # removed players are hidden (C5)
     assert player_c.get("/leaderboard?season=999").status_code == 200  # unknown -> current

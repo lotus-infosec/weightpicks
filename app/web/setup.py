@@ -14,6 +14,7 @@ from app.domain.markets import COUNT_MARKET_METRICS, Schedule
 from app.services import setup
 from app.services.secrets import WEBHOOK_CATEGORIES
 from app.services.setup import SetupError
+from app.web import format as fmt
 from app.web.security import client_ip, csrf_cookie_token, read_form, set_csrf_cookie
 
 SETUP_COOKIE = "wp_setup"
@@ -37,10 +38,6 @@ NO_KEY = (
 )
 
 
-def _tenths(x10: int) -> str:
-    return f"{x10 // 10}.{x10 % 10}"
-
-
 def form_values(key: str, draft: dict[str, Any], request: Request) -> dict[str, Any]:
     """What to show in a step's fields: the draft, else sensible defaults."""
     settings = request.app.state.settings
@@ -58,8 +55,8 @@ def form_values(key: str, draft: dict[str, Any], request: Request) -> dict[str, 
         return {
             "subject_name": saved["subject_name"],
             "unit": saved["unit"],
-            "start_weight": _tenths(saved["start_weight_x10"]),
-            "goal_weight": _tenths(saved["goal_weight_x10"]),
+            "start_weight": fmt.tenths(saved["start_weight_x10"]),
+            "goal_weight": fmt.tenths(saved["goal_weight_x10"]),
         }
     if key == "schedule":
         if saved:

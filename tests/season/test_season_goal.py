@@ -31,7 +31,7 @@ from app.models import (
     Selection,
 )
 from app.services import instance, ledger, pools, season, sim
-from app.services.admin import Actor
+from app.services.audit import Actor
 from app.services.bets import BetRejected, place_bet, place_parlay
 from app.services.observations import canonical_weigh_ins
 from app.services.users import ensure_player
@@ -150,9 +150,7 @@ def run(tmp_path_factory: pytest.TempPathFactory) -> Iterator[GoalSeason]:
                     "buy_in_cents": 2_000,
                 }
                 ids.append(
-                    pools.create(
-                        engine, SimClock(now), pools.validate(cfg, now, raw), actor_id=None
-                    )
+                    pools.create(engine, SimClock(now), pools.validate(cfg, now, raw), actor=None)
                 )
             out.pools = (ids[0], ids[1])
             with engine.connect() as conn:

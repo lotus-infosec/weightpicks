@@ -200,11 +200,9 @@ def create(engine: Engine, clock: Clock, actor: Any, template: str, form: dict[s
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
+            actor,
             action="market.create_prop",
             target=("market", market_id),
             after={"template": template, "params": p.spec.params, "title": p.spec.title},
-            ip=actor.ip,
         )
     return market_id

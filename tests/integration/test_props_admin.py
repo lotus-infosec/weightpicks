@@ -9,7 +9,7 @@ from app.core.clock import SystemClock
 from app.core.db import immediate
 from app.models import AuditEntry, InstanceSettingsRow, Market, OutboxMessage, Selection, Settlement
 from app.services import instance, props, settlement
-from app.services.admin import Actor
+from app.services.audit import Actor
 from app.services.observations import canonical_weigh_ins
 from tests.integration.test_bets_settlement import series
 from tests.integration.world import NY, World, create_admin, local, sync_sim

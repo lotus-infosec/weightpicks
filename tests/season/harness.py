@@ -23,7 +23,8 @@ from app.domain.markets import MarketStatus
 from app.models import Account, InstanceSettingsRow, Market, OddsVersion, Selection, User
 from app.services import admin, instance, ledger, sim
 from app.services import props as props_service
-from app.services.admin import Actor, AdminError
+from app.services.admin import AdminError
+from app.services.audit import Actor
 from app.services.bets import BetRejected, place_bet, place_parlay
 from app.services.observations import canonical_weigh_ins
 from app.services.users import ensure_player

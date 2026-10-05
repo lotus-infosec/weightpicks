@@ -21,6 +21,7 @@ from app.core.security import hash_password, password_problem, token_hash
 from app.models import AuthAttempt, PasswordReset, User
 from app.notify import email
 from app.services import audit
+from app.services.audit import Actor
 from app.services.auth import count_attempts, revoke_all
 from app.services.outbox import Category, enqueue
 from app.services.users import normalize_email
@@ -141,7 +142,7 @@ def complete(engine: Engine, clock: Clock, *, token: str, password: str, confirm
         audit.record(
             conn,
             clock,
-            actor_id=user_id,
+            Actor(user_id),
             action="user.password_reset_by_email",
             target=("user", user_id),
             after={"sessions_ended": ended},

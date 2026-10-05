@@ -22,7 +22,7 @@ from app.core.db import immediate, make_engine
 from app.core.migrations import upgrade_to_head
 from app.models import AiProposal, AiRun, InstanceSettingsRow, Market
 from app.services import ai_props, instance, ledger, secrets, sim
-from app.services.admin import Actor
+from app.services.audit import Actor
 from tests.fake_ai import menu_model
 from tests.integration.world import create_admin
 

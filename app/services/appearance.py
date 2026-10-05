@@ -72,7 +72,9 @@ def decode(data: bytes) -> Image.Image:
     return decoded
 
 
-def save_logo(engine: Engine, settings: Settings, clock: Clock, actor: object, data: bytes) -> None:
+def save_logo(
+    engine: Engine, settings: Settings, clock: Clock, actor: audit.Actor | None, data: bytes
+) -> None:
     im = decode(data)
     bbox = im.getchannel("A").getbbox()
     if bbox is None:
@@ -85,11 +87,20 @@ def save_logo(engine: Engine, settings: Settings, clock: Clock, actor: object, d
         tmp = folder / f".{name}.tmp"
         out.save(tmp, format="PNG", optimize=True)  # a fresh file: no metadata carried over
         os.replace(tmp, folder / name)
-    _audit(engine, clock, actor, "appearance.logo", {"bytes": len(data), "size": list(im.size)})
+    audit.record_alone(
+        engine,
+        clock,
+        actor,
+        target=("settings", 1),
+        action="appearance.logo",
+        after={"bytes": len(data), "size": list(im.size)},
+    )
     log.info("logo_saved", width=im.width, height=im.height)
 
 
-def remove_logo(engine: Engine, settings: Settings, clock: Clock, actor: object) -> bool:
+def remove_logo(
+    engine: Engine, settings: Settings, clock: Clock, actor: audit.Actor | None
+) -> bool:
     folder = uploads_dir(settings)
     removed = False
     for name in BRAND_SIZES:
@@ -98,7 +109,9 @@ def remove_logo(engine: Engine, settings: Settings, clock: Clock, actor: object)
             path.unlink()
             removed = True
     if removed:
-        _audit(engine, clock, actor, "appearance.logo_removed", {})
+        audit.record_alone(
+            engine, clock, actor, target=("settings", 1), action="appearance.logo_removed", after={}
+        )
     return removed
 
 
@@ -107,7 +120,7 @@ def has_logo(settings: Settings) -> bool:
 
 
 def set_name_and_palette(
-    engine: Engine, clock: Clock, actor: object, form: dict[str, str]
+    engine: Engine, clock: Clock, actor: audit.Actor | None, form: dict[str, str]
 ) -> dict[str, str]:
     """Validate (same rules as /setup) and save; returns field errors ({} = saved)."""
     values, errors = setup_rules.appearance(form)
@@ -127,28 +140,10 @@ def set_name_and_palette(
         audit.record(
             conn,
             clock,
-            actor_id=getattr(actor, "user_id", None),
-            ts=getattr(actor, "acted_at", None),
-            ip=getattr(actor, "ip", None),
+            actor,
             action="settings.appearance",
             target=("settings", 1),
             before={"app_name": before.app_name, "palette": before.palette},
             after=dict(values),
         )
     return {}
-
-
-def _audit(
-    engine: Engine, clock: Clock, actor: object, action: str, after: dict[str, object]
-) -> None:
-    with immediate(engine) as conn:
-        audit.record(
-            conn,
-            clock,
-            actor_id=getattr(actor, "user_id", None),
-            ts=getattr(actor, "acted_at", None),
-            ip=getattr(actor, "ip", None),
-            action=action,
-            target=("settings", 1),
-            after=after,
-        )

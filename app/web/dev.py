@@ -19,13 +19,10 @@ from app.models import Observation, SyncRun
 from app.providers.simulated import PRESETS
 from app.services import sim
 from app.services.observations import canonical_weigh_ins, latest_complete_through
+from app.web import format as fmt
 from app.web.security import require_admin, require_session
 
 TEMPLATES = Jinja2Templates(directory=Path(__file__).parent / "templates")
-
-
-def _tenths(value: int) -> str:
-    return f"{value // 10}.{value % 10}"
 
 
 async def _form(request: Request) -> dict[str, str]:
@@ -70,7 +67,7 @@ def build_router(settings: Settings, engine: Engine) -> APIRouter:
                 "presets": sorted(PRESETS),
                 "counts": sorted(counts.items()),
                 "last_sync": last_sync,
-                "canonical": [(c.local_date, _tenths(c.value), c.source) for c in canonical],
+                "canonical": [(c.local_date, fmt.tenths(c.value), c.source) for c in canonical],
                 "complete": sorted(complete.items()),
                 "error": error,
                 "csrf": require_admin(require_session(request)).csrf_token,

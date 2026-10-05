@@ -13,7 +13,7 @@ from app.core.config import Settings
 from app.core.db import immediate
 from app.models import AiProposal, AiRun, AuditEntry, InstanceSettingsRow, Market
 from app.services import ai_props, instance, secrets
-from app.services.admin import Actor
+from app.services.audit import Actor
 from tests.fake_ai import Recorder, canned, menu_model
 from tests.integration.world import NY, World, create_admin, local
 

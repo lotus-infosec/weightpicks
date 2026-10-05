@@ -16,7 +16,7 @@ from app.domain import setup as setup_steps
 from app.domain.economy import VIG_PRESETS, Economy
 from app.domain.money import parse_cents
 from app.domain.units import parse_tenths
-from app.models import Command, Market, User
+from app.models import User
 from app.notify import email as email_settings
 from app.services import (
     admin,
@@ -32,10 +32,12 @@ from app.services import (
     pools,
     season,
 )
+from app.services import audit as audit_log
 from app.services import props as props_service
 from app.services import secrets as secret_store
 from app.services import stats as stats_service
-from app.services.admin import Actor, AdminError
+from app.services.admin import AdminError
+from app.services.audit import Actor
 from app.services.auth import SessionInfo
 from app.services.observations import canonical_weigh_ins
 from app.web.security import Admin, client_ip, read_form, require_admin
@@ -198,7 +200,7 @@ def build_router() -> APIRouter:
         status: int = 200,
     ) -> Response:
         with request.app.state.engine.connect() as conn:
-            row = next((r for r in admin_views.players(conn) if r.user_id == user_id), None)
+            row = next(iter(admin_views.players(conn, user_id)), None)
             if row is None:
                 return render(request, "error.html", {"message": "No such player."}, 404)
             bets = board.my_bets(conn, user_id)
@@ -395,43 +397,11 @@ def build_router() -> APIRouter:
     ) -> Response:
         state = request.app.state
         template = template if template in props_service.PROP_TEMPLATES else "milestone_by"
-        now = state.domain_clock.now()
         with state.engine.connect() as conn:
-            config = instance.read(conn)
-            tz = config.tz if config else state.settings.tz
-            today = now.astimezone(tz).date()
-            canon = canonical_weigh_ins(conn, today - timedelta(days=13), today)
-            open_props = list(
-                conn.execute(
-                    select(Market.id.label("market_id"), Market.title, Market.status)
-                    .where(
-                        Market.origin.in_(("admin", "ai")),
-                        Market.status.in_(("open", "locked")),
-                    )
-                    .order_by(Market.id.desc())
-                    .limit(30)
-                ).all()
-            )
-            ai_queue: list[dict[str, Any]] = []
-            for proposal in ai_props.pending(conn, now):
-                if config is None:
-                    break
-                try:
-                    priced = props_service.preview(
-                        conn, config, today, proposal.template, dict(proposal.form)
-                    )
-                except props_service.PropError:
-                    priced = None
-                ai_queue.append({"row": proposal, "preview": priced})
-            last_run = conn.execute(
-                select(Command.status, Command.result, Command.created_at)
-                .where(Command.type == "ai_props_now")
-                .order_by(Command.id.desc())
-                .limit(1)
-            ).one_or_none()
-            ai_configured = admin_ai.workers_ai_configured(conn)
+            data = admin_views.props(conn, state.domain_clock.now(), state.settings.tz)
+        config, today = data.config, data.today
         unit = config.unit if config else state.settings.wp_unit
-        latest = canon[-1].value / 10 if canon else None
+        latest = data.latest_x10 / 10 if data.latest_x10 else None
         metrics = [
             (m, stats_service.METRIC_LABELS[m]) for m in (config.enabled_metrics if config else ())
         ]
@@ -464,12 +434,12 @@ def build_router() -> APIRouter:
                 "min_future": (today + timedelta(days=2)).isoformat(),
                 "max_future": (today + timedelta(days=120)).isoformat(),
                 "metrics": metrics,
-                "open_props": open_props,
-                "ai_queue": ai_queue,
+                "open_props": data.open_props,
+                "ai_queue": data.ai_queue,
                 "ai_on": bool(config and config.flags.get("ai_props")),
                 "ai_mode": config.ai_mode if config else "review",
-                "ai_configured": ai_configured,
-                "ai_last_run": last_run,
+                "ai_configured": data.ai_configured,
+                "ai_last_run": data.ai_last_run,
                 "active": "props",
             },
             status,
@@ -787,9 +757,7 @@ def build_router() -> APIRouter:
                     state.engine,
                     state.domain_clock,
                     d,
-                    actor_id=who.user_id,
-                    acted_at=who.acted_at,
-                    ip=who.ip,
+                    actor=who,
                     ai_run_id=run_id,
                 )
             )
@@ -925,12 +893,13 @@ def build_router() -> APIRouter:
             lambda: backups.create(state.engine, state.settings, state.auth_clock, label="admin")
         )
         await run_in_threadpool(
-            admin_ai.audit_simple,
-            state.engine,
-            state.auth_clock,
-            actor(request, session),
-            "backup.create",
-            {"file": path.name},
+            lambda: audit_log.record_alone(
+                state.engine,
+                state.auth_clock,
+                actor(request, session),
+                action="backup.create",
+                after={"file": path.name},
+            )
         )
         return back("/admin/system", "backup")
 
@@ -944,12 +913,13 @@ def build_router() -> APIRouter:
         if path is None:
             return system_page(request, "No such backup.", 404)
         await run_in_threadpool(
-            admin_ai.audit_simple,
-            state.engine,
-            state.auth_clock,
-            actor(request, session),
-            "backup.download",
-            {"file": path.name},
+            lambda: audit_log.record_alone(
+                state.engine,
+                state.auth_clock,
+                actor(request, session),
+                action="backup.download",
+                after={"file": path.name},
+            )
         )
         return FileResponse(path, media_type="application/gzip", filename=path.name)
 

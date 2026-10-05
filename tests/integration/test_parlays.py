@@ -9,7 +9,7 @@ from app.core.db import immediate
 from app.domain import parlay
 from app.domain.money import payout_cents
 from app.models import Bet, BetLeg, InstanceSettingsRow, OutboxMessage
-from app.services import admin, settlement
+from app.services import admin, audit, settlement
 from app.services.bets import BetRejected, place_parlay
 from tests.integration.test_bets_settlement import (
     account,
@@ -147,7 +147,7 @@ def test_a_voided_market_drops_only_that_leg(world: World) -> None:
     user = player(w, 1)
     keep, gone = market(w, D5, "over"), market(w, D7, "over")
     bet_id = bet(w, user, legs(w, keep, gone), "v").bet_id
-    admin.void_market(w.engine, w.clock, admin.Actor(user_id=user), gone, "bad line")
+    admin.void_market(w.engine, w.clock, audit.Actor(user_id=user), gone, "bad line")
     assert status(w, bet_id) == ("open", None, ["open", "void"])
     settle_day(w, D6)
     assert status(w, bet_id) == ("won", payout_cents(STAKE, -110), ["won", "void"])

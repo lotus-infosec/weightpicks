@@ -32,7 +32,7 @@ def draft(w: World, **over: object) -> pools.Draft:
 
 
 def make(w: World, **over: object) -> int:
-    return pools.create(w.engine, w.clock, draft(w, **over), actor_id=None)
+    return pools.create(w.engine, w.clock, draft(w, **over), actor=None)
 
 
 def escrow(w: World, pool_id: int) -> int:
@@ -215,5 +215,5 @@ def test_too_late_to_open(world: World) -> None:
     d = draft(w, target_date=(date(2026, 10, 7)).isoformat())
     w.clock.set(d.lock_at + timedelta(minutes=1))
     with pytest.raises(pools.PoolError) as info:
-        pools.create(w.engine, w.clock, d, actor_id=None)
+        pools.create(w.engine, w.clock, d, actor=None)
     assert info.value.code == "late"

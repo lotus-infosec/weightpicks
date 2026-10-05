@@ -4,8 +4,7 @@ entry can never disagree. Password re-prompts are enforced by the web layer.
 """
 
 import secrets as pysecrets
-from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 import structlog
@@ -32,6 +31,7 @@ from app.models import (
 from app.services import audit, auth, busts, ledger
 from app.services import instance as instance_service
 from app.services import secrets as secret_store
+from app.services.audit import Actor
 from app.services.markets import set_status
 from app.services.outbox import Category, enqueue
 from app.services.settlement import reevaluate_parlay
@@ -44,15 +44,6 @@ class AdminError(Exception):
         super().__init__(message)
         self.code = code
         self.message = message
-
-
-@dataclass(frozen=True, slots=True)
-class Actor:
-    user_id: int
-    ip: str | None = None
-    acted_at: datetime | None = (
-        None  # real time of the click; audit rows use it (dev: SimClock differs)
-    )
 
 
 def _player(conn: Connection, user_id: int) -> Any:
@@ -178,14 +169,12 @@ def void_market(engine: Engine, clock: Clock, actor: Actor, market_id: int, reas
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
+            actor,
             action="market.void",
             target=("market", market_id),
             before={"status": market.status},
             after={"status": "voided", "bets_refunded": voided},
             reason=reason,
-            ip=actor.ip,
         )
         busts.check(conn, clock, market.season_id)
     log.info("market_voided", market_id=market_id, bets=voided)
@@ -207,13 +196,11 @@ def set_frozen(engine: Engine, clock: Clock, actor: Actor, user_id: int, frozen:
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
+            actor,
             action="user.freeze" if frozen else "user.unfreeze",
             target=("user", user_id),
             before={"status": user.status},
             after={"status": new},
-            ip=actor.ip,
         )
 
 
@@ -246,14 +233,12 @@ def ban(engine: Engine, clock: Clock, actor: Actor, user_id: int, reason: str) -
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
+            actor,
             action="user.ban",
             target=("user", user_id),
             before={"status": user.status},
             after={"status": "banned", "bets_refunded": refunded, "sessions_ended": sessions},
             reason=reason,
-            ip=actor.ip,
         )
     log.info("user_banned", user_id=user_id, bets_refunded=refunded)
     return refunded
@@ -272,12 +257,10 @@ def reset_password(engine: Engine, clock: Clock, actor: Actor, user_id: int) -> 
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
+            actor,
             action="user.reset_password",
             target=("user", user_id),
             after={"sessions_ended": sessions},
-            ip=actor.ip,
         )
     return temporary
 
@@ -315,13 +298,11 @@ def bailout(engine: Engine, clock: Clock, actor: Actor, user_id: int) -> int:
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
+            actor,
             action="bank.bailout",
             target=("user", user_id),
             before={"balance_cents": balance},
             after={"balance_cents": balance + economy.bailout_cents, "bust_id": bust_id},
-            ip=actor.ip,
         )
     return economy.bailout_cents
 
@@ -353,14 +334,12 @@ def adjust(
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
+            actor,
             action="bank.adjust",
             target=("user", user_id),
             before={"balance_cents": balance},
             after={"balance_cents": balance + amount_cents, "amount_cents": amount_cents},
             reason=reason,
-            ip=actor.ip,
         )
         busts.check(conn, clock, season_id)
 
@@ -378,13 +357,11 @@ def update_economy(engine: Engine, clock: Clock, actor: Actor, economy: Economy)
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
+            actor,
             action="settings.economy",
             target=("settings", 1),
             before=before.to_json(),
             after=economy.to_json(),
-            ip=actor.ip,
         )
 
 
@@ -394,10 +371,8 @@ def rotate_registration_code(engine: Engine, clock: Clock, actor: Actor) -> str:
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
+            actor,
             action="registration.rotate",
-            ip=actor.ip,
         )
     return code
 
@@ -407,11 +382,9 @@ def reauth_failed(engine: Engine, clock: Clock, actor: Actor, action: str) -> No
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
+            actor,
             action="reauth_failed",
             after={"for": action},
-            ip=actor.ip,
         )
 
 
@@ -446,11 +419,9 @@ def request_command(engine: Engine, clock: Clock, actor: Actor, kind: str) -> in
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
+            actor,
             action=action,
             target=("command", command_id),
-            ip=actor.ip,
         )
     return command_id
 
@@ -458,9 +429,6 @@ def request_command(engine: Engine, clock: Clock, actor: Actor, kind: str) -> in
 def request_sync(engine: Engine, clock: Clock, actor: Actor) -> int:
     """Queue a sync-now command for the worker (one pending at a time)."""
     return request_command(engine, clock, actor, "sync_now")
-
-
-__all__ = ["Actor", "AdminError"]
 
 
 # ---- Discord and flags (STAGE11, D-040) ----------------------------------------------
@@ -503,13 +471,11 @@ def set_webhook(
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
+            actor,
             action="discord.webhook_set" if url else "discord.webhook_cleared",
             target=None,
             before={"category": category, "set": had},
             after={"category": category, "set": bool(url)},
-            ip=actor.ip,
         )
 
 
@@ -543,11 +509,9 @@ def set_flag(engine: Engine, clock: Clock, actor: Actor, flag: str, value: bool)
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
+            actor,
             action="settings.flag",
             target=("settings", 1),
             before={flag: before},
             after={flag: value},
-            ip=actor.ip,
         )

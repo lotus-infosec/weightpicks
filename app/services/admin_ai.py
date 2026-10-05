@@ -15,7 +15,8 @@ from app.domain import setup as setup_steps
 from app.models import AdminNote, AiRun, InstanceSettingsRow
 from app.services import audit
 from app.services import secrets as secret_store
-from app.services.admin import Actor, AdminError
+from app.services.admin import AdminError
+from app.services.audit import Actor
 
 AI_MODES = ("review", "auto")
 NOTE_MAX = 200
@@ -38,13 +39,11 @@ def set_ai_mode(engine: Engine, clock: Clock, actor: Actor, mode: str) -> None:
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
+            actor,
             action="settings.ai_mode",
             target=("settings", 1),
             before={"ai_mode": before},
             after={"ai_mode": mode},
-            ip=actor.ip,
         )
 
 
@@ -78,8 +77,7 @@ def set_workers_ai(
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
+            actor,
             action="integrations.workers_ai",
             target=("settings", 1),
             after={
@@ -87,7 +85,6 @@ def set_workers_ai(
                 "account_id_changed": bool(account_id) and not clear,
                 "credential_changed": bool(token) and not clear,
             },
-            ip=actor.ip,
         )
 
 
@@ -120,12 +117,10 @@ def add_note(
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
+            actor,
             action="note.add",
             target=("admin_note", note_id),
             after={"text": text, "from": active_from.isoformat(), "to": active_to.isoformat()},
-            ip=actor.ip,
         )
     return note_id
 
@@ -143,13 +138,11 @@ def end_note(engine: Engine, clock: Clock, actor: Actor, note_id: int, today: da
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
+            actor,
             action="note.end",
             target=("admin_note", note_id),
             before={"to": row.active_to.isoformat()},
             after={"to": new_to.isoformat()},
-            ip=actor.ip,
         )
 
 
@@ -176,21 +169,6 @@ def runs_view(conn: Connection, real_now: datetime, cap: int, limit: int = 50) -
     return {"used": quota.used_today(conn, real_now), "cap": cap, "runs": rows}
 
 
-def audit_simple(
-    engine: Engine, clock: Clock, actor: Actor, action: str, after: dict[str, Any]
-) -> None:
-    with immediate(engine) as conn:
-        audit.record(
-            conn,
-            clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
-            ip=actor.ip,
-            action=action,
-            after=after,
-        )
-
-
 def clear_secrets(engine: Engine, clock: Clock, actor: Actor) -> int:
     """Delete every stored secret (they can't be decrypted with this APP_SECRET_KEY)."""
     with immediate(engine) as conn:
@@ -198,9 +176,7 @@ def clear_secrets(engine: Engine, clock: Clock, actor: Actor) -> int:
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
-            ip=actor.ip,
+            actor,
             action="secrets.clear",
             after={"removed": removed},
         )
@@ -247,9 +223,7 @@ def set_smtp(
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
-            ip=actor.ip,
+            actor,
             action="integrations.smtp",
             target=("settings", 1),
             after={k: v for k, v in values.items() if k != "username"}

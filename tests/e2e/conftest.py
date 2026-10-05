@@ -360,7 +360,7 @@ def _props_and_parlays(engine: Any, clock: SimClock) -> None:
 
     from app.models import InstanceSettingsRow
     from app.services import props
-    from app.services.admin import Actor
+    from app.services.audit import Actor
     from app.services.observations import canonical_weigh_ins
 
     with immediate(engine) as conn:
@@ -482,7 +482,7 @@ def _special_event(engine: Any, clock: SimClock) -> None:
         "target_date": "2026-10-12",
         "buy_in_cents": 2_500,
     }
-    pool_id = pools.create(engine, clock, pools.validate(config, clock.now(), raw), actor_id=None)
+    pool_id = pools.create(engine, clock, pools.validate(config, clock.now(), raw), actor=None)
     pools.enter(engine, clock, user_id=alex, pool_id=pool_id, guess_x10=2185)
 
 

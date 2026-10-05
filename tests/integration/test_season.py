@@ -23,7 +23,7 @@ from app.models import (
     Season,
 )
 from app.services import auth, instance, ledger, markets, pools, season
-from app.services.admin import Actor
+from app.services.audit import Actor
 from app.services.bets import BetRejected, place_parlay
 from app.web.main import create_app
 from app.worker.jobs.season import GoalWatchJob
@@ -123,13 +123,13 @@ def mid_season(world: World) -> dict[str, Any]:
         w.engine,
         w.clock,
         pools.validate(config, w.clock.now(), raw | {"target_date": GOAL_DAY.isoformat()}),
-        actor_id=None,
+        actor=None,
     )
     late = pools.create(
         w.engine,
         w.clock,
         pools.validate(config, w.clock.now(), raw | {"target_date": "2026-10-20", "title": "Late"}),
-        actor_id=None,
+        actor=None,
     )
     for user, guess in ((p1, 2190), (p2, 2199)):
         pools.enter(w.engine, w.clock, user_id=user, pool_id=early, guess_x10=guess)

@@ -34,7 +34,7 @@ def player(world: World) -> Iterator[tuple[TestClient, World, int]]:
         "buy_in_cents": 2_500,
     }
     pool_id = pools.create(
-        world.engine, world.clock, pools.validate(config, world.clock.now(), raw), actor_id=None
+        world.engine, world.clock, pools.validate(config, world.clock.now(), raw), actor=None
     )
     c = web.client(create_app(world.settings, domain_clock=world.clock))
     c.__enter__()
@@ -95,6 +95,23 @@ def _rival(w: World) -> int:
         account = ledger.open_player_account(conn, w.clock, season, user)
         ledger.grant_starting(conn, w.clock, account, 100_000, idempotency_key=f"grant:{user}")
     return user
+
+
+def test_full_page_pool_entry_keeps_the_parlay_leg_limit(
+    player: tuple[TestClient, World, int],
+) -> None:
+    """Regression (STAGE16): the full-page answer to entering a pool hardcoded 6 legs."""
+    c, w, pool_id = player
+    with immediate(w.engine) as conn:
+        economy = conn.execute(select(InstanceSettingsRow.economy)).scalar_one() or {}
+        conn.execute(
+            update(InstanceSettingsRow).values(economy=dict(economy) | {"max_parlay_legs": 3})
+        )
+    r = c.post(
+        f"/api/pools/{pool_id}/enter",
+        data={"csrf_token": web.page_csrf(c, "/?tab=events"), "guess": "219.5"},
+    )
+    assert r.status_code == 200 and 'data-max-legs="3"' in r.text
 
 
 def test_events_tab_hidden_when_flag_off(player: tuple[TestClient, World, int]) -> None:

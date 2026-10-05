@@ -119,9 +119,7 @@ def create(
     clock: Clock,
     draft: Draft,
     *,
-    actor_id: int | None,
-    acted_at: datetime | None = None,
-    ip: str | None = None,
+    actor: audit.Actor | None,
     ai_run_id: int | None = None,
 ) -> int:
     with immediate(engine) as conn:
@@ -150,7 +148,7 @@ def create(
                 status=OPEN,
                 config=draft.as_json(),
                 ai_run_id=ai_run_id,
-                created_by=actor_id,
+                created_by=actor.user_id if actor else None,
                 created_at=now,
             )
             .returning(Pool.id)
@@ -165,15 +163,37 @@ def create(
         audit.record(
             conn,
             clock,
-            actor_id=actor_id,
-            ts=acted_at,
+            actor,
             action="pool.create",
             target=("pool", pool_id),
             after=draft.as_json() | {"ai_run_id": ai_run_id},
-            ip=ip,
         )
     log.info("pool_created", pool_id=pool_id, target_date=draft.target_date.isoformat())
     return pool_id
+
+
+def entries_by_pool(conn: Connection, pool_ids: list[int]) -> dict[int, list[Any]]:
+    """Every entry of these pools in one query, in entry order: user_id, display_name,
+    status (of the user), guess_x10, payout_cents."""
+    found: dict[int, list[Any]] = {pool_id: [] for pool_id in pool_ids}
+    if not pool_ids:
+        return found
+    rows = conn.execute(
+        select(
+            PoolEntry.pool_id,
+            PoolEntry.user_id,
+            User.display_name,
+            User.status,
+            PoolEntry.guess_x10,
+            PoolEntry.payout_cents,
+        )
+        .join(User, User.id == PoolEntry.user_id)
+        .where(PoolEntry.pool_id.in_(pool_ids))
+        .order_by(PoolEntry.created_at, PoolEntry.id)
+    ).all()
+    for row in rows:
+        found[row.pool_id].append(row)
+    return found
 
 
 def parse_guess(raw: str) -> int:
@@ -394,9 +414,7 @@ def void(engine: Engine, clock: Clock, actor: Any, pool_id: int) -> None:
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
-            ip=actor.ip,
+            actor,
             action="pool.void",
             target=("pool", pool_id),
             before={"status": pool.status},
