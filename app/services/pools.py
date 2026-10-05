@@ -383,6 +383,27 @@ def refund_pool(conn: Connection, clock: Clock, pool_id: int, reason: str) -> bo
     return True
 
 
+def void(engine: Engine, clock: Clock, actor: Any, pool_id: int) -> None:
+    """Admin void: refund every buy-in. Audited."""
+    with immediate(engine) as conn:
+        pool = conn.execute(select(Pool.status).where(Pool.id == pool_id)).one_or_none()
+        if pool is None:
+            raise PoolError("not_found", "No such pool.")
+        if not refund_pool(conn, clock, pool_id, "admin_void"):
+            raise PoolError("finished", f"This pool is already {pool.status}.")
+        audit.record(
+            conn,
+            clock,
+            actor_id=actor.user_id,
+            ts=actor.acted_at,
+            ip=actor.ip,
+            action="pool.void",
+            target=("pool", pool_id),
+            before={"status": pool.status},
+            after={"status": REFUNDED},
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class PoolPass:
     locked: int

@@ -472,6 +472,7 @@ ADMIN_FLAGS = (  # /admin/discord (Settings)
     "parlays",
     "ai_props",
     "ai_hype",
+    "special_events",
 )
 
 

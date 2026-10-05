@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% from "admin/_reauth.html" import password %}
+{% block title %}Season · Admin{% endblock %}
+{% block content %}
+<h1>Season</h1>
+{% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+
+{% if current %}
+<section class="card" data-testid="season-current">
+  <h2>Season {{ current.number }}</h2>
+  <p>{% if current.start_x10 %}{{ "%.1f"|format(current.start_x10 / 10) }}{% else %}?{% endif %} → goal <strong>{% if current.goal_x10 %}{{ "%.1f"|format(current.goal_x10 / 10) }}{% else %}not set{% endif %}</strong> {{ unit }}
+    · <span class="badge status-{{ current.status }}">{{ "goal reached" if current.status == "frozen" else current.status }}</span>
+    {% if frozen %}<span class="badge status-frozen">instance frozen</span>{% endif %}</p>
+  <p class="muted small">Started {{ current.started_at | local_time }}{% if current.goal_reached_at %} · goal reached {{ current.goal_reached_at | local_time }}{% endif %}. Latest weigh-in: {{ latest or "none" }}.</p>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>{{ "Unfreeze" if frozen else "Freeze" }}</h2>
+  <p class="muted">{% if frozen %}Unfreezing reopens betting. After Goal Reached, start a new season instead.{% else %}Freezing stops new bets and pool entries and locks every open market. Nothing is refunded.{% endif %}</p>
+  <form method="post" action="/admin/season/{{ 'unfreeze' if frozen else 'freeze' }}" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    {{ password() }}
+    <button type="submit" class="ghost" data-testid="freeze-toggle">{{ "Unfreeze" if frozen else "Freeze" }}</button>
+  </form>
+</section>
+
+{% if current and current.status == "active" %}
+<details class="card danger">
+  <summary><h2 class="inline">Goal Reached (manual)</h2></summary>
+  <p class="muted">Use this if the goal was hit but the sync missed it. It freezes the instance, settles every market the data already decides, refunds everything else (weekly and monthly windows, futures, later pools) and posts Goal Reached. It can't be undone.</p>
+  <form method="post" action="/admin/season/goal" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>Type GOAL to confirm <input type="text" name="confirm" autocomplete="off" required></label>
+    {{ password() }}
+    <button type="submit" class="danger-button">Goal Reached</button>
+  </form>
+</details>
+{% endif %}
+
+{% if frozen %}
+<section class="card" data-testid="new-season">
+  <h2>Start a new season</h2>
+  <p class="muted">Ends this season, opens new accounts with everyone's balance carried over (profit restarts at zero) and reopens betting. Past seasons stay on the leaderboard and in bet history.</p>
+  <form method="post" action="/admin/season/new" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <div class="row wrap">
+      <label>Starting weight ({{ unit }}) <input type="text" inputmode="decimal" name="start_weight" value="{{ latest }}" required></label>
+      <label>Goal weight ({{ unit }}) <input type="text" inputmode="decimal" name="goal_weight" required></label>
+    </div>
+    {{ password() }}
+    <button type="submit" class="primary">Start season</button>
+  </form>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>All seasons</h2>
+  <table class="table" data-testid="season-history">
+    <thead><tr><th>#</th><th>Start → goal</th><th>Status</th><th>Dates</th></tr></thead>
+    <tbody>
+    {% for s in seasons %}
+    <tr><td>{{ s.number }}</td>
+      <td data-label="Start → goal">{% if s.start_x10 %}{{ "%.1f"|format(s.start_x10 / 10) }}{% else %}?{% endif %} → {% if s.goal_x10 %}{{ "%.1f"|format(s.goal_x10 / 10) }}{% else %}?{% endif %}</td>
+      <td data-label="Status">{{ "goal reached" if s.status == "frozen" else s.status }}</td>
+      <td data-label="Dates" class="small">{{ s.started_at.strftime("%b %-d, %Y") }}{% if s.ended_at %} – {{ s.ended_at.strftime("%b %-d, %Y") }}{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
