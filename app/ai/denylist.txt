@@ -1,0 +1,31 @@
+# Words an AI-written title, blurb or hype message may not contain (whole word, any case).
+# Mentions (@everyone, @here), links and markup are blocked separately in app/ai/text.py.
+asshole
+bastard
+bitch
+bullshit
+crap
+cunt
+damn
+dick
+dumbass
+fag
+faggot
+fatass
+fatso
+fuck
+fucking
+idiot
+loser
+moron
+nigga
+nigger
+piss
+pig
+retard
+retarded
+shit
+slut
+stupid
+whale
+whore

@@ -115,6 +115,8 @@ def insert_market(
     pricing: Pricing,
     now: datetime,
     origin: str = "core",
+    ai_run_id: int | None = None,
+    blurb: str | None = None,
 ) -> int:
     """Insert an open market with its two selections and odds version 1."""
     status = transition(MarketStatus.DRAFT, MarketStatus.OPEN)
@@ -131,6 +133,8 @@ def insert_market(
             title=spec.title,
             status=status.value,
             origin=origin,
+            ai_run_id=ai_run_id,
+            blurb=blurb,
             opens_at=now,
             lock_at=spec.lock_at,
             settle_after=spec.settle_after,

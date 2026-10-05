@@ -135,6 +135,60 @@ def preview(
     return Preview(template, spec, pricing)
 
 
+def insert_prop(
+    conn: Connection,
+    clock: Clock,
+    config: InstanceConfig,
+    p: Preview,
+    *,
+    origin: str = "admin",
+    ai_run_id: int | None = None,
+    blurb: str | None = None,
+) -> int:
+    """Insert a previewed prop and queue its `new_markets` post, in the caller's write
+    transaction. Shared by the admin form and AI proposals (D-042)."""
+    season_id = active_season_id(conn)
+    if season_id is None:
+        raise PropError("No season is running.")
+    if instance.current_state(conn) == instance.FROZEN:
+        raise PropError("The season is frozen.")
+    if conn.execute(select(Market.id).where(Market.dedupe_key == p.spec.dedupe_key)).first():
+        raise PropError("That prop already exists.")
+    if p.spec.lock_at <= clock.now():
+        raise PropError("Too late today: props lock at the nightly bet lock. Try tomorrow.")
+    market_id = insert_market(
+        conn,
+        season_id=season_id,
+        spec=p.spec,
+        pricing=p.pricing,
+        now=clock.now(),
+        origin=origin,
+        ai_run_id=ai_run_id,
+        blurb=blurb,
+    )
+    today = local_date(clock.now(), config.tz)
+    enqueue(
+        conn,
+        clock,
+        category=Category.NEW_MARKETS,
+        payload={
+            "timeframe": p.spec.timeframe.value,
+            "day": today.isoformat(),
+            "markets": [
+                {
+                    "market_id": market_id,
+                    "title": p.spec.title,
+                    "line_x10": p.pricing.line_x10,
+                    "odds_over": p.pricing.odds_over,
+                    "odds_under": p.pricing.odds_under,
+                }
+            ],
+        },
+        dedupe_key=f"new_markets:{origin}:{market_id}",
+    )
+    return market_id
+
+
 def create(engine: Engine, clock: Clock, actor: Any, template: str, form: dict[str, str]) -> int:
     with immediate(engine) as conn:
         config = instance.read(conn)
@@ -142,40 +196,7 @@ def create(engine: Engine, clock: Clock, actor: Any, template: str, form: dict[s
             raise PropError("Finish setup first.")
         today = local_date(clock.now(), config.tz)
         p = preview(conn, config, today, template, form)
-        season_id = active_season_id(conn)
-        if season_id is None:
-            raise PropError("No season is running.")
-        if conn.execute(select(Market.id).where(Market.dedupe_key == p.spec.dedupe_key)).first():
-            raise PropError("That prop already exists.")
-        if p.spec.lock_at <= clock.now():
-            raise PropError("Too late today: props lock at the nightly bet lock. Try tomorrow.")
-        market_id = insert_market(
-            conn,
-            season_id=season_id,
-            spec=p.spec,
-            pricing=p.pricing,
-            now=clock.now(),
-            origin="admin",
-        )
-        enqueue(
-            conn,
-            clock,
-            category=Category.NEW_MARKETS,
-            payload={
-                "timeframe": p.spec.timeframe.value,
-                "day": today.isoformat(),
-                "markets": [
-                    {
-                        "market_id": market_id,
-                        "title": p.spec.title,
-                        "line_x10": p.pricing.line_x10,
-                        "odds_over": p.pricing.odds_over,
-                        "odds_under": p.pricing.odds_under,
-                    }
-                ],
-            },
-            dedupe_key=f"new_markets:admin:{market_id}",
-        )
+        market_id = insert_prop(conn, clock, config, p)
         audit.record(
             conn,
             clock,
