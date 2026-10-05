@@ -8,6 +8,9 @@
   <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false}'>
   <title>{% block title %}{{ instance.app_name }}{% endblock %}</title>
   <link rel="stylesheet" href="/static/app.css">
+  <link rel="icon" type="image/png" sizes="32x32" href="/brand/favicon.png">
+  <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
   {# app.js registers Alpine components on alpine:init, so it must load before Alpine. #}
   <script src="/static/app.js" defer></script>
   <script src="/static/vendor/htmx-2.0.11.min.js" defer></script>
@@ -17,7 +20,7 @@
 <body class="app" hx-headers='{{ {"X-CSRF-Token": csrf} | tojson }}'>
   {% if session %}
   <header class="topbar">
-    <a class="brand" href="/">{{ instance.app_name }}</a>
+    <a class="brand" href="/"><img src="/brand/mark.png" alt="" width="28" height="28" class="brand-mark">{{ instance.app_name }}</a>
     {% if wallet %}<span class="wallet" id="balance" data-testid="balance">{{ wallet.balance_cents | money }}</span>{% endif %}
     <form method="post" action="/api/auth/logout" class="inline">
       <input type="hidden" name="csrf_token" value="{{ csrf }}">
@@ -42,7 +45,7 @@
   </nav>
   {% endif %}
   {% else %}
-  <header class="topbar"><span class="brand">{{ instance.app_name }}</span></header>
+  <header class="topbar"><span class="brand"><img src="/brand/mark.png" alt="" width="28" height="28" class="brand-mark">{{ instance.app_name }}</span></header>
   {% endif %}
   <main class="page{{ ' wide' if session and session.role == 'admin' }}">
     {% if instance.frozen and session %}<p class="alert frozen-banner" data-testid="frozen-banner">{% if session.role == "admin" %}The instance is frozen: no bets or pool entries. Admin → Season to unfreeze or start a new season.{% else %}Betting is paused. Your history and the leaderboard are still here.{% endif %}</p>{% endif %}

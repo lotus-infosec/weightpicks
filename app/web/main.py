@@ -108,7 +108,15 @@ def _is_setup_path(path: str) -> bool:
     return path == "/setup" or path.startswith("/setup/")
 
 
-UNGATED_PATHS = frozenset({"/healthz", "/robots.txt"})
+UNGATED_PATHS = frozenset({"/healthz", "/robots.txt", "/manifest.webmanifest"})
+# /brand/<name> -> the default file in static/brand (an Appearance upload overrides it).
+BRAND_FILES = {
+    "logo.png": "logo-512.png",
+    "logo-192.png": "logo-192.png",
+    "favicon.png": "favicon-32.png",
+    "apple-touch-icon.png": "apple-touch-icon.png",
+    "mark.png": "mark-64.png",
+}
 FROZEN_BLOCKED = ("/api/bets", "/api/pools")
 
 
@@ -178,7 +186,7 @@ def create_app(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
         path = request.url.path
-        if path.startswith("/static/") or path in UNGATED_PATHS:
+        if path.startswith(("/static/", "/brand/")) or path in UNGATED_PATHS:
             return await call_next(request)
         done = await run_in_threadpool(refresh)
         if done is None:
@@ -202,7 +210,7 @@ def create_app(
     ) -> Response:
         response = await call_next(request)
         response.headers.update(SECURITY_HEADERS)
-        if not request.url.path.startswith("/static/"):
+        if not request.url.path.startswith(("/static/", "/brand/")):
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -250,6 +258,38 @@ def create_app(
                 return FileResponse(candidate, media_type="text/css")
         return Response(
             "/* stylesheet not built: run scripts/build-css.sh */\n", media_type="text/css"
+        )
+
+    @app.get("/brand/{name}", include_in_schema=False)
+    def brand(name: str) -> Response:
+        """The instance's uploaded logo and icons (Appearance), else the project defaults."""
+        default = BRAND_FILES.get(name)
+        if default is None:
+            return PlainTextResponse("Not found", status_code=404)
+        uploaded = settings.data_dir / "uploads" / name
+        path = uploaded if uploaded.is_file() else STATIC_DIR / "brand" / default
+        return FileResponse(
+            path,
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=300", "X-Content-Type-Options": "nosniff"},
+        )
+
+    @app.get("/manifest.webmanifest", include_in_schema=False)
+    def manifest() -> JSONResponse:
+        return JSONResponse(
+            {
+                "name": live.app_name,
+                "short_name": live.app_name[:12],
+                "start_url": "/",
+                "display": "standalone",
+                "background_color": "#0e1116",
+                "theme_color": "#0e1116",
+                "icons": [
+                    {"src": "/brand/logo-192.png", "sizes": "192x192", "type": "image/png"},
+                    {"src": "/brand/logo.png", "sizes": "512x512", "type": "image/png"},
+                ],
+            },
+            media_type="application/manifest+json",
         )
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
