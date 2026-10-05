@@ -61,7 +61,7 @@ def admin_routes(app: object) -> set[tuple[str, str]]:
 def test_permission_matrix(clients: tuple[TestClient, TestClient, World]) -> None:
     admin_c, player_c, w = clients
     routes = admin_routes(admin_c.app)
-    assert len(routes) == 51  # STAGE13 +9 (AI); STAGE14 +7 (events, season); STAGE15 +10
+    assert len(routes) == 53  # STAGE13 +9 (AI); STAGE14 +7 (events, season); STAGE15 +12
     anon = web.client(create_app(w.settings, domain_clock=w.clock))
     with anon:
         for method, path in sorted(routes):

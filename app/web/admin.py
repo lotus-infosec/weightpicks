@@ -16,6 +16,7 @@ from app.core.security import verify_password
 from app.domain import setup as setup_steps
 from app.domain.economy import VIG_PRESETS, Economy
 from app.models import Command, Market, User
+from app.notify import email as email_settings
 from app.services import (
     admin,
     admin_ai,
@@ -70,6 +71,8 @@ MESSAGES = {
     "logo": "Logo saved. It may take a refresh to show everywhere.",
     "logo_removed": "Logo removed: back to the default.",
     "secrets_cleared": "Unreadable secrets cleared. Enter the integrations again in Settings.",
+    "smtp": "Email settings saved.",
+    "smtp_test": "Test email queued to your address. It should arrive within a minute.",
 }
 REAUTH_FAILED_MESSAGE = "That's not your password. Nothing was changed."
 MAX_RESTORE_BYTES = 512 * 1024 * 1024
@@ -1145,6 +1148,8 @@ def build_router() -> APIRouter:
             config = instance.read(conn)
             recent = admin_views.recent_outbox(conn)
             ai_configured = admin_ai.workers_ai_configured(conn)
+            smtp = email_settings.stored(conn)
+            smtp_password = "smtp.password" in secret_store.names(conn)
         return render(
             request,
             "admin/discord.html",
@@ -1155,6 +1160,8 @@ def build_router() -> APIRouter:
                 "flags": config.flags if config else {},
                 "recent": recent,
                 "ai_configured": ai_configured,
+                "smtp": smtp,
+                "smtp_password": smtp_password,
                 "can_store": bool(state.settings.app_secret_key.get_secret_value()),
                 "error": error,
                 "active": "discord",
@@ -1206,6 +1213,38 @@ def build_router() -> APIRouter:
         except AdminError as exc:
             return discord_page(request, exc.message, 400)
         return back("/admin/discord", "workers_ai")
+
+    @router.post("/discord/smtp")
+    async def discord_smtp(request: Request, session: Admin) -> Response:
+        form = dict(await read_form(request))
+        state = request.app.state
+        if not await reauth(request, session, form, "integrations.smtp"):
+            return discord_page(request, REAUTH_FAILED_MESSAGE, 403)
+        try:
+            errors = await run_in_threadpool(
+                admin_ai.set_smtp,
+                state.engine,
+                state.auth_clock,
+                actor(request, session),
+                state.settings.app_secret_key.get_secret_value(),
+                form,
+                form.get("clear") == "on",
+            )
+        except AdminError as exc:
+            return discord_page(request, exc.message, 400)
+        if errors:
+            return discord_page(request, " ".join(errors.values()), 400)
+        return back("/admin/discord", "smtp")
+
+    @router.post("/discord/smtp/test")
+    async def discord_smtp_test(request: Request, session: Admin) -> Response:
+        state = request.app.state
+        queued = await run_in_threadpool(
+            admin_ai.send_smtp_test, state.engine, state.auth_clock, actor(request, session)
+        )
+        if not queued:
+            return discord_page(request, "Set up email first.", 400)
+        return back("/admin/discord", "smtp_test")
 
     @router.post("/discord/test/{category}")
     async def discord_test(request: Request, session: Admin, category: str) -> Response:

@@ -26,7 +26,7 @@ class Session(Base):
 class AuthAttempt(Base):
     __tablename__ = "auth_attempts"
     __table_args__ = (
-        CheckConstraint("kind IN ('login', 'register', 'setup')", name="kind_valid"),
+        CheckConstraint("kind IN ('login', 'register', 'setup', 'reset')", name="kind_valid"),
         Index("ix_auth_attempts_kind_ip_ts", "kind", "ip", "ts"),
     )
 
@@ -61,3 +61,18 @@ class BannedEmail(Base):
     email: Mapped[str] = mapped_column(String(320), primary_key=True)  # normalized
     banned_at: Mapped[datetime] = mapped_column(UTCDateTime())
     reason: Mapped[str | None] = mapped_column(String(200))
+
+
+class PasswordReset(Base):
+    """A password-reset link sent by email (STAGE15): only the token's hash is stored;
+    single use, short-lived."""
+
+    __tablename__ = "password_resets"
+    __table_args__ = (Index("ix_password_resets_user_id", "user_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    used_at: Mapped[datetime | None] = mapped_column(UTCDateTime())

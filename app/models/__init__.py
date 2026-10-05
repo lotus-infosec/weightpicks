@@ -2,7 +2,7 @@
 
 from app.models.admin import AuditEntry, Bust, Command
 from app.models.ai import AdminNote, AiProposal, AiRun
-from app.models.auth import AuthAttempt, BannedEmail, RegistrationCode, Session
+from app.models.auth import AuthAttempt, BannedEmail, PasswordReset, RegistrationCode, Session
 from app.models.base import Base
 from app.models.bets import Bet, BetLeg, Settlement
 from app.models.ledger import Account, LedgerEntry, LedgerTxn, Season, User
@@ -35,6 +35,7 @@ __all__ = [
     "Observation",
     "OddsVersion",
     "OutboxMessage",
+    "PasswordReset",
     "Pool",
     "PoolEntry",
     "RegistrationCode",
