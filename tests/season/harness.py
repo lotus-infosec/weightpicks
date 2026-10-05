@@ -21,12 +21,13 @@ from app.core.db import immediate, make_engine
 from app.core.migrations import upgrade_to_head
 from app.domain.markets import MarketStatus
 from app.models import Account, InstanceSettingsRow, Market, OddsVersion, Selection, User
-from app.services import admin, auth, instance, ledger, sim
+from app.services import admin, instance, ledger, sim
 from app.services import props as props_service
 from app.services.admin import Actor, AdminError
 from app.services.bets import BetRejected, place_bet, place_parlay
 from app.services.observations import canonical_weigh_ins
 from app.services.users import ensure_player
+from tests.integration.world import create_admin
 
 NY = ZoneInfo("America/New_York")
 START = date(2026, 10, 1)
@@ -195,7 +196,7 @@ def run_season(
                 setup_completed_at=start, economy=economy, flags=flags
             )
         )
-    admin_id = auth.create_admin(
+    admin_id = create_admin(
         engine,
         SimClock(start),
         email="admin@example.invalid",

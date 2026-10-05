@@ -10,7 +10,6 @@ import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import time
-from fractions import Fraction
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -27,6 +26,7 @@ WEBHOOK_RE = re.compile(r"https://(discord\.com|discordapp\.com)/api/webhooks/\d
 # A Cloudflare account ID is 32 hex digits; it becomes part of the API URL path.
 ACCOUNT_ID_RE = re.compile(r"[0-9a-fA-F]{32}")
 API_TOKEN_RE = re.compile(r"[\w-]{20,200}")
+SMTP_TLS_MODES = ("starttls", "ssl", "none")
 COMMON_ZONES = (
     "America/New_York",
     "America/Chicago",
@@ -256,7 +256,7 @@ def smtp(form: Mapping[str, str]) -> Result:
     if "@" not in sender:
         errors["from_address"] = "Enter the From address."
     tls = form.get("tls", "starttls") or "starttls"
-    if tls not in ("starttls", "ssl", "none"):
+    if tls not in SMTP_TLS_MODES:
         errors["tls"] = "Choose STARTTLS, SSL/TLS or none."
     if errors:
         return {}, errors
@@ -301,8 +301,3 @@ def money_text(cents: int | None) -> str:
         return ""
     whole, frac = divmod(cents, 100)
     return f"{whole}" if frac == 0 else f"{whole}.{frac:02d}"
-
-
-def vig_from_fraction(hold: str) -> str:
-    value = Fraction(hold)
-    return next((k for k, v in VIG_PRESETS.items() if v == value), "-110")

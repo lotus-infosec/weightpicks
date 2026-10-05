@@ -10,11 +10,11 @@ from app.core.clock import SystemClock
 from app.core.db import make_engine
 from app.core.migrations import upgrade_to_head
 from app.models import Account, AuditEntry, User
-from app.services import auth, backups, leaderboard, ledger, maintenance
+from app.services import backups, leaderboard, ledger, maintenance
 from app.web.main import create_app
 from tests.integration import web
 from tests.integration.test_bets_settlement import player
-from tests.integration.world import World
+from tests.integration.world import World, create_admin
 
 
 def standings(w: World) -> list[tuple[str, int, int]]:
@@ -156,7 +156,7 @@ def test_web_answers_503_while_staged(world: World) -> None:
     w = world
     c = web.client(create_app(w.settings, domain_clock=w.clock))
     with c:
-        auth.create_admin(
+        create_admin(
             w.engine,
             SystemClock(),
             email="a@example.invalid",

@@ -21,9 +21,10 @@ from app.core.config import Settings
 from app.core.db import immediate, make_engine
 from app.core.migrations import upgrade_to_head
 from app.models import AiProposal, AiRun, InstanceSettingsRow, Market
-from app.services import ai_props, auth, instance, ledger, secrets, sim
+from app.services import ai_props, instance, ledger, secrets, sim
 from app.services.admin import Actor
 from tests.fake_ai import menu_model
+from tests.integration.world import create_admin
 
 pytestmark = pytest.mark.season
 
@@ -119,7 +120,7 @@ def week(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Week]:
     day = first + timedelta(days=WEEK)
     target = at(day, time(12, 0))
     sim.advance(engine, settings, target - now)
-    admin_id = auth.create_admin(
+    admin_id = create_admin(
         engine, SimClock(target), email="a@example.invalid", display_name="A", password="x" * 12
     )
     with engine.connect() as conn:

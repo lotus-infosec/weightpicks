@@ -10,7 +10,7 @@ from sqlalchemy import Engine, select, update
 from app.core.clock import SystemClock
 from app.core.db import immediate
 from app.models import InstanceSettingsRow
-from app.services import auth
+from tests.integration.world import create_admin
 
 PASSWORD = "correct horse battery"
 _CSRF = re.compile(r'name="csrf_token" value="([^"]+)"')
@@ -73,7 +73,7 @@ def log_in(c: TestClient, email: str, password: str = PASSWORD) -> None:
 
 
 def as_admin(c: TestClient, engine: Engine, email: str = "admin@example.invalid") -> None:
-    auth.create_admin(engine, SystemClock(), email=email, display_name="Admin", password=PASSWORD)
+    create_admin(engine, SystemClock(), email=email, display_name="Admin", password=PASSWORD)
     log_in(c, email)
 
 

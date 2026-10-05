@@ -192,7 +192,7 @@ def test_everyone_over_or_nobody_in_is_refunded(world: World) -> None:
     assert escrow(w, over) == 0
 
 
-def test_admin_refund_and_open_entries_block_a_bust(world: World) -> None:
+def test_admin_refund_and_a_pot_entry_blocks_a_bust(world: World) -> None:
     w = world
     p1 = player(w, 1, grant=5_000)
     pool_id = make(w, buy_in_cents=5_000)
@@ -202,17 +202,12 @@ def test_admin_refund_and_open_entries_block_a_bust(world: World) -> None:
         season = ledger.active_season_id(conn)
         assert season is not None
         assert busts.check(conn, w.clock, season) == []  # money is in the pot
-        assert pools.open_entries(conn, account_id_of(conn, p1)) == 1
         assert pools.refund_pool(conn, w.clock, pool_id, "admin_void") is True
         assert pools.refund_pool(conn, w.clock, pool_id, "admin_void") is False
     assert account(w, p1) == (5_000, 0)
     assert status(w, pool_id)[0] == "refunded"
     with w.engine.connect() as conn:
         assert conn.execute(select(Bust.id)).first() is None
-
-
-def account_id_of(conn: object, user: int) -> int:
-    return int(conn.execute(select(Account.id).where(Account.user_id == user)).scalar_one())  # type: ignore[attr-defined]
 
 
 def test_too_late_to_open(world: World) -> None:

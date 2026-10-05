@@ -1,11 +1,12 @@
 from datetime import timedelta
 from fractions import Fraction
+from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
-from sqlalchemy import Engine, func, select
+from sqlalchemy import Engine, func, insert, select
 
 from app.cli import main
 from app.core.clock import SimClock, SystemClock
@@ -322,20 +323,32 @@ def test_finish_refuses_a_database_with_data(keyed: Settings, migrated_engine: E
         assert conn.execute(select(func.count()).select_from(User)).scalar_one() == 0  # rolled back
 
 
-def test_existing_admin_counts_as_set_up(keyed: Settings, migrated_engine: Engine) -> None:
-    from app.services import auth
+def test_pre_setup_databases_are_marked_set_up_by_migration_0012(
+    keyed: Settings, engine: Engine, tmp_path: Path
+) -> None:
+    """Databases bootstrapped before /setup (an admin, no setup_completed_at) are marked
+    complete by migration 0012; an admin alone no longer counts."""
+    from alembic import command
 
-    auth.create_admin(
-        migrated_engine,
-        SystemClock(),
-        email="a@example.invalid",
-        display_name="A",
-        password=web.PASSWORD,
-    )
-    with migrated_engine.connect() as conn:
+    from app.core.migrations import _config, upgrade_to_head
+
+    with engine.begin() as conn:
+        command.upgrade(_config(conn), "0011")
+    with immediate(engine) as conn:
+        instance.ensure(conn, SystemClock(), keyed)
+        conn.execute(
+            insert(User).values(
+                email="a@example.invalid",
+                display_name="A",
+                password_hash="x",
+                role="admin",
+                status="active",
+                created_at=SystemClock().now(),
+            )
+        )
+        assert not setup.is_complete(conn)
+    upgrade_to_head(engine, tmp_path / ".migrate.lock")
+    with engine.connect() as conn:
         assert setup.is_complete(conn)
     with pytest.raises(SetupError, match="already complete"):
-        setup.issue_token(migrated_engine, SystemClock())
-    with web.client(create_app(keyed)) as c:
-        assert c.get("/setup").status_code == 404
-        assert c.get("/login").status_code == 200
+        setup.issue_token(engine, SystemClock())

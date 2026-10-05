@@ -30,7 +30,7 @@ from app.worker.jobs.season import GoalWatchJob
 from app.worker.registry import JobContext
 from tests.integration import web
 from tests.integration.test_bets_settlement import account, bet, player, selection, weight_market
-from tests.integration.world import NY, World, local, sync_sim
+from tests.integration.world import NY, World, create_admin, local, sync_sim
 
 GOAL_DAY = date(2026, 10, 11)  # first canonical weigh-in at or under 220.0 lb (219.4)
 GOAL_X10 = 2200
@@ -64,7 +64,7 @@ def yes_no_market(w: World, template: str, params: Any) -> int:
 
 
 def admin_actor(w: World) -> Actor:
-    admin_id = auth.create_admin(
+    admin_id = create_admin(
         w.engine, SystemClock(), email="a@example.invalid", display_name="A", password=web.PASSWORD
     )
     return Actor(user_id=admin_id)

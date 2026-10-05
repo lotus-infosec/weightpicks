@@ -26,7 +26,7 @@ from app.domain.markets import Timeframe
 from app.services import auth, instance, markets
 from app.services.ledger import open_season
 from app.web.main import create_app
-from tests.integration.world import local, mark_setup_done, sync_sim
+from tests.integration.world import create_admin, local, mark_setup_done, sync_sim
 
 
 @dataclass
@@ -279,9 +279,7 @@ def ops_server(tmp_path: Path) -> Iterator[OpsServer]:
     sim.advance(engine, settings, local(2026, 10, 5, 12) - start)  # first daily drop at 11:00
     clock = SimClock(local(2026, 10, 5, 12))
     admin_email, password = "admin@example.invalid", "correct horse battery"
-    auth.create_admin(
-        engine, SystemClock(), email=admin_email, display_name="Admin", password=password
-    )
+    create_admin(engine, SystemClock(), email=admin_email, display_name="Admin", password=password)
     mark_setup_done(engine, settings)
     with immediate(engine) as conn:  # no allowance, so the all-in loser really goes bust
         economy = instance.read(conn).economy.to_json() | {"daily_allowance_cents": 0}  # type: ignore[union-attr]
@@ -372,7 +370,7 @@ def _props_and_parlays(engine: Any, clock: SimClock) -> None:
                 flags=dict(flags) | {"props_futures": True, "parlays": True}
             )
         )
-    admin_id = auth.create_admin(
+    admin_id = create_admin(
         engine,
         SystemClock(),
         email="admin@example.invalid",

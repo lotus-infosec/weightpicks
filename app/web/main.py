@@ -33,7 +33,7 @@ from app.services import instance, maintenance
 from app.services import setup as setup_service
 from app.services.instance import InstanceConfig
 from app.web import format as fmt
-from app.web.security import BodyLimit, Forbidden, LoginRequired, csrf_protect
+from app.web.security import BodyLimit, Forbidden, LoginRequired, csrf_protect, wants_html
 
 WEB_DIR = Path(__file__).parent
 TEMPLATES_DIR = WEB_DIR / "templates"
@@ -313,7 +313,7 @@ def create_app(
 
     @app.exception_handler(LoginRequired)
     async def login_required(request: Request, _exc: LoginRequired) -> Response:
-        if request.method == "GET" and "HX-Request" not in request.headers:
+        if wants_html(request):
             return RedirectResponse("/login", status_code=303)
         return JSONResponse(
             {"ok": False, "reason": "login_required"},
@@ -323,7 +323,7 @@ def create_app(
 
     @app.exception_handler(Forbidden)
     async def forbidden(request: Request, _exc: Forbidden) -> Response:
-        if request.method == "GET" and "HX-Request" not in request.headers:
+        if wants_html(request):
             return templates.TemplateResponse(
                 request,
                 "error.html",

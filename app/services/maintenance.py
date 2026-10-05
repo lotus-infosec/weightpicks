@@ -22,13 +22,12 @@ from pathlib import Path
 from typing import Any
 
 import structlog
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine
 
 from app.core.clock import Clock, SystemClock
 from app.core.config import Settings
 from app.core.db import immediate
 from app.domain import backup as rules
-from app.models import Heartbeat
 from app.services import audit, backups, instance
 
 log = structlog.get_logger()
@@ -301,11 +300,3 @@ def record_done(engine: Engine, settings: Settings, clock: Clock) -> dict[str, A
         )
     path.unlink(missing_ok=True)
     return note
-
-
-def heartbeat_age(engine: Engine, now: datetime) -> timedelta | None:
-    with engine.connect() as conn:
-        beat = conn.execute(
-            select(Heartbeat.beat_at).where(Heartbeat.component == "worker")
-        ).scalar_one_or_none()
-    return None if beat is None else now - beat

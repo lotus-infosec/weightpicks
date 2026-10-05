@@ -1,8 +1,7 @@
 """The singleton instance settings row: the source of truth for zone, unit, schedule,
 enabled metrics, economy, appearance, flags and instance state (D-030, D-036).
 
-`/setup` writes it. Dev and tests may auto-create it from the environment defaults
-(`ensure`), which is also how pre-STAGE08 databases got theirs.
+`/setup` writes it. Tests create it from the environment defaults (`ensure`).
 """
 
 from dataclasses import asdict, dataclass, field

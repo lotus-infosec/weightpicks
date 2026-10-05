@@ -35,14 +35,14 @@ from tests.integration.test_bets_settlement import (
     to_settle_time,
     weight_market,
 )
-from tests.integration.world import World
+from tests.integration.world import World, create_admin
 
 PW = "correct horse battery"
 
 
 @pytest.fixture
 def boss(world: World) -> Actor:
-    admin_id = auth.create_admin(
+    admin_id = create_admin(
         world.engine,
         SystemClock(),
         email="admin@example.invalid",

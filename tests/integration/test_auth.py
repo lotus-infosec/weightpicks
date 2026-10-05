@@ -9,6 +9,7 @@ from app.core.db import immediate
 from app.models import Account, AuthAttempt, BannedEmail, Session, User
 from app.services import auth, ledger
 from app.services.auth import AuthError
+from tests.integration.world import create_admin
 
 PW = "correct horse battery"
 
@@ -208,17 +209,9 @@ def test_sessions_slide_expire_and_revoke(
     assert auth.resolve(migrated_engine, clock, "x" * 200) is None
 
 
-def test_admin_bootstrap_and_short_sessions(migrated_engine: Engine, clock: SimClock) -> None:
-    admin = auth.create_admin(
-        migrated_engine, clock, email="Admin@Example.invalid", display_name="Admin", password=PW
-    )
-    assert (
-        refused(
-            lambda: auth.create_admin(
-                migrated_engine, clock, email="b@example.invalid", display_name="B", password=PW
-            )
-        )
-        == "admin_exists"
+def test_admin_sessions_are_short(migrated_engine: Engine, clock: SimClock) -> None:
+    admin = create_admin(
+        migrated_engine, clock, email="admin@example.invalid", display_name="Admin", password=PW
     )
     new = login(migrated_engine, clock, email="admin@example.invalid")
     assert new.info.role == "admin" and new.info.user_id == admin

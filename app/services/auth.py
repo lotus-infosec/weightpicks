@@ -1,4 +1,4 @@
-"""Registration, login, sessions and the bootstrap helpers (BUILD_PLAN §1.6, D-034).
+"""Registration, login, sessions and registration codes (BUILD_PLAN §1.6, D-034).
 
 Every write path is one short BEGIN IMMEDIATE transaction; password hashing (slow by
 design) runs outside it where possible. Rate limits are counted from `auth_attempts`.
@@ -299,7 +299,7 @@ def revoke_all(conn: Connection, user_id: int) -> int:
     return conn.execute(delete(Session).where(Session.user_id == user_id)).rowcount
 
 
-# ---- bootstrap (CLI until /setup exists, D-034) ------------------------------------------------
+# ---- registration codes -------------------------------------------------------------------------
 
 
 def rotate_registration_code(engine: Engine, clock: Clock) -> str:
@@ -313,35 +313,3 @@ def rotate_registration_code(engine: Engine, clock: Clock) -> str:
             )
         )
     return code
-
-
-def create_admin(
-    engine: Engine, clock: Clock, *, email: str, display_name: str, password: str
-) -> int:
-    email = normalize_email(email)
-    name = " ".join(display_name.split())
-    if "@" not in email or not 1 <= len(name) <= MAX_NAME:
-        raise AuthError("invalid", "Enter an email address and a display name.")
-    problem = password_problem(password)
-    if problem:
-        raise AuthError("weak_password", problem)
-    password_hash = hash_password(password)
-    with immediate(engine) as conn:
-        if conn.execute(select(User.id).where(User.role == "admin")).first():
-            raise AuthError("admin_exists", "An admin already exists (one per instance).")
-        if conn.execute(select(User.id).where(User.email == email)).first():
-            raise AuthError("email_taken", "That email already has an account.")
-        user_id: int = conn.execute(
-            insert(User)
-            .values(
-                email=email,
-                display_name=name,
-                password_hash=password_hash,
-                role="admin",
-                status="active",
-                created_at=clock.now(),
-            )
-            .returning(User.id)
-        ).scalar_one()
-    log.info("admin_created", user_id=user_id)
-    return user_id

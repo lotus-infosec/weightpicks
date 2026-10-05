@@ -40,7 +40,6 @@ MAX_TOKENS = 600
 P_MIN, P_MAX = 0.08, 0.92
 OPEN_PROP_CAP = 8
 PROP_TIMEFRAMES = (Timeframe.PROP.value, Timeframe.FUTURE.value)
-KINDS = ("props_daily", "props_weekly", "props_manual")
 
 
 @dataclass(slots=True)

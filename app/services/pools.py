@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 import structlog
-from sqlalchemy import Connection, Engine, func, insert, select, update
+from sqlalchemy import Connection, Engine, insert, select, update
 
 from app.ai.text import problem
 from app.core.clock import Clock
@@ -431,15 +431,3 @@ def tick(engine: Engine, clock: Clock) -> PoolPass:
         p.settle_after for p in live if p.settle_after > now
     ]
     return PoolPass(locked, finished, min(upcoming) if upcoming else None)
-
-
-def open_entries(conn: Connection, account_id: int) -> int:
-    """Open pool entries on an account (they keep a player from going bust)."""
-    return int(
-        conn.execute(
-            select(func.count())
-            .select_from(PoolEntry)
-            .join(Pool, Pool.id == PoolEntry.pool_id)
-            .where(PoolEntry.account_id == account_id, Pool.status.in_((OPEN, LOCKED)))
-        ).scalar_one()
-    )

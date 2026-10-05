@@ -30,11 +30,12 @@ from app.models import (
     Season,
     Selection,
 )
-from app.services import auth, instance, ledger, pools, season, sim
+from app.services import instance, ledger, pools, season, sim
 from app.services.admin import Actor
 from app.services.bets import BetRejected, place_bet, place_parlay
 from app.services.observations import canonical_weigh_ins
 from app.services.users import ensure_player
+from tests.integration.world import create_admin
 
 pytestmark = pytest.mark.season
 
@@ -120,7 +121,7 @@ def run(tmp_path_factory: pytest.TempPathFactory) -> Iterator[GoalSeason]:
             account = ledger.open_player_account(conn, clock, season_id, user)
             ledger.grant_starting(conn, clock, account, 100_000, idempotency_key=f"g:{user}")
             users.append(user)
-    admin_id = auth.create_admin(
+    admin_id = create_admin(
         engine, SystemClock(), email="a@example.invalid", display_name="A", password="x" * 12
     )
     out = GoalSeason(engine, settings)

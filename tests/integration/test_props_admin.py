@@ -8,11 +8,11 @@ from sqlalchemy import select, update
 from app.core.clock import SystemClock
 from app.core.db import immediate
 from app.models import AuditEntry, InstanceSettingsRow, Market, OutboxMessage, Selection, Settlement
-from app.services import auth, instance, props, settlement
+from app.services import instance, props, settlement
 from app.services.admin import Actor
 from app.services.observations import canonical_weigh_ins
 from tests.integration.test_bets_settlement import series
-from tests.integration.world import NY, World, local, sync_sim
+from tests.integration.world import NY, World, create_admin, local, sync_sim
 
 
 def enable(w: World, on: bool = True) -> None:
@@ -24,7 +24,7 @@ def enable(w: World, on: bool = True) -> None:
 @pytest.fixture(autouse=True)
 def _admin(world: World) -> None:
     global ACTOR
-    admin_id = auth.create_admin(
+    admin_id = create_admin(
         world.engine, SystemClock(), email="a@example.invalid", display_name="A", password="x" * 12
     )
     ACTOR = Actor(user_id=admin_id)

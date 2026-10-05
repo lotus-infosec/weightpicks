@@ -8,7 +8,7 @@ from sqlalchemy import select, update
 from app.core.db import immediate
 from app.domain import parlay
 from app.domain.money import payout_cents
-from app.models import Bet, BetLeg, InstanceSettingsRow
+from app.models import Bet, BetLeg, InstanceSettingsRow, OutboxMessage
 from app.services import admin, settlement
 from app.services.bets import BetRejected, place_parlay
 from tests.integration.test_bets_settlement import (
@@ -129,6 +129,16 @@ def test_settlement_truths_through_real_markets(world: World) -> None:
         + STAKE
     )
     assert account(w, user)[0] == expected
+    with w.engine.connect() as conn:
+        posts = conn.execute(
+            select(OutboxMessage.category, OutboxMessage.payload).where(
+                OutboxMessage.dedupe_key.like("bet_result:%")
+            )
+        ).all()
+    parlay_posts = {p.payload["bet_id"]: p.category for p in posts if p.payload.get("kind")}
+    # Hits and busted parlays go to their own Discord category (CONCEPT §9).
+    assert set(parlay_posts.values()) == {"parlay_results"}
+    assert set(parlay_posts) == {b.bet_id for b in (both_win, early_loss, one_push, all_push)}
 
 
 def test_a_voided_market_drops_only_that_leg(world: World) -> None:

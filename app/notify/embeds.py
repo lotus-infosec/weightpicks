@@ -319,6 +319,7 @@ BUILDERS: dict[str, Callable[[str, dict[str, Any], Context], dict[str, Any]]] = 
     "bets_placed": _bet_placed,
     "high_roller": _bet_placed,
     "bet_results": _bet_result,
+    "parlay_results": _bet_result,
     "market_settlements": _market_settled,
     "busts": _bust,
     "new_markets": _new_markets,
