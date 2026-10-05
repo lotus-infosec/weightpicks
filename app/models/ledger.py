@@ -34,6 +34,10 @@ class Season(Base):
     start_weight_x10: Mapped[int | None]
     goal_weight_x10: Mapped[int | None]
     direction: Mapped[str | None] = mapped_column(String(4))  # down | up
+    # Goal Reached (STAGE14, D-011): when, and the canonical weigh-in that did it (None
+    # when the admin triggered it by hand without one).
+    goal_reached_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    goal_observation_id: Mapped[int | None]
 
 
 class User(Base):

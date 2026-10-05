@@ -77,7 +77,8 @@ def call(
     json_schema: dict[str, Any] | None = None,
 ) -> CallOutcome:
     if client is None:
-        return CallOutcome(record_skip(engine, real_clock, kind, "no_token"), None, "skipped")
+        skipped = record_skip(engine, real_clock, kind, "no_token")
+        return CallOutcome(skipped, None, "skipped", "no_token")
     text = "".join(m["content"] for m in messages)
     est_in, est_neurons = quota.estimate(model, text, max_tokens)
     with immediate(engine) as conn:

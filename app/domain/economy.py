@@ -27,6 +27,7 @@ class Economy:
     max_bet_cents: int | None = None  # none: all-in allowed
     max_parlay_legs: int = 6
     high_roller_cents: int = 50_000  # $500
+    pool_buyin_cents: int = 10_000  # $100: default special-event buy-in (D-043)
 
     def __post_init__(self) -> None:
         for name in ("starting_bankroll_cents", "daily_allowance_cents", "bailout_cents"):
@@ -45,6 +46,16 @@ class Economy:
             raise ValueError("parlays allow 2-12 legs")
         if self.high_roller_cents < 100:
             raise ValueError("the high-roller threshold must be at least $1")
+        if not 100 <= self.pool_buyin_cents <= self.max_pool_buyin_cents:
+            raise ValueError("the default pool buy-in must be $1 to half the starting bankroll")
+
+    @property
+    def max_pool_buyin_cents(self) -> int:
+        """Buy-ins are clamped to $1 ... half the starting bankroll (D-043)."""
+        return max(100, self.starting_bankroll_cents // 2)
+
+    def clamp_pool_buyin(self, cents: int) -> int:
+        return min(max(cents, 100), self.max_pool_buyin_cents)
 
     @property
     def vig_preset(self) -> str:

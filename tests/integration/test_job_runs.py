@@ -89,6 +89,7 @@ def test_registered_jobs_have_unique_names(
     assert names == [
         "heartbeat",
         "garmin_sync",
+        "goal_watch",
         "daily_drop",
         "weekly_drop",
         "monthly_drop",
@@ -97,6 +98,7 @@ def test_registered_jobs_have_unique_names(
         "ai_hype",
         "lock_markets",
         "settle_markets",
+        "pools_tick",
         "daily_allowance",
         "weekly_standings",
         "ledger_verify",

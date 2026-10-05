@@ -247,3 +247,20 @@ def recent_outbox(conn: Connection, limit: int = 10) -> list[Any]:
             .limit(limit)
         ).all()
     )
+
+
+def pools(conn: Connection, limit: int = 30) -> list[dict[str, Any]]:
+    """Special events, newest first, each with its entries (D-043)."""
+    from app.models import Pool, PoolEntry, User
+
+    rows = conn.execute(select(Pool).order_by(Pool.id.desc()).limit(limit)).all()
+    out: list[dict[str, Any]] = []
+    for p in rows:
+        entries = conn.execute(
+            select(User.display_name, PoolEntry.guess_x10, PoolEntry.payout_cents)
+            .join(User, User.id == PoolEntry.user_id)
+            .where(PoolEntry.pool_id == p.id)
+            .order_by(PoolEntry.created_at, PoolEntry.id)
+        ).all()
+        out.append({"pool": p, "entries": entries, "pot_cents": p.buy_in_cents * len(entries)})
+    return out

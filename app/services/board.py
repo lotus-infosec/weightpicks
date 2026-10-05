@@ -5,7 +5,7 @@ only, never emails (bets are public by design, BUILD_PLAN §1.3).
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import Connection, case, select
@@ -13,7 +13,18 @@ from sqlalchemy import Connection, case, select
 from app.domain import parlay
 from app.domain.ledger import AccountKind
 from app.domain.markets import MarketStatus
-from app.models import Account, Bet, BetLeg, Market, OddsVersion, Selection, Settlement, User
+from app.models import (
+    Account,
+    Bet,
+    BetLeg,
+    Market,
+    OddsVersion,
+    Pool,
+    PoolEntry,
+    Selection,
+    Settlement,
+    User,
+)
 from app.services.ledger import active_season_id
 
 
@@ -224,8 +235,11 @@ def _bets(conn: Connection, *conditions: Any, limit: int = 50) -> list[BetRow]:
     return out
 
 
-def my_bets(conn: Connection, user_id: int) -> list[BetRow]:
-    return _bets(conn, Bet.user_id == user_id, limit=200)
+def my_bets(conn: Connection, user_id: int, season_id: int | None = None) -> list[BetRow]:
+    """A player's bets; with `season_id`, only that season's (the season switcher)."""
+    if season_id is None:
+        return _bets(conn, Bet.user_id == user_id, limit=200)
+    return _bets(conn, Bet.user_id == user_id, Bet.season_id == season_id, limit=200)
 
 
 def feed(conn: Connection, limit: int = 50) -> list[BetRow]:
@@ -246,3 +260,85 @@ def wallet(conn: Connection, user_id: int) -> Wallet | None:
         )
     ).one_or_none()
     return None if row is None else Wallet(row.balance_cents, row.pnl_cents)
+
+
+# ---- special events (pools, D-043) --------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class PoolCard:
+    pool_id: int
+    title: str
+    question: str
+    target_date: date
+    buy_in_cents: int
+    lock_at: datetime
+    status: str  # open | locked | settled | refunded
+    entries: int
+    pot_cents: int
+    my_guess_x10: int | None
+    result_x10: int | None
+    # Everyone's guesses, shown only once the pool is locked (hidden while it's open).
+    guesses: tuple[tuple[str, int, int | None], ...] = ()  # (name, guess, payout)
+
+    @property
+    def open(self) -> bool:
+        return self.status == "open"
+
+
+def pools(
+    conn: Connection, user_id: int, now: datetime, season_id: int | None = None
+) -> list[PoolCard]:
+    """This season's pools for the Events tab: open ones first, then recent results."""
+    season_id = season_id or active_season_id(conn)
+    rows = conn.execute(
+        select(Pool)
+        .where(Pool.season_id == season_id)
+        .order_by((Pool.status == "open").desc(), Pool.target_date, Pool.id.desc())
+        .limit(20)
+    ).all()
+    cards: list[PoolCard] = []
+    for p in rows:
+        entries = conn.execute(
+            select(
+                PoolEntry.user_id,
+                User.display_name,
+                User.status,
+                PoolEntry.guess_x10,
+                PoolEntry.payout_cents,
+            )
+            .join(User, User.id == PoolEntry.user_id)
+            .where(PoolEntry.pool_id == p.id)
+            .order_by(PoolEntry.created_at, PoolEntry.id)
+        ).all()
+        mine = next((e.guess_x10 for e in entries if e.user_id == user_id), None)
+        status = "locked" if p.status == "open" and now >= p.lock_at else p.status
+        shown = (
+            tuple(
+                (
+                    "Removed player" if e.status == "banned" else e.display_name,  # D-012
+                    e.guess_x10,
+                    e.payout_cents,
+                )
+                for e in entries
+            )
+            if status != "open"
+            else ()
+        )
+        cards.append(
+            PoolCard(
+                p.id,
+                p.title,
+                p.question,
+                p.target_date,
+                p.buy_in_cents,
+                p.lock_at,
+                status,
+                len(entries),
+                p.buy_in_cents * len(entries),
+                mine,
+                p.result_x10,
+                shown,
+            )
+        )
+    return cards

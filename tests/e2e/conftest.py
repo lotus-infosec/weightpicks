@@ -167,6 +167,7 @@ def rich_server(tmp_path: Path) -> Iterator[RichServer]:
     mark_setup_done(engine, settings)
     _props_and_parlays(engine, clock)
     _ai_props(engine, clock)
+    _special_event(engine, clock)
     engine.dispose()
 
     port = _free_port()
@@ -451,3 +452,28 @@ def _ai_props(engine: Any, clock: SimClock) -> None:
                 created_at=now,
             )
         )
+
+
+def _special_event(engine: Any, clock: SimClock) -> None:
+    """STAGE14: special events on, one open pot with an entry from Alex (p2)."""
+    from sqlalchemy import select, update
+
+    from app.models import InstanceSettingsRow, User
+    from app.services import pools
+
+    with immediate(engine) as conn:
+        flags = conn.execute(select(InstanceSettingsRow.flags)).scalar_one() or {}
+        conn.execute(
+            update(InstanceSettingsRow).values(flags=dict(flags) | {"special_events": True})
+        )
+        config = instance.read(conn)
+        alex = conn.execute(select(User.id).where(User.display_name == "Alex")).scalar_one()
+    assert config is not None
+    raw = {
+        "title": "Columbus Day pot",
+        "question": "What will the scale say on Monday morning, Oct 12?",
+        "target_date": "2026-10-12",
+        "buy_in_cents": 2_500,
+    }
+    pool_id = pools.create(engine, clock, pools.validate(config, clock.now(), raw), actor_id=None)
+    pools.enter(engine, clock, user_id=alex, pool_id=pool_id, guess_x10=2185)

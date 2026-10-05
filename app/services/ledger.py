@@ -393,6 +393,136 @@ def refund(
     )
 
 
+def carry_over(
+    conn: Connection, clock: Clock, account_id: int, amount_cents: int, *, idempotency_key: str
+) -> PostResult:
+    """Last season's ending balance, minted into the player's new-season account. Not a
+    betting kind, so the new season's P&L starts at 0 (D-043)."""
+    _require_positive(amount_cents)
+    return _transfer(
+        conn,
+        clock,
+        kind=EntryKind.SEASON_CARRY,
+        source=AccountKind.MINT,
+        player_account_id=account_id,
+        amount_cents=amount_cents,
+        idempotency_key=idempotency_key,
+    )
+
+
+# ---- pools (special events) -----------------------------------------------------------
+
+
+def open_pool_account(conn: Connection, clock: Clock, season_id: int) -> int:
+    """A fresh escrow account for one pool."""
+    account_id: int = conn.execute(
+        insert(Account)
+        .values(
+            kind=AccountKind.POOL.value,
+            season_id=season_id,
+            balance_cents=0,
+            pnl_cents=0,
+            created_at=clock.now(),
+        )
+        .returning(Account.id)
+    ).scalar_one()
+    return account_id
+
+
+def _pool_move(
+    conn: Connection,
+    clock: Clock,
+    *,
+    kind: EntryKind,
+    escrow_account_id: int,
+    player_account_id: int,
+    to_player_cents: int,
+    idempotency_key: str,
+    pool_id: int,
+) -> PostResult:
+    return post_txn(
+        conn,
+        clock,
+        kind=kind,
+        entries=[
+            Entry(escrow_account_id, -to_player_cents, kind),
+            Entry(player_account_id, to_player_cents, kind),
+        ],
+        idempotency_key=idempotency_key,
+        ref_type="pool",
+        ref_id=pool_id,
+    )
+
+
+def pool_buyin(
+    conn: Connection,
+    clock: Clock,
+    account_id: int,
+    escrow_account_id: int,
+    amount_cents: int,
+    *,
+    pool_id: int,
+    idempotency_key: str,
+) -> PostResult:
+    _require_positive(amount_cents)
+    return _pool_move(
+        conn,
+        clock,
+        kind=EntryKind.POOL_BUYIN,
+        escrow_account_id=escrow_account_id,
+        player_account_id=account_id,
+        to_player_cents=-amount_cents,
+        idempotency_key=idempotency_key,
+        pool_id=pool_id,
+    )
+
+
+def pool_payout(
+    conn: Connection,
+    clock: Clock,
+    account_id: int,
+    escrow_account_id: int,
+    amount_cents: int,
+    *,
+    pool_id: int,
+    idempotency_key: str,
+) -> PostResult:
+    _require_positive(amount_cents)
+    return _pool_move(
+        conn,
+        clock,
+        kind=EntryKind.POOL_PAYOUT,
+        escrow_account_id=escrow_account_id,
+        player_account_id=account_id,
+        to_player_cents=amount_cents,
+        idempotency_key=idempotency_key,
+        pool_id=pool_id,
+    )
+
+
+def pool_refund(
+    conn: Connection,
+    clock: Clock,
+    account_id: int,
+    escrow_account_id: int,
+    amount_cents: int,
+    *,
+    pool_id: int,
+    idempotency_key: str,
+) -> PostResult:
+    _require_positive(amount_cents)
+    return _pool_move(
+        conn,
+        clock,
+        kind=EntryKind.POOL_REFUND,
+        escrow_account_id=escrow_account_id,
+        player_account_id=account_id,
+        to_player_cents=amount_cents,
+        idempotency_key=idempotency_key,
+        pool_id=pool_id,
+    )
+
+
 # ---- verification -----------------------------------------------------------------
 
 

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% from "admin/_reauth.html" import password %}
+{% block title %}Events · Admin{% endblock %}
+{% block content %}
+<h1>Special events</h1>
+{% if not enabled %}<p class="alert">Special events are turned off. Turn them on in <a href="/admin/discord">Settings</a>.</p>{% endif %}
+{% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+<p class="muted">A Price Is Right pot: everyone buys in once and guesses your weight on the target date. Closest without going over takes the pot (ties split it). Code settles it from the scale; if nobody is under, or there's no weigh-in that day, everyone is refunded.</p>
+
+{% if ai_configured %}
+<section class="card">
+  <h2>Describe it</h2>
+  <form method="post" action="/admin/events/draft" class="stack" data-testid="event-ai-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>In your own words <textarea name="text" rows="3" maxlength="500" placeholder="Thanksgiving pot, $200, guess my weight Thanksgiving morning">{{ form.text or "" }}</textarea></label>
+    <button type="submit" class="ghost">Draft it with AI</button>
+  </form>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>{{ "Check and edit" if draft else "Or fill it in" }}</h2>
+  <form method="post" action="/admin/events/preview" class="stack" data-testid="event-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>Title <input type="text" name="title" maxlength="80" value="{{ form.title or '' }}" required></label>
+    <label>Question <input type="text" name="question" maxlength="300" value="{{ form.question or '' }}" required></label>
+    <div class="row wrap">
+      <label>Target date <input type="date" name="target_date" min="{{ min_day }}" max="{{ max_day }}" value="{{ form.target_date or '' }}" required></label>
+      <label>Buy-in ($) <input type="text" inputmode="decimal" name="buy_in" value="{{ form.buy_in or ('%.2f'|format(default_buyin)) }}" required></label>
+    </div>
+    <p class="muted small">Buy-in $1 to ${{ "%.2f"|format(max_buyin) }}. Entries lock the night before the target date at the bet lock.</p>
+    <button type="submit">Preview</button>
+  </form>
+</section>
+
+{% if draft %}
+<section class="card" data-testid="event-preview">
+  <h2>Preview</h2>
+  <p><strong>{{ draft.title }}</strong></p>
+  <p>{{ draft.question }}</p>
+  <p class="small">Weight on <strong>{{ draft.target_date.strftime("%a %b %-d") }}</strong> · buy-in <strong>{{ draft.buy_in_cents | money }}</strong> · locks {{ draft.lock_at | local_time }}{% if projected %} · trend projects about {{ "%.1f"|format(projected) }} {{ unit }}{% endif %}</p>
+  {% for n in notes %}<p class="muted small">{{ n }}</p>{% endfor %}
+  <form method="post" action="/admin/events/publish" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    {% for k in ("title", "question", "target_date", "buy_in", "ai_run_id") %}<input type="hidden" name="{{ k }}" value="{{ form[k] or '' }}">{% endfor %}
+    {{ password() }}
+    <button type="submit" class="primary" {{ "disabled" if not enabled }}>Publish</button>
+  </form>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Events</h2>
+  {% if not pools %}<p class="muted">No special events yet.</p>{% endif %}
+  <ul class="plain stack" data-testid="pools">
+  {% for item in pools %}{% set p = item.pool %}
+    <li class="proposal">
+      <p><strong>{{ p.title }}</strong> <span class="badge status-{{ p.status }}">{{ p.status }}</span></p>
+      <p class="small">{{ p.target_date.strftime("%a %b %-d") }} · buy-in {{ p.buy_in_cents | money }} · {{ item.entries | length }} in · pot {{ item.pot_cents | money }}{% if p.result_x10 %} · actual {{ "%.1f"|format(p.result_x10 / 10) }} {{ unit }}{% endif %}</p>
+      {% if item.entries %}<p class="muted small">{% for e in item.entries %}{{ e.display_name }} {{ "%.1f"|format(e.guess_x10 / 10) }}{% if e.payout_cents %} (+{{ e.payout_cents | money }}){% endif %}{{ ", " if not loop.last }}{% endfor %}</p>{% endif %}
+      {% if p.status in ("open", "locked") %}
+      <details>
+        <summary class="small">Void and refund</summary>
+        <form method="post" action="/admin/events/{{ p.id }}/void" class="stack">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          {{ password() }}
+          <button type="submit" class="danger-button">Void and refund everyone</button>
+        </form>
+      </details>
+      {% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+</section>
+{% endblock %}

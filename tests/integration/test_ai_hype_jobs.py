@@ -211,4 +211,4 @@ def test_run_now_command(world: World) -> None:
         status, result = conn.execute(select(Command.status, Command.result)).one()
         kind = conn.execute(select(AiRun.kind)).scalar_one()
     assert status == "done" and result["ai_status"] == "skipped"
-    assert result["ai_reason"] is None and kind == "props_manual"
+    assert result["ai_reason"] == "no_token" and kind == "props_manual"

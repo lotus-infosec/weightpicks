@@ -252,6 +252,64 @@ def _hype(category: str, p: dict[str, Any], ctx: Context) -> dict[str, Any]:
     )
 
 
+POOL_REASONS = {
+    "nobody_eligible": "every guess was over",
+    "no_weigh_in": "there was no weigh-in that day",
+    "no_entries": "nobody entered",
+    "goal_reached": "the goal was reached first",
+    "admin_void": "the admin called it off",
+}
+
+
+def _special_event(category: str, p: dict[str, Any], ctx: Context) -> dict[str, Any]:
+    kind = p.get("kind")
+    url = f"{ctx.base_url}/?tab=events"
+    if kind == "pool_open":
+        text = (
+            f"{safe(p.get('question'), 300)}\nBuy-in **{money(p.get('buy_in_cents'))}** · "
+            f"guess the weigh-in on **{safe(p.get('target_date'))}**. Closest without going over "
+            "takes the pot."
+        )
+        return _embed(ctx, category, f"New pot: {safe(p.get('title'), 200)}", text, GOLD, url=url)
+    if kind == "pool_result" and p.get("status") == "settled":
+        names = ", ".join(safe(ctx.user_name(u), 64) for u in p.get("winners", []))
+        text = (
+            f"The scale said **{number(p.get('result_x10'))}**. {names or 'Nobody'} "
+            f"{'take' if len(p.get('winners', [])) > 1 else 'takes'} "
+            f"**{money(p.get('share_cents'))}** of the {money(p.get('pot_cents'))} pot."
+        )
+        return _embed(
+            ctx, category, f"{safe(p.get('title'), 200)}: we have a winner", text, GREEN, url=url
+        )
+    if kind == "pool_result":
+        why = POOL_REASONS.get(str(p.get("reason")), "it couldn't be decided")
+        text = f"Everyone gets their buy-in back: {why}."
+        return _embed(ctx, category, f"{safe(p.get('title'), 200)}: refunded", text, GREY, url=url)
+    return _fallback(category, p, ctx)
+
+
+def _goal(category: str, p: dict[str, Any], ctx: Context) -> dict[str, Any]:
+    if p.get("kind") == "season_start":
+        text = (
+            f"Season {p.get('season')} starts at **{number(p.get('start_x10'))}** with a goal of "
+            f"**{number(p.get('goal_x10'))}**. Balances carried over; new lines drop at the "
+            "next drop time."
+        )
+        return _embed(ctx, category, "A new season begins", text, BLUE, url=ctx.base_url)
+    lines = [
+        f"Season {p.get('season')}: **{number(p.get('start_x10'))} → {number(p.get('goal_x10'))}**"
+        + (f" in {p.get('days')} days." if p.get("days") is not None else "."),
+    ]
+    if p.get("value_x10") is not None:
+        lines.append(f"Goal weigh-in: **{number(p.get('value_x10'))}** on {safe(p.get('day'))}.")
+    lines.append("Every bet is settled or refunded and betting is frozen.")
+    medals = ("1st", "2nd", "3rd")
+    for medal, row in zip(medals, p.get("top", []), strict=False):
+        name = safe(ctx.user_name(row.get("user_id")), 64)
+        lines.append(f"{medal}: {name} ({signed_money(row.get('pnl_cents'))})")
+    return _embed(ctx, category, "GOAL REACHED", "\n".join(lines), GOLD, url=ctx.base_url)
+
+
 def _fallback(category: str, p: dict[str, Any], ctx: Context) -> dict[str, Any]:
     text = safe(p.get("text") or p.get("title") or CATEGORY_LABELS.get(category, category), 1000)
     return _embed(ctx, category, CATEGORY_LABELS.get(category, category), text, BLURPLE)
@@ -267,6 +325,8 @@ BUILDERS: dict[str, Callable[[str, dict[str, Any], Context], dict[str, Any]]] = 
     "weekly_standings": _standings,
     "admin_alerts": _alert,
     "hype": _hype,
+    "special_events": _special_event,
+    "goal_reached": _goal,
 }
 
 
