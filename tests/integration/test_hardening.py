@@ -7,6 +7,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.clock import SystemClock
+from app.domain import setup as steps
+from app.domain.units import parse_tenths
 from app.services import auth
 from app.web.main import create_app
 from app.web.security import CSRF_COOKIE, MAX_BODY_BYTES, UPLOAD_LIMITS
@@ -167,3 +169,67 @@ def test_missing_tunnel_header_is_logged_once_in_production(
     with web.client(create_app(world.settings, domain_clock=world.clock)) as dev:
         dev.get("/login")
     assert "cf_header_missing" not in capsys.readouterr().out
+
+
+# ---- S4 (#21): an account-wide login failure limit across IPs ------------------------------
+
+
+def test_rotating_ips_does_not_buy_more_guesses(world: World, player: TestClient) -> None:
+    email = "player1@example.invalid"
+    clock = SystemClock()
+    for n in range(auth.LOGIN_FAILS_PER_ACCOUNT):
+        with pytest.raises(auth.AuthError):
+            auth.login(
+                world.engine,
+                clock,
+                email=email,
+                password="wrong" * 3,
+                ip=f"198.51.100.{n}",
+                user_agent=None,
+            )
+    with pytest.raises(auth.AuthError) as refused:
+        auth.login(
+            world.engine,
+            clock,
+            email=email,
+            password=web.PASSWORD,
+            ip="192.0.2.77",
+            user_agent=None,
+        )
+    assert refused.value.code == "rate_limited"
+
+
+# ---- S6 (#23): integration inputs ------------------------------------------------------------
+
+
+def test_workers_ai_and_webhook_inputs_are_strict() -> None:
+    assert steps.workers_ai_problem("f" * 32, "fake" * 6) == {}
+    for bad in ("acct/../x", "f" * 31, "f" * 32 + "?x=1", "g" * 32):
+        assert "workers_ai.account_id" in steps.workers_ai_problem(bad, "")
+    assert "workers_ai.token" in steps.workers_ai_problem("", "has space in it fakefake")
+    good = "https://discord.com/api/webhooks/1/abc-DEF_1"
+    assert steps.webhook_problem(good) is None
+    assert steps.webhook_problem(good + "\n") is not None
+
+
+# ---- S7 (#24): bounded money and weight parsing --------------------------------------------
+
+
+def test_weight_parsing_is_plain_decimal_only() -> None:
+    assert parse_tenths("212.45") == 2125 and parse_tenths("1,212.4") == 12124
+    for bad in ("2e2", "1e300", "NaN", "-5", "", "12345", "inf"):
+        assert parse_tenths(bad) is None, bad
+
+
+def test_huge_admin_adjustment_is_a_form_error_not_a_500(world: World, admin: TestClient) -> None:
+    r = admin.post(
+        "/admin/bank/adjust",
+        data={
+            "csrf_token": web.page_csrf(admin, "/admin/bank"),
+            "user_id": "2",
+            "amount": "1e30",
+            "reason": "x",
+            "admin_password": web.PASSWORD,
+        },
+    )
+    assert r.status_code == 400 and "Enter an amount" in r.text

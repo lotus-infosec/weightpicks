@@ -56,7 +56,7 @@ STEP_FORMS: dict[int, dict[str, str]] = {
     },
     5: {"metric_steps": "on", "metric_workouts": "on"},
     6: {"ack": "1"},
-    7: {"account_id": "acct-1", "token": "ai-token-xyz"},
+    7: {"account_id": "f" * 32, "token": "fake" * 6},
     8: {"webhook_bets_placed": WEBHOOK},
     9: {"host": ""},
     10: {},
@@ -197,7 +197,7 @@ def test_full_wizard_creates_the_instance(keyed: Settings, migrated_engine: Engi
         row = conn.execute(select(InstanceSettingsRow)).one()
         config = instance.read(conn)
         assert secrets.get(conn, KEY, "webhook.bets_placed") == WEBHOOK
-        assert secrets.get(conn, KEY, "workers_ai.token") == "ai-token-xyz"
+        assert secrets.get(conn, KEY, "workers_ai.token") == "fake" * 6
         stored = conn.execute(select(Secret.ciphertext)).scalars().all()
         accounts = (
             conn.execute(select(Account.kind).where(Account.season_id == season.id)).scalars().all()

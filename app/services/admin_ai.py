@@ -11,6 +11,7 @@ from app.ai import quota
 from app.core.clock import Clock
 from app.core.crypto import SecretKeyMissing, WrongSecretKey
 from app.core.db import immediate
+from app.domain import setup as setup_steps
 from app.models import AdminNote, AiRun, InstanceSettingsRow
 from app.services import audit
 from app.services import secrets as secret_store
@@ -60,8 +61,9 @@ def set_workers_ai(
     account_id, token = account_id.strip(), token.strip()
     if not clear and not (account_id or token):
         raise AdminError("empty", "Enter the account ID and token, or tick Clear.")
-    if len(account_id) > 64 or len(token) > 200 or any(c.isspace() for c in account_id + token):
-        raise AdminError("bad_value", "That doesn't look like a Cloudflare account ID or token.")
+    problems = {} if clear else setup_steps.workers_ai_problem(account_id, token)
+    if problems:
+        raise AdminError("bad_value", " ".join(problems.values()))
     with immediate(engine) as conn:
         if clear:
             for name in SECRET_NAMES:

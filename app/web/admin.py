@@ -2,7 +2,6 @@
 destructive and money actions re-prompt for the admin's password."""
 
 from datetime import date, timedelta
-from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +14,8 @@ from starlette.background import BackgroundTask
 from app.core.security import verify_password
 from app.domain import setup as setup_steps
 from app.domain.economy import VIG_PRESETS, Economy
+from app.domain.money import parse_cents
+from app.domain.units import parse_tenths
 from app.models import Command, Market, User
 from app.notify import email as email_settings
 from app.services import (
@@ -75,28 +76,6 @@ MESSAGES = {
     "smtp_test": "Test email queued to your address. It should arrive within a minute.",
 }
 REAUTH_FAILED_MESSAGE = "That's not your password. Nothing was changed."
-
-
-def _tenths(raw: str) -> int | None:
-    """'212.4' -> 2124 (tenths of the unit), or None."""
-    try:
-        value = Decimal(raw.replace(",", "").strip())
-    except (InvalidOperation, ValueError):
-        return None
-    if not value.is_finite() or value <= 0 or value > 1500:
-        return None
-    return int((value * 10).to_integral_value())
-
-
-def _cents(raw: str) -> int | None:
-    """'-12.50' -> -1250 (signed, whole cents)."""
-    try:
-        value = Decimal(raw.replace("$", "").replace(",", "").strip())
-    except (InvalidOperation, ValueError):
-        return None
-    if not value.is_finite() or value != value.quantize(Decimal("0.01")):
-        return None
-    return int(value * 100)
 
 
 def build_router() -> APIRouter:
@@ -352,7 +331,7 @@ def build_router() -> APIRouter:
                 )
                 return back("/admin/bank", "bailout")
             if action == "adjust":
-                amount = _cents(form.get("amount", ""))
+                amount = parse_cents(form.get("amount", ""))
                 if amount is None:
                     return bank_page(request, "Enter an amount like 25 or -12.50.", status=400)
                 await run_in_threadpool(
@@ -726,7 +705,7 @@ def build_router() -> APIRouter:
         )
 
     def _event_raw(form: dict[str, str]) -> dict[str, Any]:
-        cents = _cents(form.get("buy_in", ""))
+        cents = parse_cents(form.get("buy_in", ""))
         return {
             "title": form.get("title", ""),
             "question": form.get("question", ""),
@@ -891,8 +870,8 @@ def build_router() -> APIRouter:
                 if done is None:
                     return season_page(request, "Goal Reached already ran for this season.", 409)
                 return back("/admin/season", "goal")
-            start = _tenths(form.get("start_weight", ""))
-            goal = _tenths(form.get("goal_weight", ""))
+            start = parse_tenths(form.get("start_weight", ""))
+            goal = parse_tenths(form.get("goal_weight", ""))
             if start is None or goal is None:
                 return season_page(request, "Enter both weights, like 212.4.", 400)
             await run_in_threadpool(

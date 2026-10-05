@@ -7,22 +7,21 @@ outbox row holds the token encrypted (Fernet) until the email is sent, then drop
 Setting a new password ends every session of that account.
 """
 
-import hashlib
 import secrets as pysecrets
 from datetime import timedelta
 
 import structlog
-from sqlalchemy import Connection, Engine, func, insert, select, update
+from sqlalchemy import Connection, Engine, insert, select, update
 
 from app.core.clock import Clock
 from app.core.config import Settings
 from app.core.crypto import SecretKeyMissing, derive_fernet
 from app.core.db import immediate
-from app.core.security import hash_password, password_problem
+from app.core.security import hash_password, password_problem, token_hash
 from app.models import AuthAttempt, PasswordReset, User
 from app.notify import email
 from app.services import audit
-from app.services.auth import revoke_all
+from app.services.auth import count_attempts, revoke_all
 from app.services.outbox import Category, enqueue
 from app.services.users import normalize_email
 
@@ -44,21 +43,6 @@ def enabled(conn: Connection, settings: Settings) -> bool:
     return email.configured(conn) and bool(settings.app_secret_key.get_secret_value())
 
 
-def _hash(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
-
-
-def _attempts(conn: Connection, since: object, **where: object) -> int:
-    query = (
-        select(func.count())
-        .select_from(AuthAttempt)
-        .where(AuthAttempt.kind == "reset", AuthAttempt.ts > since)
-    )
-    for key, value in where.items():
-        query = query.where(getattr(AuthAttempt, key) == value)
-    return int(conn.execute(query).scalar_one())
-
-
 def request(engine: Engine, clock: Clock, settings: Settings, *, address: str, ip: str) -> None:
     """Send a reset link if the address belongs to an active account. Silent otherwise;
     raises ResetError only for rate limits (same answer for any address)."""
@@ -69,8 +53,8 @@ def request(engine: Engine, clock: Clock, settings: Settings, *, address: str, i
         now = clock.now()
         hour = now - timedelta(hours=1)
         if (
-            _attempts(conn, hour, ip=ip) >= PER_IP_PER_HOUR
-            or _attempts(conn, hour, email=normalized) >= PER_EMAIL_PER_HOUR
+            count_attempts(conn, "reset", hour, ip=ip) >= PER_IP_PER_HOUR
+            or count_attempts(conn, "reset", hour, email=normalized) >= PER_EMAIL_PER_HOUR
         ):
             raise ResetError("rate_limited", "Too many requests. Try again in an hour.")
         conn.execute(
@@ -92,7 +76,10 @@ def request(engine: Engine, clock: Clock, settings: Settings, *, address: str, i
         reset_id = conn.execute(
             insert(PasswordReset)
             .values(
-                user_id=user, token_hash=_hash(token), created_at=now, expires_at=now + TOKEN_TTL
+                user_id=user,
+                token_hash=token_hash(token),
+                created_at=now,
+                expires_at=now + TOKEN_TTL,
             )
             .returning(PasswordReset.id)
         ).scalar_one()
@@ -117,7 +104,7 @@ def _usable(conn: Connection, clock: Clock, token: str) -> int | None:
     row = conn.execute(
         select(
             PasswordReset.id, PasswordReset.user_id, PasswordReset.expires_at, PasswordReset.used_at
-        ).where(PasswordReset.token_hash == _hash(token))
+        ).where(PasswordReset.token_hash == token_hash(token))
     ).one_or_none()
     if row is None or row.used_at is not None or row.expires_at <= clock.now():
         return None

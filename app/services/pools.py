@@ -21,6 +21,7 @@ from app.domain import pools as rules
 from app.domain.ledger import AccountKind, InsufficientFunds
 from app.domain.schedule import at_local, local_date
 from app.domain.settlement import readiness
+from app.domain.units import parse_tenths
 from app.models import Account, Pool, PoolEntry, User
 from app.services import audit, instance, ledger
 from app.services.instance import InstanceConfig
@@ -176,10 +177,9 @@ def create(
 
 
 def parse_guess(raw: str) -> int:
-    try:
-        value = round(float(raw.replace(",", "").strip()) * 10)
-    except ValueError as exc:
-        raise PoolError("guess", "Enter your guess as a weight, like 212.4.") from exc
+    value = parse_tenths(raw)
+    if value is None:
+        raise PoolError("guess", "Enter your guess as a weight, like 212.4.")
     if not MIN_GUESS_X10 <= value <= MAX_GUESS_X10:
         raise PoolError("guess", "That guess isn't a plausible weight.")
     return value

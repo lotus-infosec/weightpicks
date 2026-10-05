@@ -235,14 +235,13 @@ def build_router() -> APIRouter:
                 data.get("admin", {}).get("password_hash"),
             )
         elif step.key == "ai":
-            keep_or_set(
-                "workers_ai.account_id",
-                form.get("account_id", "").strip(),
-                form.get("clear") == "on",
-            )
-            keep_or_set(
-                "workers_ai.token", form.get("token", "").strip(), form.get("clear") == "on"
-            )
+            account_id, token = form.get("account_id", "").strip(), form.get("token", "").strip()
+            clear = form.get("clear") == "on"
+            problems = {} if clear else steps.workers_ai_problem(account_id, token)
+            errors.update(problems)
+            if not problems:
+                keep_or_set("workers_ai.account_id", account_id, clear)
+                keep_or_set("workers_ai.token", token, clear)
             values = {"configured": "workers_ai.token" in secrets_map}
         elif step.key == "discord":
             for category in WEBHOOK_CATEGORIES:
