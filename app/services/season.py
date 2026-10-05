@@ -112,7 +112,7 @@ def goal_reached(
     clock: Clock,
     *,
     hit: Hit | None = None,
-    actor: admin.Actor | None = None,
+    actor: audit.Actor | None = None,
 ) -> GoalResult | None:
     """Run Goal Reached for the current season (D-011). None if it already ran."""
     with immediate(engine) as conn:
@@ -148,9 +148,7 @@ def goal_reached(
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id if actor else None,
-            ts=actor.acted_at if actor else None,
-            ip=actor.ip if actor else None,
+            actor,
             action="season.goal_reached",
             target=("season", season.id),
             after={
@@ -236,7 +234,7 @@ def goal_reached(
 # ---- freeze / unfreeze -------------------------------------------------------------------
 
 
-def set_frozen(engine: Engine, clock: Clock, actor: admin.Actor, frozen: bool) -> None:
+def set_frozen(engine: Engine, clock: Clock, actor: audit.Actor, frozen: bool) -> None:
     with immediate(engine) as conn:
         season = _season(conn)
         if not frozen and season is not None and season.status == "frozen":
@@ -251,9 +249,7 @@ def set_frozen(engine: Engine, clock: Clock, actor: admin.Actor, frozen: bool) -
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
-            ip=actor.ip,
+            actor,
             action="instance.freeze" if frozen else "instance.unfreeze",
             target=("settings", 1),
             before={"state": before},
@@ -265,7 +261,7 @@ def set_frozen(engine: Engine, clock: Clock, actor: admin.Actor, frozen: bool) -
 
 
 def new_season(
-    engine: Engine, clock: Clock, actor: admin.Actor, *, start_x10: int, goal_x10: int
+    engine: Engine, clock: Clock, actor: audit.Actor, *, start_x10: int, goal_x10: int
 ) -> int:
     """End the current season and start the next with balances carried over (D-043)."""
     if start_x10 <= 0 or goal_x10 <= 0 or start_x10 == goal_x10:
@@ -339,9 +335,7 @@ def new_season(
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
-            ip=actor.ip,
+            actor,
             action="season.new",
             target=("season", season_id),
             before={"season_id": old.id if old else None},

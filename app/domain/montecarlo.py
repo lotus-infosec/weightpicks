@@ -8,7 +8,6 @@ Templates are vectorised functions from the path matrix to per-path outcomes:
 1.0 yes, 0.0 no, NaN push.
 """
 
-import hashlib
 import math
 from collections.abc import Callable
 from typing import Any, Literal
@@ -24,12 +23,6 @@ N_PATHS = 5_000
 Paths = NDArray[np.float64]  # shape (paths, days); column j is day j + 1
 Outcomes = NDArray[np.float64]
 Template = Callable[[Paths], Outcomes]
-
-
-def mc_seed(market_id: int, odds_version: int) -> int:
-    """Stable seed from (market, version) so prices reproduce in tests and audits."""
-    digest = hashlib.sha256(f"{market_id}:{odds_version}".encode()).digest()
-    return int.from_bytes(digest[:8], "big") >> 1
 
 
 def simulate_paths(
@@ -105,18 +98,6 @@ def streak_reaches(
                 ok = window < previous  # NaN on either side -> False (breaks)
         run = np.sum(np.cumprod(ok, axis=1), axis=1)
         return _as_outcome(current_streak + run >= n)
-
-    return template
-
-
-def future_value_over(*, day: int, line: float) -> Template:
-    """The weigh-in on `day` is over `line`; a missed weigh-in pushes (NaN)."""
-
-    def template(paths: Paths) -> Outcomes:
-        values = paths[:, day - 1]
-        with np.errstate(invalid="ignore"):
-            over = (values > line).astype(np.float64)
-        return np.where(np.isnan(values), np.nan, over)
 
     return template
 

@@ -134,4 +134,3 @@ def test_step_lookup_and_missing() -> None:
         "appearance",
     ]
     assert s.money_text(100_050) == "1000.50" and s.money_text(None) == ""
-    assert s.vig_from_fraction("1/12") == "-120"

@@ -10,19 +10,23 @@ import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import time
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from fractions import Fraction
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.domain.economy import VIG_PRESETS, Economy
 from app.domain.markets import COUNT_MARKET_METRICS, METRIC_LABELS, Schedule
+from app.domain.money import parse_cents
+from app.domain.units import parse_tenths
 
 Errors = dict[str, str]
 Result = tuple[dict[str, Any], Errors]
 PALETTES = {"ember": "Ember", "lagoon": "Lagoon", "grove": "Grove", "slate": "Slate"}
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
-WEBHOOK_RE = re.compile(r"^https://(discord\.com|discordapp\.com)/api/webhooks/\d+/[\w-]+$")
+WEBHOOK_RE = re.compile(r"https://(discord\.com|discordapp\.com)/api/webhooks/\d+/[\w-]+")
+# A Cloudflare account ID is 32 hex digits; it becomes part of the API URL path.
+ACCOUNT_ID_RE = re.compile(r"[0-9a-fA-F]{32}")
+API_TOKEN_RE = re.compile(r"[\w-]{20,200}")
+SMTP_TLS_MODES = ("starttls", "ssl", "none")
 COMMON_ZONES = (
     "America/New_York",
     "America/Chicago",
@@ -66,29 +70,6 @@ def _text(form: Mapping[str, str], key: str) -> str:
     return " ".join(form.get(key, "").split())
 
 
-def _weight_x10(raw: str) -> int | None:
-    """'212.4' -> 2124 (tenths, rounded half-up once, like ingest)."""
-    try:
-        value = Decimal(raw.strip())
-    except (InvalidOperation, ValueError):
-        return None
-    if not value.is_finite():
-        return None
-    return int((value * 10).quantize(Decimal(1), rounding=ROUND_HALF_UP))
-
-
-def _cents(raw: str) -> int | None:
-    """'$1,000.50' -> 100050; whole cents only."""
-    cleaned = raw.replace("$", "").replace(",", "").strip()
-    try:
-        value = Decimal(cleaned)
-    except (InvalidOperation, ValueError):
-        return None
-    if not value.is_finite() or value != value.quantize(Decimal("0.01")):
-        return None
-    return int(value * 100)
-
-
 def _wall(raw: str) -> time | None:
     try:
         return time.fromisoformat(raw.strip())
@@ -109,8 +90,8 @@ def subject(form: Mapping[str, str]) -> Result:
         errors["unit"] = "Choose lb or kg."
     low, high = (60, 1500) if unit != "kg" else (30, 700)
     start, goal = (
-        _weight_x10(form.get("start_weight", "")),
-        _weight_x10(form.get("goal_weight", "")),
+        parse_tenths(form.get("start_weight", "")),
+        parse_tenths(form.get("goal_weight", "")),
     )
     for key, value in (("start_weight", start), ("goal_weight", goal)):
         if value is None or not low * 10 <= value <= high * 10:
@@ -177,12 +158,12 @@ def economy(form: Mapping[str, str]) -> Result:
     errors: Errors = {}
     money = {}
     for key in ("starting_bankroll", "daily_allowance", "bailout", "high_roller"):
-        cents = _cents(form.get(key, ""))
+        cents = parse_cents(form.get(key, ""))
         if cents is None or cents < 0:
             errors[key] = "Enter a dollar amount like 1000 or 12.50."
         money[key] = cents or 0
     max_bet_raw = form.get("max_bet", "").strip()
-    max_bet = None if max_bet_raw == "" else _cents(max_bet_raw)
+    max_bet = None if max_bet_raw == "" else parse_cents(max_bet_raw)
     if max_bet_raw and max_bet is None:
         errors["max_bet"] = "Enter a dollar amount, or leave empty for no maximum."
     ints = {}
@@ -197,7 +178,7 @@ def economy(form: Mapping[str, str]) -> Result:
         errors["vig"] = "Choose a vig."
     # Optional (the /setup wizard doesn't ask): blank means the default, clamped (D-043).
     pool_raw = form.get("pool_buyin", "").strip()
-    pool_buyin = _cents(pool_raw) if pool_raw else None
+    pool_buyin = parse_cents(pool_raw) if pool_raw else None
     if pool_raw and (pool_buyin is None or pool_buyin < 100):
         errors["pool_buyin"] = "Enter a dollar amount of at least 1."
     if errors:
@@ -242,8 +223,19 @@ def appearance(form: Mapping[str, str]) -> Result:
     return ({}, errors) if errors else ({"app_name": name, "palette": palette}, {})
 
 
+def workers_ai_problem(account_id: str, token: str) -> dict[str, str]:
+    """Errors keyed by secret name for the Workers AI account ID and token (blank means
+    keep what is stored)."""
+    errors: dict[str, str] = {}
+    if account_id and not ACCOUNT_ID_RE.fullmatch(account_id):
+        errors["workers_ai.account_id"] = "A Cloudflare account ID is 32 characters (0-9, a-f)."
+    if token and not API_TOKEN_RE.fullmatch(token):
+        errors["workers_ai.token"] = "That doesn't look like a Cloudflare API token."
+    return errors
+
+
 def webhook_problem(url: str) -> str | None:
-    if url and not WEBHOOK_RE.match(url):
+    if url and not WEBHOOK_RE.fullmatch(url):
         return "Paste a Discord webhook URL (https://discord.com/api/webhooks/...)."
     return None
 
@@ -264,7 +256,7 @@ def smtp(form: Mapping[str, str]) -> Result:
     if "@" not in sender:
         errors["from_address"] = "Enter the From address."
     tls = form.get("tls", "starttls") or "starttls"
-    if tls not in ("starttls", "ssl", "none"):
+    if tls not in SMTP_TLS_MODES:
         errors["tls"] = "Choose STARTTLS, SSL/TLS or none."
     if errors:
         return {}, errors
@@ -309,8 +301,3 @@ def money_text(cents: int | None) -> str:
         return ""
     whole, frac = divmod(cents, 100)
     return f"{whole}" if frac == 0 else f"{whole}.{frac:02d}"
-
-
-def vig_from_fraction(hold: str) -> str:
-    value = Fraction(hold)
-    return next((k for k, v in VIG_PRESETS.items() if v == value), "-110")

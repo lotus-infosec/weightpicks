@@ -20,12 +20,12 @@ from app.models import (
     Market,
     OddsVersion,
     Pool,
-    PoolEntry,
     Selection,
     Settlement,
     User,
 )
 from app.services.ledger import active_season_id
+from app.services.pools import entries_by_pool
 
 
 @dataclass(frozen=True, slots=True)
@@ -298,19 +298,9 @@ def pools(
         .limit(20)
     ).all()
     cards: list[PoolCard] = []
+    all_entries = entries_by_pool(conn, [p.id for p in rows])
     for p in rows:
-        entries = conn.execute(
-            select(
-                PoolEntry.user_id,
-                User.display_name,
-                User.status,
-                PoolEntry.guess_x10,
-                PoolEntry.payout_cents,
-            )
-            .join(User, User.id == PoolEntry.user_id)
-            .where(PoolEntry.pool_id == p.id)
-            .order_by(PoolEntry.created_at, PoolEntry.id)
-        ).all()
+        entries = all_entries[p.id]
         mine = next((e.guess_x10 for e in entries if e.user_id == user_id), None)
         status = "locked" if p.status == "open" and now >= p.lock_at else p.status
         shown = (

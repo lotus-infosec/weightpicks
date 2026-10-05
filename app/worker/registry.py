@@ -6,6 +6,13 @@ the unique constraint means a period can only ever be claimed once, so repeated
 ticks, restarts and catch-up never run anything twice. A failed run stays
 recorded as `error` for that period.
 
+A worker that dies mid-job (OOM, power loss, `docker kill`) leaves its claim as
+`running`. There is one worker per instance, so at start-up any `running` claim is
+from a dead process: `recover_interrupted` removes it and the period runs again on
+the next tick. That is safe because every job is idempotent by itself (drops have a
+dedupe key, allowances a ledger idempotency key, posts an outbox dedupe key) and its
+writes are one transaction, so a crash either committed all of it or none.
+
 A job with `every_tick = True` (e.g. `lock_markets`) is idempotent by itself and runs
 on every tick without a `job_runs` row; it is reported as run when it returns a
 truthy value (it did something).
@@ -17,7 +24,7 @@ from datetime import datetime
 from typing import Protocol
 
 import structlog
-from sqlalchemy import Engine, insert, update
+from sqlalchemy import Engine, delete, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.core.clock import Clock
@@ -55,6 +62,22 @@ def _claim(engine: Engine, job: str, period_key: str, now: datetime) -> int | No
             return result.scalar_one()
     except IntegrityError:
         return None
+
+
+def recover_interrupted(engine: Engine) -> list[tuple[str, str]]:
+    """At worker start-up: release claims a dead worker left `running` so they re-run.
+    Returns the (job, period_key) pairs released."""
+    with immediate(engine) as conn:
+        stuck = [
+            (row.job, row.period_key)
+            for row in conn.execute(
+                select(JobRun.job, JobRun.period_key).where(JobRun.status == "running")
+            )
+        ]
+        conn.execute(delete(JobRun).where(JobRun.status == "running"))
+    for job, period_key in stuck:
+        log.warning("job_interrupted_rerun", job=job, period_key=period_key)
+    return stuck
 
 
 def _finish(engine: Engine, run_id: int, status: str, at: datetime, error: str | None) -> None:

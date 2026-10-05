@@ -1,8 +1,8 @@
 """First-run setup: the one-time token, the setup session, the wizard draft and the
 finish transaction (BUILD_PLAN §1.5, D-036).
 
-- Setup is complete once `settings.setup_completed_at` is set, or (for databases
-  bootstrapped before STAGE08) once an admin exists.
+- Setup is complete once `settings.setup_completed_at` is set (migration 0012 set it
+  for databases bootstrapped before /setup existed).
 - The token is 32 random bytes; only its SHA-256 is stored, valid 24 h. Entering it
   starts a setup session (HttpOnly cookie, hash stored in `setup_draft`, 2 h sliding).
   Wrong tokens are limited to 5 per IP per hour.
@@ -63,9 +63,7 @@ def is_complete(conn: Connection) -> bool:
     done = conn.execute(
         select(InstanceSettingsRow.setup_completed_at).where(InstanceSettingsRow.id == 1)
     ).scalar_one_or_none()
-    if done is not None:
-        return True
-    return conn.execute(select(User.id).where(User.role == "admin")).first() is not None
+    return done is not None
 
 
 # ---- token ------------------------------------------------------------------------------

@@ -51,13 +51,13 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --frozen
-      - run: uv run pytest -q -m "not perf and not calibration and not e2e" --cov --cov-report=term-missing:skip-covered
+      - run: uv run pytest -q -m "not perf and not calibration and not e2e and not load" --cov --cov-report=term-missing:skip-covered
       - name: Coverage gate (app/domain and app/services >= 95%)
         run: uv run coverage report --include='app/domain/*,app/services/*' --fail-under=95
       - name: Performance budgets and calibration (no coverage instrumentation)
         env:
           PERF_BUDGET_SCALE: "2"  # shared runners are ~2x slower than the dev machine
-        run: uv run pytest -q -m "perf or calibration" -s
+        run: uv run pytest -q -m "perf or calibration or load" -s
 
   e2e:
     runs-on: ubuntu-24.04

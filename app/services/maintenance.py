@@ -22,13 +22,12 @@ from pathlib import Path
 from typing import Any
 
 import structlog
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine
 
 from app.core.clock import Clock, SystemClock
 from app.core.config import Settings
 from app.core.db import immediate
 from app.domain import backup as rules
-from app.models import Heartbeat
 from app.services import audit, backups, instance
 
 log = structlog.get_logger()
@@ -72,21 +71,8 @@ def _write_action(settings: Settings, action: dict[str, Any]) -> None:
     tmp.replace(folder / ACTION)  # the action appears atomically, after everything else
 
 
-def _audit(engine: Engine, clock: Clock, actor: Any, action: str, after: dict[str, Any]) -> None:
-    with immediate(engine) as conn:
-        audit.record(
-            conn,
-            clock,
-            actor_id=getattr(actor, "user_id", None),
-            ts=getattr(actor, "acted_at", None),
-            ip=getattr(actor, "ip", None),
-            action=action,
-            after=after,
-        )
-
-
 def stage_restore(
-    engine: Engine, settings: Settings, clock: Clock, actor: Any, archive: Path
+    engine: Engine, settings: Settings, clock: Clock, actor: audit.Actor | None, archive: Path
 ) -> rules.Manifest:
     """Verify a backup and stage it; it's applied at the next container start."""
     if pending_action(settings) is not None:
@@ -104,7 +90,7 @@ def stage_restore(
         raise MaintenanceError("bad_backup", "The staged copy failed checks.")
     m = checked.manifest
     details = {"source": archive.name, "created_at": m.created_at, "revision": m.revision}
-    _audit(engine, clock, actor, "maintenance.restore_staged", details)
+    audit.record_alone(engine, clock, actor, action="maintenance.restore_staged", after=details)
     _write_action(
         settings,
         {"kind": "restore", "staged_at": SystemClock().now().isoformat(), **details},
@@ -114,7 +100,13 @@ def stage_restore(
 
 
 def stage_reset(
-    engine: Engine, settings: Settings, clock: Clock, actor: Any, *, confirm: str, wipe_garmin: bool
+    engine: Engine,
+    settings: Settings,
+    clock: Clock,
+    actor: audit.Actor | None,
+    *,
+    confirm: str,
+    wipe_garmin: bool,
 ) -> None:
     """Stage a factory reset. `confirm` must be the instance name, exactly."""
     if pending_action(settings) is not None:
@@ -124,7 +116,9 @@ def stage_reset(
     name = config.app_name if config else "WeightPicks"
     if confirm.strip() != name:
         raise MaintenanceError("confirm", f'Type the instance name "{name}" exactly to confirm.')
-    _audit(engine, clock, actor, "maintenance.reset_staged", {"wipe_garmin": wipe_garmin})
+    audit.record_alone(
+        engine, clock, actor, action="maintenance.reset_staged", after={"wipe_garmin": wipe_garmin}
+    )
     _write_action(
         settings,
         {"kind": "reset", "wipe_garmin": wipe_garmin, "staged_at": SystemClock().now().isoformat()},
@@ -297,15 +291,11 @@ def record_done(engine: Engine, settings: Settings, clock: Clock) -> dict[str, A
         return None
     with immediate(engine) as conn:
         audit.record(
-            conn, clock, actor_id=None, action=f"maintenance.{note.get('kind')}_applied", after=note
+            conn,
+            clock,
+            None,
+            action=f"maintenance.{note.get('kind')}_applied",
+            after=note,
         )
     path.unlink(missing_ok=True)
     return note
-
-
-def heartbeat_age(engine: Engine, now: datetime) -> timedelta | None:
-    with engine.connect() as conn:
-        beat = conn.execute(
-            select(Heartbeat.beat_at).where(Heartbeat.component == "worker")
-        ).scalar_one_or_none()
-    return None if beat is None else now - beat

@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine, insert
+from sqlalchemy import insert
 
 from app.core.clock import SimClock, SystemClock
 from app.core.db import immediate
@@ -60,17 +60,14 @@ def test_apply_proceeds_when_the_worker_heartbeat_is_stale(world: World) -> None
     assert maintenance.apply(w.settings, wait_seconds=1, poll=0.01).status == "reset"
 
 
-def test_record_done_ignores_garbage_and_heartbeat_age(world: World) -> None:
+def test_record_done_ignores_garbage(world: World) -> None:
     w = world
     (Path(w.settings.data_dir) / maintenance.DONE).write_text("{bad")
     assert maintenance.record_done(w.engine, w.settings, SystemClock()) is None
-    assert maintenance.heartbeat_age(w.engine, SystemClock().now()) is None
 
 
 def test_backup_edge_cases(world: World) -> None:
     w = world
-    with pytest.raises(ValueError, match="file-based"):
-        backups.db_path(create_engine("sqlite://"))
     good = backups.create(w.engine, w.settings, w.clock)
     twice = good.parent / "wp-twice.tar.gz"
     with tarfile.open(good, "r:gz") as src, tarfile.open(twice, "w:gz") as out:

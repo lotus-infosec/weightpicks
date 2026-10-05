@@ -3,13 +3,14 @@
 import re
 
 from fastapi import FastAPI
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, select, update
 
 from app.core.clock import SystemClock
 from app.core.db import immediate
 from app.models import InstanceSettingsRow
-from app.services import auth
+from tests.integration.world import create_admin
 
 PASSWORD = "correct horse battery"
 _CSRF = re.compile(r'name="csrf_token" value="([^"]+)"')
@@ -19,6 +20,21 @@ _META = re.compile(r'<meta name="csrf-token" content="([^"]*)"')
 def client(app: FastAPI) -> TestClient:
     """HTTPS base URL so the Secure session cookie is sent back, like a real browser."""
     return TestClient(app, base_url="https://testserver")
+
+
+def api_routes(app: FastAPI) -> list[APIRoute]:
+    """Every route, including those inside included routers."""
+
+    def walk(routes: list[object]) -> list[APIRoute]:
+        found: list[APIRoute] = []
+        for r in routes:
+            if isinstance(r, APIRoute):
+                found.append(r)
+            elif hasattr(r, "original_router"):  # include_router wrapper
+                found += walk(r.original_router.routes)
+        return found
+
+    return walk(list(app.routes))
 
 
 def open_registration(engine: Engine) -> None:
@@ -57,7 +73,7 @@ def log_in(c: TestClient, email: str, password: str = PASSWORD) -> None:
 
 
 def as_admin(c: TestClient, engine: Engine, email: str = "admin@example.invalid") -> None:
-    auth.create_admin(engine, SystemClock(), email=email, display_name="Admin", password=PASSWORD)
+    create_admin(engine, SystemClock(), email=email, display_name="Admin", password=PASSWORD)
     log_in(c, email)
 
 

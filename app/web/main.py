@@ -1,6 +1,8 @@
 """FastAPI app factory: security headers, CSRF, sessions, pages and health checks."""
 
 import contextlib
+import time
+import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -31,7 +33,7 @@ from app.services import instance, maintenance
 from app.services import setup as setup_service
 from app.services.instance import InstanceConfig
 from app.web import format as fmt
-from app.web.security import Forbidden, LoginRequired, csrf_protect
+from app.web.security import BodyLimit, Forbidden, LoginRequired, csrf_protect, wants_html
 
 WEB_DIR = Path(__file__).parent
 TEMPLATES_DIR = WEB_DIR / "templates"
@@ -160,6 +162,24 @@ def restart_container() -> None:
         log.warning("restart_required", hint="restart the app to apply the staged action")
 
 
+def log_request(request: Request, status: int, started: float, request_id: str) -> None:
+    """One JSON line per request (uvicorn's access log is off). The route *template* is
+    logged, never the raw path, so tokens in URLs (/reset/{token}) stay out of the logs."""
+    route = request.scope.get("route")
+    path = getattr(route, "path", None) or (
+        "/static" if request.url.path.startswith("/static/") else "<unmatched>"
+    )
+    level = log.debug if path in ("/healthz", "/static") else log.info
+    level(
+        "request",
+        method=request.method,
+        route=path,
+        status=status,
+        ms=round((time.perf_counter() - started) * 1000, 1),
+        request_id=request_id,
+    )
+
+
 def announce_setup_token(engine: Engine, clock: Clock) -> None:
     """On a fresh instance, issue the one-time setup token and print it to the logs
     (the plan's channel: `docker compose logs web | grep SETUP`). Hash-only in the DB."""
@@ -212,6 +232,7 @@ def create_app(
     app.state.live = live
     app.state.setup_done = False  # cached once true; only a factory reset undoes it
     app.state.restart = restart_container  # after staging a restore/reset (tests replace it)
+    app.state.tunnel_warned = False
 
     def refresh() -> bool | None:
         """Load the settings row; None if the schema isn't ready yet."""
@@ -256,15 +277,43 @@ def create_app(
     async def security_headers(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        response = await call_next(request)
+        request_id = uuid.uuid4().hex[:16]
+        structlog.contextvars.bind_contextvars(request_id=request_id)
+        started = time.perf_counter()
+        try:
+            warn_without_tunnel(request)
+            response = await call_next(request)
+        finally:
+            structlog.contextvars.unbind_contextvars("request_id")
         response.headers.update(SECURITY_HEADERS)
+        response.headers["X-Request-ID"] = request_id
         if not request.url.path.startswith(("/static/", "/brand/")):
             response.headers["Cache-Control"] = "no-store"
+        log_request(request, response.status_code, started, request_id)
         return response
+
+    def warn_without_tunnel(request: Request) -> None:
+        """R13: behind cloudflared every request carries CF-Connecting-IP. Without it, client
+        IPs (and so the rate limits) are the proxy's, and the header could be forged by
+        whoever can reach the port. Logged once per process; the health check is exempt."""
+        if (
+            settings.is_dev
+            or app.state.tunnel_warned
+            or request.url.path == "/healthz"
+            or "CF-Connecting-IP" in request.headers
+        ):
+            return
+        app.state.tunnel_warned = True
+        log.warning(
+            "cf_header_missing",
+            hint="serve the app only through the Cloudflare tunnel (WP_BIND=127.0.0.1:8000)",
+        )
+
+    app.add_middleware(BodyLimit)  # outermost: caps bodies before anything reads them
 
     @app.exception_handler(LoginRequired)
     async def login_required(request: Request, _exc: LoginRequired) -> Response:
-        if request.method == "GET" and "HX-Request" not in request.headers:
+        if wants_html(request):
             return RedirectResponse("/login", status_code=303)
         return JSONResponse(
             {"ok": False, "reason": "login_required"},
@@ -274,7 +323,7 @@ def create_app(
 
     @app.exception_handler(Forbidden)
     async def forbidden(request: Request, _exc: Forbidden) -> Response:
-        if request.method == "GET" and "HX-Request" not in request.headers:
+        if wants_html(request):
             return templates.TemplateResponse(
                 request,
                 "error.html",

@@ -11,6 +11,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from app.domain.economy import Economy
 from app.services import auth, board, instance, leaderboard, password_reset, pools, stats
 from app.services.auth import AuthError, SessionInfo
 from app.services.bets import BetRejected, place_bet, place_parlay
@@ -267,15 +268,11 @@ def build_router() -> APIRouter:
 
     # ---- player pages -------------------------------------------------------------------
 
-    @router.get("/")
-    def board_page(request: Request, tab: str = "daily") -> Response:
-        session = current_session(request)
-        if session is None:
-            return RedirectResponse("/login", status_code=303)
-        if session.role == "admin":
-            return RedirectResponse("/admin", status_code=303)
+    def board_context(request: Request, user_id: int, tab: str) -> dict[str, Any]:
+        """The board page or one of its tabs: the tabs the flags allow, the cards, the wallet."""
         state = request.app.state
-        flags = state.live.config.flags if state.live.config else {}
+        config = state.live.config
+        flags = config.flags if config else {}
         tabs = (
             TABS
             + (PROP_TABS if flags.get("props_futures") else ())
@@ -284,18 +281,24 @@ def build_router() -> APIRouter:
         tab = tab if tab in tabs else "daily"
         now = state.domain_clock.now()
         with state.engine.connect() as conn:
-            cards = board.open_markets(conn, tab, now) if tab != "events" else []
-            pool_cards = board.pools(conn, session.user_id, now) if tab == "events" else []
-            wallet = board.wallet(conn, session.user_id)
-        context = {
-            "tab": tab,
-            "tabs": tabs,
-            "cards": cards,
-            "pools": pool_cards,
-            "wallet": wallet,
-            "parlays": bool(flags.get("parlays")),
-            "max_legs": state.live.config.economy.max_parlay_legs if state.live.config else 6,
-        }
+            return {
+                "tab": tab,
+                "tabs": tabs,
+                "cards": board.open_markets(conn, tab, now) if tab != "events" else [],
+                "pools": board.pools(conn, user_id, now) if tab == "events" else [],
+                "wallet": board.wallet(conn, user_id),
+                "parlays": bool(flags.get("parlays")),
+                "max_legs": config.economy.max_parlay_legs if config else Economy().max_parlay_legs,
+            }
+
+    @router.get("/")
+    def board_page(request: Request, tab: str = "daily") -> Response:
+        session = current_session(request)
+        if session is None:
+            return RedirectResponse("/login", status_code=303)
+        if session.role == "admin":
+            return RedirectResponse("/admin", status_code=303)
+        context = board_context(request, session.user_id, tab)
         if "HX-Request" in request.headers:
             return render(request, "_board_tab.html", context)
         return render(request, "board.html", context)
@@ -394,26 +397,11 @@ def build_router() -> APIRouter:
             message, ok = ("You're in. Good luck!" if new else "Guess updated."), True
         except pools.PoolError as exc:
             message, status = exc.message, 409
-        flags = state.live.config.flags if state.live.config else {}
-        tabs = (
-            TABS
-            + (PROP_TABS if flags.get("props_futures") else ())
-            + (EVENT_TABS if flags.get("special_events") else ())
-        )
-        now = state.domain_clock.now()
-        with state.engine.connect() as conn:
-            context = {
-                "tab": "events",
-                "tabs": tabs,
-                "cards": [],
-                "pools": board.pools(conn, session.user_id, now),
-                "wallet": board.wallet(conn, session.user_id),
-                "pool_message": message,
-                "pool_ok": ok,
-                "pool_id": pool_id,
-                "parlays": bool(flags.get("parlays")),
-                "max_legs": 6,
-            }
+        context = board_context(request, session.user_id, "events") | {
+            "pool_message": message,
+            "pool_ok": ok,
+            "pool_id": pool_id,
+        }
         name = "_board_tab.html" if "HX-Request" in request.headers else "board.html"
         return render(request, name, context, status if name == "board.html" else 200)
 

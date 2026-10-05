@@ -387,7 +387,7 @@ def reevaluate_parlay(conn: Connection, clock: Clock, bet_id: int, now: datetime
     enqueue(
         conn,
         clock,
-        category=Category.BET_RESULTS,
+        category=Category.PARLAY_RESULTS,  # CONCEPT §9: hits and busted parlays
         payload={
             "bet_id": bet_id,
             "user_id": bet.user_id,

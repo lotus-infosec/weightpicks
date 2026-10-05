@@ -4,7 +4,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from app.domain.money import ZERO, Money, payout_cents
+from app.domain.money import MAX_AMOUNT_CENTS, ZERO, Money, parse_cents, payout_cents
 
 stakes = st.integers(min_value=1, max_value=10_000_000)
 american_odds = st.one_of(
@@ -39,14 +39,16 @@ def test_money_formats_as_dollars(cents: int, text: str) -> None:
     ("text", "cents"),
     [("1,234.56", 123456), ("$1,000", 100000), ("-12.5", -1250), ("0.05", 5), (" 7 ", 700)],
 )
-def test_money_parse_is_exact(text: str, cents: int) -> None:
-    assert Money.parse(text) == Money(cents)
+def test_parse_cents_is_exact(text: str, cents: int) -> None:
+    assert parse_cents(text) == cents
 
 
-@pytest.mark.parametrize("bad", ["1.234", "abc", "", "1e3", "NaN", "$-", "1..2"])
-def test_money_parse_rejects_bad_input(bad: str) -> None:
-    with pytest.raises(ValueError):
-        Money.parse(bad)
+@pytest.mark.parametrize(
+    "bad",
+    ["1.234", "abc", "", "1e3", "1e30", "NaN", "Infinity", "$-", "1..2", "1_000", "10000001"],
+)
+def test_parse_cents_rejects_bad_input(bad: str) -> None:
+    assert parse_cents(bad) is None  # S7 (#24): no exponents, nothing over $10M
 
 
 def test_money_arithmetic_and_ordering() -> None:
@@ -63,9 +65,9 @@ def test_money_arithmetic_and_ordering() -> None:
         a * 1.5  # type: ignore[operator]
 
 
-@given(st.integers(min_value=-(10**12), max_value=10**12))
+@given(st.integers(min_value=-MAX_AMOUNT_CENTS, max_value=MAX_AMOUNT_CENTS))
 def test_money_str_round_trips_through_parse(cents: int) -> None:
-    assert Money.parse(str(Money(cents))) == Money(cents)
+    assert parse_cents(str(Money(cents))) == cents
 
 
 # ---- Payout ------------------------------------------------------------------

@@ -7,8 +7,6 @@ from scipy.stats import norm
 from app.domain.lines import UNIT_PARAMS, WeightFit
 from app.domain.montecarlo import (
     N_PATHS,
-    future_value_over,
-    mc_seed,
     milestone_by,
     price_yes_no,
     simulate_paths,
@@ -35,12 +33,6 @@ FIT = make_fit()
 nan = np.nan
 
 
-def test_seed_is_stable_and_distinct() -> None:
-    assert mc_seed(7, 1) == mc_seed(7, 1)
-    assert len({mc_seed(7, 1), mc_seed(7, 2), mc_seed(8, 1)}) == 3
-    assert 0 <= mc_seed(7, 1) < 2**63
-
-
 def test_paths_reproducible_by_seed() -> None:
     a = simulate_paths(FIT, 30, p_weigh_in=0.85, seed=42, unit="lb")
     b = simulate_paths(FIT, 30, p_weigh_in=0.85, seed=42, unit="lb")
@@ -58,14 +50,14 @@ SEEDS = range(1, 5)  # 4 x 5,000 paths: sampling error ~0.35 points
 
 def test_future_value_matches_closed_form_within_one_point() -> None:
     h = 7
-    runs = [simulate_paths(FIT, h, p_weigh_in=1.0, seed=mc_seed(1, s), unit="lb") for s in SEEDS]
+    runs = [simulate_paths(FIT, h, p_weigh_in=1.0, seed=1000 + s, unit="lb") for s in SEEDS]
     mean = FIT.a + FIT.b * h
     fitted_var = FIT.var_a + 2 * h * FIT.cov_ab + h * h * FIT.var_b
     sd = math.sqrt(FIT.sigma**2 + fitted_var + h * UNIT_PARAMS["lb"].drift_q)
     for offset in (-1.0, -0.3, 0.0, 0.4, 1.2):
         line = round(mean + offset, 1) + 0.05  # half-tenth line: rounding is unbiased
         closed = float(norm.sf((line - mean) / sd))
-        each = [float(np.nanmean(future_value_over(day=h, line=line)(p))) for p in runs]
+        each = [float(np.mean(p[:, h - 1] > line)) for p in runs]  # every day weighed
         assert abs(np.mean(each) - closed) < 0.01, (offset, each, closed)
         assert all(abs(mc - closed) < 0.02 for mc in each)  # any single 5,000-path price
 
@@ -108,12 +100,6 @@ def test_down_streak_template() -> None:
     )
     template = streak_reaches("down", 3, last_weight=200.0)
     np.testing.assert_array_equal(template(paths), [1, 0, 0, 0])
-
-
-def test_future_value_pushes_when_missed() -> None:
-    paths = np.array([[200.0, 199.0], [200.0, nan], [200.0, 199.6]])
-    outcome = future_value_over(day=2, line=199.5)(paths)
-    np.testing.assert_array_equal(outcome, [0.0, nan, 1.0])
 
 
 def test_price_yes_no_excludes_pushes() -> None:

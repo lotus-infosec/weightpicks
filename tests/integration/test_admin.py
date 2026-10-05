@@ -23,7 +23,8 @@ from app.models import (
     User,
 )
 from app.services import admin, auth, busts, ledger, settlement
-from app.services.admin import Actor, AdminError
+from app.services.admin import AdminError
+from app.services.audit import Actor
 from app.services.auth import AuthError
 from app.worker.jobs.commands import CommandsJob
 from app.worker.registry import JobContext
@@ -35,14 +36,14 @@ from tests.integration.test_bets_settlement import (
     to_settle_time,
     weight_market,
 )
-from tests.integration.world import World
+from tests.integration.world import World, create_admin
 
 PW = "correct horse battery"
 
 
 @pytest.fixture
 def boss(world: World) -> Actor:
-    admin_id = auth.create_admin(
+    admin_id = create_admin(
         world.engine,
         SystemClock(),
         email="admin@example.invalid",
@@ -320,7 +321,7 @@ def test_audit_is_append_only_and_redacted(world: World, boss: Actor) -> None:
         audit.record(
             conn,
             world.clock,
-            actor_id=boss.user_id,
+            boss,
             action="test",
             after={"password": "hunter2", "nested": {"webhook_url": "https://x"}, "ok": 1},
         )

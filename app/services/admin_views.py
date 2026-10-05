@@ -1,8 +1,9 @@
 """Read models for the admin panel. Read-only; nothing here writes."""
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import Connection, func, select
 
@@ -19,11 +20,16 @@ from app.models import (
     LedgerTxn,
     Market,
     OutboxMessage,
+    Pool,
     SyncRun,
     User,
 )
-from app.services import busts, instance
+from app.services import admin_ai, ai_props, busts, instance
+from app.services import props as props_service
+from app.services.instance import InstanceConfig
 from app.services.ledger import active_season_id
+from app.services.observations import canonical_weigh_ins
+from app.services.pools import entries_by_pool
 
 PAGE = 50
 
@@ -136,7 +142,8 @@ def markets(conn: Connection, status: str | None) -> list[MarketRow]:
     return [MarketRow(*row) for row in conn.execute(query)]
 
 
-def players(conn: Connection) -> list[PlayerRow]:
+def players(conn: Connection, user_id: int | None = None) -> list[PlayerRow]:
+    """Every player (or just one) with this season's balance, P&L, open bets and busts."""
     season = active_season_id(conn)
     open_bets = (
         select(Bet.user_id, func.count().label("n"))
@@ -162,7 +169,7 @@ def players(conn: Connection) -> list[PlayerRow]:
             & (Account.kind == AccountKind.PLAYER.value),
         )
         .outerjoin(open_bets, open_bets.c.user_id == User.id)
-        .where(User.role == "player")
+        .where(User.role == "player", *([User.id == user_id] if user_id is not None else []))
         .order_by(User.display_name)
     ).all()
     counts = busts.badge_counts(conn, season) if season else {}
@@ -251,19 +258,12 @@ def recent_outbox(conn: Connection, limit: int = 10) -> list[Any]:
 
 def pools(conn: Connection, limit: int = 30) -> list[dict[str, Any]]:
     """Special events, newest first, each with its entries (D-043)."""
-    from app.models import Pool, PoolEntry, User
-
     rows = conn.execute(select(Pool).order_by(Pool.id.desc()).limit(limit)).all()
-    out: list[dict[str, Any]] = []
-    for p in rows:
-        entries = conn.execute(
-            select(User.display_name, PoolEntry.guess_x10, PoolEntry.payout_cents)
-            .join(User, User.id == PoolEntry.user_id)
-            .where(PoolEntry.pool_id == p.id)
-            .order_by(PoolEntry.created_at, PoolEntry.id)
-        ).all()
-        out.append({"pool": p, "entries": entries, "pot_cents": p.buy_in_cents * len(entries)})
-    return out
+    entries = entries_by_pool(conn, [p.id for p in rows])
+    return [
+        {"pool": p, "entries": entries[p.id], "pot_cents": p.buy_in_cents * len(entries[p.id])}
+        for p in rows
+    ]
 
 
 def system_health(conn: Connection, now: datetime, cap: int) -> dict[str, Any]:
@@ -332,3 +332,55 @@ def system_health(conn: Connection, now: datetime, cap: int) -> dict[str, Any]:
         "backup_run": backup_run,
         "heartbeats": [(c, b, now - b < timedelta(minutes=3)) for c, b in beats],
     }
+
+
+@dataclass(frozen=True, slots=True)
+class PropsData:
+    config: InstanceConfig | None
+    today: date
+    latest_x10: int | None  # the latest weigh-in of the last two weeks
+    open_props: list[Any]
+    ai_queue: list[dict[str, Any]]  # pending AI proposals, each re-priced now
+    ai_last_run: Any
+    ai_configured: bool
+
+
+def props(conn: Connection, now: datetime, default_tz: ZoneInfo) -> PropsData:
+    """Everything the admin Props page shows (D-041, D-042)."""
+    config = instance.read(conn)
+    today = now.astimezone(config.tz if config else default_tz).date()
+    canon = canonical_weigh_ins(conn, today - timedelta(days=13), today)
+    open_props = list(
+        conn.execute(
+            select(Market.id.label("market_id"), Market.title, Market.status)
+            .where(Market.origin.in_(("admin", "ai")), Market.status.in_(("open", "locked")))
+            .order_by(Market.id.desc())
+            .limit(30)
+        ).all()
+    )
+    ai_queue: list[dict[str, Any]] = []
+    for proposal in ai_props.pending(conn, now):
+        if config is None:
+            break
+        try:
+            priced = props_service.preview(
+                conn, config, today, proposal.template, dict(proposal.form)
+            )
+        except props_service.PropError:
+            priced = None
+        ai_queue.append({"row": proposal, "preview": priced})
+    last_run = conn.execute(
+        select(Command.status, Command.result, Command.created_at)
+        .where(Command.type == "ai_props_now")
+        .order_by(Command.id.desc())
+        .limit(1)
+    ).one_or_none()
+    return PropsData(
+        config,
+        today,
+        canon[-1].value if canon else None,
+        open_props,
+        ai_queue,
+        last_run,
+        admin_ai.workers_ai_configured(conn),
+    )

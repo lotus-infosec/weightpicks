@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 
+import pytest
 from sqlalchemy import Engine, select
 
 from app.core.clock import SimClock
@@ -7,7 +8,7 @@ from app.core.config import Settings
 from app.models import Heartbeat, JobRun
 from app.services.instance import InstanceConfig
 from app.worker.jobs import INFRA_JOBS, HeartbeatJob, domain_jobs
-from app.worker.registry import JobContext, run_due
+from app.worker.registry import JobContext, recover_interrupted, run_due
 
 
 class CountingJob:
@@ -117,3 +118,24 @@ def test_seen_cache_skips_repeat_claims_but_not_new_periods(
     assert run_due([job], migrated_engine, clock, seen) == ["counting"]
     # A fresh process (empty cache) still can't run a claimed period twice.
     assert run_due([job], migrated_engine, clock, {}) == []
+
+
+class DyingJob(CountingJob):
+    def run(self, ctx: JobContext) -> None:
+        raise SystemExit("the worker process dies mid-job")
+
+
+def test_a_period_interrupted_by_a_crash_runs_again_after_restart(
+    migrated_engine: Engine, clock: SimClock
+) -> None:
+    """STAGE16 chaos finding: a dead worker's claim stayed `running`, so that period
+    (a day's drop, allowance or standings) never ran. Start-up now releases it."""
+    with pytest.raises(SystemExit):
+        run_due([DyingJob()], migrated_engine, clock)
+    assert _runs(migrated_engine) == [("counting", "2026-10-05", "running")]
+    job = CountingJob()
+    assert run_due([job], migrated_engine, clock) == []  # still claimed by the dead worker
+    assert recover_interrupted(migrated_engine) == [("counting", "2026-10-05")]
+    assert run_due([job], migrated_engine, clock) == ["counting"]
+    assert _runs(migrated_engine) == [("counting", "2026-10-05", "ok")]
+    assert recover_interrupted(migrated_engine) == []  # finished claims are never touched

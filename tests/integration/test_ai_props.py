@@ -12,10 +12,10 @@ from app.core.clock import SimClock, SystemClock
 from app.core.config import Settings
 from app.core.db import immediate
 from app.models import AiProposal, AiRun, AuditEntry, InstanceSettingsRow, Market
-from app.services import ai_props, auth, instance, secrets
-from app.services.admin import Actor
+from app.services import ai_props, instance, secrets
+from app.services.audit import Actor
 from tests.fake_ai import Recorder, canned, menu_model
-from tests.integration.world import NY, World, local
+from tests.integration.world import NY, World, create_admin, local
 
 KEY = "k" * 40
 
@@ -37,7 +37,7 @@ def ai(world: World) -> tuple[World, Settings, SimClock]:
 
 
 def admin_actor(w: World) -> Actor:
-    admin_id = auth.create_admin(
+    admin_id = create_admin(
         w.engine, SystemClock(), email="a@example.invalid", display_name="A", password="x" * 12
     )
     return Actor(user_id=admin_id)

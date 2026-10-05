@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 import structlog
-from sqlalchemy import Connection, Engine, func, insert, select, update
+from sqlalchemy import Connection, Engine, insert, select, update
 
 from app.ai.text import problem
 from app.core.clock import Clock
@@ -21,6 +21,7 @@ from app.domain import pools as rules
 from app.domain.ledger import AccountKind, InsufficientFunds
 from app.domain.schedule import at_local, local_date
 from app.domain.settlement import readiness
+from app.domain.units import parse_tenths
 from app.models import Account, Pool, PoolEntry, User
 from app.services import audit, instance, ledger
 from app.services.instance import InstanceConfig
@@ -118,9 +119,7 @@ def create(
     clock: Clock,
     draft: Draft,
     *,
-    actor_id: int | None,
-    acted_at: datetime | None = None,
-    ip: str | None = None,
+    actor: audit.Actor | None,
     ai_run_id: int | None = None,
 ) -> int:
     with immediate(engine) as conn:
@@ -149,7 +148,7 @@ def create(
                 status=OPEN,
                 config=draft.as_json(),
                 ai_run_id=ai_run_id,
-                created_by=actor_id,
+                created_by=actor.user_id if actor else None,
                 created_at=now,
             )
             .returning(Pool.id)
@@ -164,22 +163,43 @@ def create(
         audit.record(
             conn,
             clock,
-            actor_id=actor_id,
-            ts=acted_at,
+            actor,
             action="pool.create",
             target=("pool", pool_id),
             after=draft.as_json() | {"ai_run_id": ai_run_id},
-            ip=ip,
         )
     log.info("pool_created", pool_id=pool_id, target_date=draft.target_date.isoformat())
     return pool_id
 
 
+def entries_by_pool(conn: Connection, pool_ids: list[int]) -> dict[int, list[Any]]:
+    """Every entry of these pools in one query, in entry order: user_id, display_name,
+    status (of the user), guess_x10, payout_cents."""
+    found: dict[int, list[Any]] = {pool_id: [] for pool_id in pool_ids}
+    if not pool_ids:
+        return found
+    rows = conn.execute(
+        select(
+            PoolEntry.pool_id,
+            PoolEntry.user_id,
+            User.display_name,
+            User.status,
+            PoolEntry.guess_x10,
+            PoolEntry.payout_cents,
+        )
+        .join(User, User.id == PoolEntry.user_id)
+        .where(PoolEntry.pool_id.in_(pool_ids))
+        .order_by(PoolEntry.created_at, PoolEntry.id)
+    ).all()
+    for row in rows:
+        found[row.pool_id].append(row)
+    return found
+
+
 def parse_guess(raw: str) -> int:
-    try:
-        value = round(float(raw.replace(",", "").strip()) * 10)
-    except ValueError as exc:
-        raise PoolError("guess", "Enter your guess as a weight, like 212.4.") from exc
+    value = parse_tenths(raw)
+    if value is None:
+        raise PoolError("guess", "Enter your guess as a weight, like 212.4.")
     if not MIN_GUESS_X10 <= value <= MAX_GUESS_X10:
         raise PoolError("guess", "That guess isn't a plausible weight.")
     return value
@@ -394,9 +414,7 @@ def void(engine: Engine, clock: Clock, actor: Any, pool_id: int) -> None:
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
-            ip=actor.ip,
+            actor,
             action="pool.void",
             target=("pool", pool_id),
             before={"status": pool.status},
@@ -431,15 +449,3 @@ def tick(engine: Engine, clock: Clock) -> PoolPass:
         p.settle_after for p in live if p.settle_after > now
     ]
     return PoolPass(locked, finished, min(upcoming) if upcoming else None)
-
-
-def open_entries(conn: Connection, account_id: int) -> int:
-    """Open pool entries on an account (they keep a player from going bust)."""
-    return int(
-        conn.execute(
-            select(func.count())
-            .select_from(PoolEntry)
-            .join(Pool, Pool.id == PoolEntry.pool_id)
-            .where(PoolEntry.account_id == account_id, Pool.status.in_((OPEN, LOCKED)))
-        ).scalar_one()
-    )

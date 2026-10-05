@@ -45,13 +45,6 @@ def uploads_dir(settings: Settings) -> Path:
     return Path(settings.data_dir) / "uploads"
 
 
-def db_path(engine: Engine) -> Path:
-    database = engine.url.database
-    if not database:
-        raise ValueError("backups need a file-based SQLite database")
-    return Path(database)
-
-
 def _hash_file(path: Path) -> rules.FileEntry:
     digest, size = hashlib.sha256(), 0
     with path.open("rb") as handle:

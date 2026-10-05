@@ -2,11 +2,23 @@
 tenths of the instance's display unit, converted once at ingest, rounded half-up."""
 
 import math
+import re
+from decimal import ROUND_HALF_UP, Decimal
 from fractions import Fraction
 from typing import Literal
 
 Unit = Literal["lb", "kg"]
 GRAMS_PER_POUND = Fraction(45359237, 100000)  # exact by definition
+_WEIGHT = re.compile(r"\d{1,4}(?:\.\d+)?")
+
+
+def parse_tenths(text: str) -> int | None:
+    """'212.4' -> 2124 (tenths of the unit, rounded half-up once, like ingest). Plain
+    decimals only (no exponents, signs or NaN); callers check the range they need."""
+    cleaned = text.replace(",", "").strip()
+    if not _WEIGHT.fullmatch(cleaned):
+        return None
+    return int((Decimal(cleaned) * 10).quantize(Decimal(1), rounding=ROUND_HALF_UP))
 
 
 def grams_to_tenths(grams: int, unit: Unit) -> int:

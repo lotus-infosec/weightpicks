@@ -26,6 +26,11 @@ def odds(american: int | None) -> str:
     return f"+{american}" if american > 0 else f"{MINUS}{abs(american)}"
 
 
+def tenths(x10: int) -> str:
+    """2124 -> '212.4' (a weight in tenths of the unit, as a form value)."""
+    return f"{x10 // 10}.{x10 % 10}"
+
+
 def line(line_x10: int | None, metric: str, unit: str) -> str:
     if line_x10 is None:
         return ""

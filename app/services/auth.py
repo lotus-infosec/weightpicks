@@ -1,4 +1,4 @@
-"""Registration, login, sessions and the bootstrap helpers (BUILD_PLAN §1.6, D-034).
+"""Registration, login, sessions and registration codes (BUILD_PLAN §1.6, D-034).
 
 Every write path is one short BEGIN IMMEDIATE transaction; password hashing (slow by
 design) runs outside it where possible. Rate limits are counted from `auth_attempts`.
@@ -37,6 +37,7 @@ SLIDE_EVERY = timedelta(minutes=5)
 LOGIN_WINDOW = timedelta(minutes=15)
 LOGIN_FAILS_PER_EMAIL = 5
 LOGIN_ATTEMPTS_PER_IP = 30
+LOGIN_FAILS_PER_ACCOUNT = 20  # all IPs together
 REGISTER_WINDOW = timedelta(hours=1)
 REGISTERS_PER_IP = 5
 KEEP_ATTEMPTS = timedelta(days=1)
@@ -76,16 +77,27 @@ def _record(
     conn.execute(delete(AuthAttempt).where(AuthAttempt.ts < now - KEEP_ATTEMPTS))
 
 
-def _attempts(conn: Connection, kind: str, ip: str, since: datetime, **extra: object) -> int:
+def count_attempts(
+    conn: Connection,
+    kind: str,
+    since: datetime,
+    *,
+    ip: str | None = None,
+    email: str | None = None,
+    ok: bool | None = None,
+) -> int:
+    """Rows of `auth_attempts` of one kind since a time, optionally narrowed."""
     query = (
         select(func.count())
         .select_from(AuthAttempt)
-        .where(AuthAttempt.kind == kind, AuthAttempt.ip == ip, AuthAttempt.ts > since)
+        .where(AuthAttempt.kind == kind, AuthAttempt.ts > since)
     )
-    if "email" in extra:
-        query = query.where(AuthAttempt.email == extra["email"])
-    if "ok" in extra:
-        query = query.where(AuthAttempt.ok.is_(bool(extra["ok"])))
+    if ip is not None:
+        query = query.where(AuthAttempt.ip == ip)
+    if email is not None:
+        query = query.where(AuthAttempt.email == email)
+    if ok is not None:
+        query = query.where(AuthAttempt.ok.is_(ok))
     count: int = conn.execute(query).scalar_one()
     return count
 
@@ -119,7 +131,7 @@ def register(
     password_hash = hash_password(password)  # slow: before the write lock
     now = clock.now()
     with immediate(engine) as conn:
-        if _attempts(conn, "register", ip, now - REGISTER_WINDOW) >= REGISTERS_PER_IP:
+        if count_attempts(conn, "register", now - REGISTER_WINDOW, ip=ip) >= REGISTERS_PER_IP:
             refusal: AuthError | None = AuthError(
                 "rate_limited", "Too many sign-ups from this network. Try again in an hour."
             )
@@ -191,10 +203,14 @@ def login(
                 User.email == email
             )
         ).one_or_none()
+        since = now - LOGIN_WINDOW
         locked = (
-            _attempts(conn, "login", ip, now - LOGIN_WINDOW, email=email, ok=False)
+            count_attempts(conn, "login", since, ip=ip, email=email, ok=False)
             >= LOGIN_FAILS_PER_EMAIL
-            or _attempts(conn, "login", ip, now - LOGIN_WINDOW) >= LOGIN_ATTEMPTS_PER_IP
+            or count_attempts(conn, "login", since, ip=ip) >= LOGIN_ATTEMPTS_PER_IP
+            # Across every IP too, so rotating addresses doesn't buy more guesses (#21).
+            or count_attempts(conn, "login", since, email=email, ok=False)
+            >= LOGIN_FAILS_PER_ACCOUNT
         )
     # Verify even when locked or unknown so timing reveals nothing (argon2, outside the lock).
     good = verify_password(row.password_hash if row else None, password)
@@ -283,7 +299,7 @@ def revoke_all(conn: Connection, user_id: int) -> int:
     return conn.execute(delete(Session).where(Session.user_id == user_id)).rowcount
 
 
-# ---- bootstrap (CLI until /setup exists, D-034) ------------------------------------------------
+# ---- registration codes -------------------------------------------------------------------------
 
 
 def rotate_registration_code(engine: Engine, clock: Clock) -> str:
@@ -297,35 +313,3 @@ def rotate_registration_code(engine: Engine, clock: Clock) -> str:
             )
         )
     return code
-
-
-def create_admin(
-    engine: Engine, clock: Clock, *, email: str, display_name: str, password: str
-) -> int:
-    email = normalize_email(email)
-    name = " ".join(display_name.split())
-    if "@" not in email or not 1 <= len(name) <= MAX_NAME:
-        raise AuthError("invalid", "Enter an email address and a display name.")
-    problem = password_problem(password)
-    if problem:
-        raise AuthError("weak_password", problem)
-    password_hash = hash_password(password)
-    with immediate(engine) as conn:
-        if conn.execute(select(User.id).where(User.role == "admin")).first():
-            raise AuthError("admin_exists", "An admin already exists (one per instance).")
-        if conn.execute(select(User.id).where(User.email == email)).first():
-            raise AuthError("email_taken", "That email already has an account.")
-        user_id: int = conn.execute(
-            insert(User)
-            .values(
-                email=email,
-                display_name=name,
-                password_hash=password_hash,
-                role="admin",
-                status="active",
-                created_at=clock.now(),
-            )
-            .returning(User.id)
-        ).scalar_one()
-    log.info("admin_created", user_id=user_id)
-    return user_id

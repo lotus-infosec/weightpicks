@@ -7,9 +7,22 @@ the stored integers and floors to whole cents, so the house keeps sub-cent dust.
 import re
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import Self
 
-_AMOUNT = re.compile(r"^(?P<sign>-)?\$?(?P<whole>\d{1,3}(?:,\d{3})+|\d+)(?:\.(?P<frac>\d{1,2}))?$")
+_AMOUNT = re.compile(r"(?P<sign>-)?\$?(?P<whole>\d{1,3}(?:,\d{3})+|\d+)(?:\.(?P<frac>\d{1,2}))?")
+MAX_AMOUNT_CENTS = 10_000_000 * 100  # $10M: far above any setting, far below SQLite's limit
+
+
+def parse_cents(text: str) -> int | None:
+    """'1,234.56', '$1,000', '-12.5' -> exact whole cents. None for anything else: more
+    than two decimals, exponents, NaN, or more than $10M either way. Callers check the
+    sign and range they need."""
+    match = _AMOUNT.fullmatch(text.strip())
+    if match is None:
+        return None
+    cents = int(match["whole"].replace(",", "")) * 100 + int((match["frac"] or "").ljust(2, "0"))
+    if cents > MAX_AMOUNT_CENTS:
+        return None
+    return -cents if match["sign"] else cents
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -19,16 +32,6 @@ class Money:
     def __post_init__(self) -> None:
         if type(self.cents) is not int:
             raise TypeError(f"Money needs int cents, got {type(self.cents).__name__}")
-
-    @classmethod
-    def parse(cls, text: str) -> Self:
-        """Parse '1,234.56', '$1,000', '-12.5' exactly. At most two decimal places."""
-        match = _AMOUNT.match(text.strip())
-        if match is None:
-            raise ValueError(f"not a money amount: {text!r}")
-        whole = int(match["whole"].replace(",", ""))
-        cents = whole * 100 + int((match["frac"] or "").ljust(2, "0"))
-        return cls(-cents if match["sign"] else cents)
 
     def __add__(self, other: "Money") -> "Money":
         if not isinstance(other, Money):

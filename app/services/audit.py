@@ -1,12 +1,14 @@
 """The admin audit log (BUILD_PLAN §1.5: every admin mutation is recorded). Rows are
 append-only (triggers). Values under sensitive-looking keys are never stored."""
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Connection, insert
+from sqlalchemy import Connection, Engine, insert
 
 from app.core.clock import Clock
+from app.core.db import immediate
 from app.models import AuditEntry
 
 SENSITIVE = ("password", "token", "secret", "webhook", "code_hash")
@@ -27,30 +29,53 @@ def redact(data: dict[str, Any] | None) -> dict[str, Any] | None:
     return clean
 
 
+@dataclass(frozen=True, slots=True)
+class Actor:
+    """Who did it: the user, their IP, and the real time of the click (audit rows use it;
+    in dev the app's SimClock differs)."""
+
+    user_id: int
+    ip: str | None = None
+    acted_at: datetime | None = None
+
+
 def record(
     conn: Connection,
     clock: Clock,
+    actor: Actor | None,
     *,
-    actor_id: int | None,
     action: str,
     target: tuple[str, int] | None = None,
     before: dict[str, Any] | None = None,
     after: dict[str, Any] | None = None,
     reason: str | None = None,
-    ip: str | None = None,
-    ts: datetime | None = None,
 ) -> None:
-    """`ts` defaults to the clock; callers pass the real time an admin acted."""
+    """`actor` is None for the system (jobs, AI auto mode, maintenance)."""
     conn.execute(
         insert(AuditEntry).values(
-            actor_id=actor_id,
+            actor_id=actor.user_id if actor else None,
             action=action,
             target_type=target[0] if target else None,
             target_id=target[1] if target else None,
             before=redact(before),
             after=redact(after),
             reason=reason,
-            ip=ip,
-            ts=ts or clock.now(),
+            ip=actor.ip if actor else None,
+            ts=(actor.acted_at if actor else None) or clock.now(),
         )
     )
+
+
+def record_alone(
+    engine: Engine,
+    clock: Clock,
+    actor: Actor | None,
+    *,
+    action: str,
+    target: tuple[str, int] | None = None,
+    after: dict[str, Any] | None = None,
+) -> None:
+    """An audit row in its own transaction, for actions with nothing else to write
+    (downloads, staged maintenance, file changes)."""
+    with immediate(engine) as conn:
+        record(conn, clock, actor, action=action, target=target, after=after)

@@ -2,15 +2,22 @@
 (BUILD_PLAN §1.6, D-034).
 
 CSRF: every non-GET/HEAD/OPTIONS request must carry a token in the `X-CSRF-Token`
-header or a `csrf_token` form field. It must match either the session's synchronizer
-token or the `wp_csrf` double-submit cookie (login and register, before a session
-exists). The check is a global FastAPI dependency, so no route can forget it.
+header or a `csrf_token` form field. With a session it must match the session's
+synchronizer token; only before a session exists (login, register, reset) does the
+`wp_csrf` double-submit cookie count, so a cookie planted by a sibling subdomain can't
+stand in for it. Browsers that say a request is `cross-site` or `same-site` (another
+subdomain) are refused outright. The check is a global FastAPI dependency, so no route
+can forget it.
+
+Body size: `BodyLimit` (ASGI middleware) counts bytes as they stream in, before any
+route, form parser or auth check reads them (STAGE16 S1).
 """
 
 from typing import Annotated
 from urllib.parse import parse_qs
 
 from fastapi import Depends, HTTPException, Request, Response
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.security import new_token, same
 from app.services import auth
@@ -20,11 +27,16 @@ SESSION_COOKIE = "wp_session"
 CSRF_COOKIE = "wp_csrf"
 CSRF_HEADER = "X-CSRF-Token"
 CSRF_FIELD = "csrf_token"
-MAX_FORM_BYTES = 16 * 1024
-# Multipart uploads (logo, backup restore): only on the admin routes that expect them.
-MAX_UPLOAD_BYTES = 512 * 1024 * 1024
-MULTIPART_PATHS = ("/admin/appearance/logo", "/admin/system/restore")
+MAX_BODY_BYTES = 16 * 1024  # every form and JSON request
+# Multipart uploads go only to these admin routes, each with its own cap. A restore
+# upload is spooled through the RAM-backed /tmp, so it stays well under the web
+# container's memory limit; bigger backups are restored from the CLI (docs/backups.md).
+UPLOAD_LIMITS = {
+    "/admin/appearance/logo": 2 * 1024 * 1024,
+    "/admin/system/restore": 256 * 1024 * 1024,
+}
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+FOREIGN_SITES = frozenset({"cross-site", "same-site"})
 
 
 class LoginRequired(Exception):
@@ -43,10 +55,66 @@ def client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+class _TooLarge(Exception):
+    pass
+
+
+class BodyLimit:
+    """Refuse request bodies over the route's cap while they stream in: by Content-Length
+    up front, and by counting chunks (chunked uploads have no length)."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        path = scope["path"]
+        limit = UPLOAD_LIMITS.get(path, MAX_BODY_BYTES)
+        length = dict(scope["headers"]).get(b"content-length")
+        if length is None and path in UPLOAD_LIMITS and scope["method"] not in SAFE_METHODS:
+            await _plain(send, 411, "uploads need a Content-Length")
+            return
+        if length is not None and (not length.isdigit() or int(length) > limit):
+            await _plain(send, 413, "request body too large")
+            return
+        received, started = 0, False
+
+        async def counted() -> Message:
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > limit:
+                    raise _TooLarge
+            return message
+
+        async def tracked(message: Message) -> None:
+            nonlocal started
+            started = started or message["type"] == "http.response.start"
+            await send(message)
+
+        try:
+            await self.app(scope, counted, tracked)
+        except* _TooLarge:  # may arrive wrapped by the http middlewares' task groups
+            if not started:
+                await _plain(send, 413, "request body too large")
+
+
+async def _plain(send: Send, status: int, text: str) -> None:
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status,
+            "headers": [(b"content-type", b"text/plain; charset=utf-8"), (b"connection", b"close")],
+        }
+    )
+    await send({"type": "http.response.body", "body": text.encode()})
+
+
 async def read_form(request: Request) -> dict[str, str]:
-    body = await request.body()
-    if len(body) > MAX_FORM_BYTES:
-        raise HTTPException(status_code=413, detail="form too large")
+    body = await request.body()  # capped by BodyLimit
     return {k: v[-1] for k, v in parse_qs(body.decode(errors="replace")).items()}
 
 
@@ -108,25 +176,25 @@ def current_session(request: Request) -> SessionInfo | None:
 async def csrf_protect(request: Request) -> None:
     if request.method in SAFE_METHODS:
         return
+    if request.headers.get("sec-fetch-site") in FOREIGN_SITES:
+        raise HTTPException(status_code=403, detail="cross-site request refused")
+    session = current_session(request)
     submitted = request.headers.get(CSRF_HEADER)
     content_type = request.headers.get("content-type", "")
     if not submitted and content_type.startswith("application/x-www-form-urlencoded"):
         submitted = (await read_form(request)).get(CSRF_FIELD)
     elif not submitted and content_type.startswith("multipart/form-data"):
-        if request.url.path not in MULTIPART_PATHS:
+        if request.url.path not in UPLOAD_LIMITS:
             raise HTTPException(status_code=415, detail="uploads aren't accepted here")
-        if int(request.headers.get("content-length") or 0) > MAX_UPLOAD_BYTES:
-            raise HTTPException(status_code=413, detail="upload too large")
+        if session is None or session.role != "admin":
+            raise HTTPException(status_code=403, detail="uploads need the admin")  # unparsed
         form = await request.form(max_files=1, max_fields=10)
         field = form.get(CSRF_FIELD)
         submitted = field if isinstance(field, str) else None
     if not submitted:
         raise HTTPException(status_code=403, detail="missing CSRF token")
-    expected = [request.cookies.get(CSRF_COOKIE) or ""]
-    session = current_session(request)
-    if session is not None:
-        expected.append(session.csrf_token)
-    if not any(token and same(submitted, token) for token in expected):
+    expected = session.csrf_token if session else request.cookies.get(CSRF_COOKIE, "")
+    if not (expected and same(submitted, expected)):
         raise HTTPException(status_code=403, detail="bad CSRF token")
 
 

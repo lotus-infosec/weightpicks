@@ -40,7 +40,6 @@ MAX_TOKENS = 600
 P_MIN, P_MAX = 0.08, 0.92
 OPEN_PROP_CAP = 8
 PROP_TIMEFRAMES = (Timeframe.PROP.value, Timeframe.FUTURE.value)
-KINDS = ("props_daily", "props_weekly", "props_manual")
 
 
 @dataclass(slots=True)
@@ -356,7 +355,7 @@ def _consider(
         audit.record(
             conn,
             clock,
-            actor_id=None,
+            None,
             action="market.create_ai_prop",
             target=("market", market_id),
             after={"template": template, "params": priced.spec.params, "ai_run_id": run_id},
@@ -420,12 +419,10 @@ def approve(engine: Engine, clock: Clock, actor: Any, proposal_id: int) -> int:
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
+            actor,
             action="ai_proposal.approve",
             target=("market", market_id),
             after={"proposal_id": row.id, "template": row.template, "params": priced.spec.params},
-            ip=actor.ip,
         )
     return market_id
 
@@ -443,11 +440,9 @@ def reject(engine: Engine, clock: Clock, actor: Any, proposal_id: int) -> None:
         audit.record(
             conn,
             clock,
-            actor_id=actor.user_id,
-            ts=actor.acted_at,
+            actor,
             action="ai_proposal.reject",
             target=("ai_proposal", proposal_id),
-            ip=actor.ip,
         )
 
 

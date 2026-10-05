@@ -83,7 +83,7 @@ def test_workers_ai_settings_card(admin: tuple[TestClient, World]) -> None:
     c, w = admin
     page = c.get("/admin/discord").text
     assert 'data-testid="ai-configured">not set' in page
-    form = {"account_id": "acct-1", "token": TOKEN}
+    form = {"account_id": "f" * 32, "token": TOKEN}
     wrong = post(c, "/admin/discord", "/admin/discord/workers-ai", form | {"admin_password": "no"})
     assert wrong.status_code == 403
     with w.engine.connect() as conn:

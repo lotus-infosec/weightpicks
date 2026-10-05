@@ -21,12 +21,14 @@ from app.core.db import immediate, make_engine
 from app.core.migrations import upgrade_to_head
 from app.domain.markets import MarketStatus
 from app.models import Account, InstanceSettingsRow, Market, OddsVersion, Selection, User
-from app.services import admin, auth, instance, ledger, sim
+from app.services import admin, instance, ledger, sim
 from app.services import props as props_service
-from app.services.admin import Actor, AdminError
+from app.services.admin import AdminError
+from app.services.audit import Actor
 from app.services.bets import BetRejected, place_bet, place_parlay
 from app.services.observations import canonical_weigh_ins
 from app.services.users import ensure_player
+from tests.integration.world import create_admin
 
 NY = ZoneInfo("America/New_York")
 START = date(2026, 10, 1)
@@ -160,9 +162,10 @@ def _balance(engine: Engine, user: int) -> int:
     return value
 
 
-def run_season(
-    tmp_path: Path, *, days: int = 60, players: int = 6, seed: int = 11, v2: bool = False
-) -> SeasonRun:
+def start_season(
+    tmp_path: Path, *, players: int = 6, v2: bool = False
+) -> tuple[Engine, Settings, datetime, list[int], Actor]:
+    """A migrated instance on Oct 1, set up, with funded bettors and an admin."""
     settings = Settings(
         app_env="dev",
         data_dir=tmp_path,
@@ -195,14 +198,20 @@ def run_season(
                 setup_completed_at=start, economy=economy, flags=flags
             )
         )
-    admin_id = auth.create_admin(
+    admin_id = create_admin(
         engine,
         SimClock(start),
         email="admin@example.invalid",
         display_name="Admin",
         password="correct horse battery",
     )
-    admin_actor = Actor(admin_id)
+    return engine, settings, start, users, Actor(admin_id)
+
+
+def run_season(
+    tmp_path: Path, *, days: int = 60, players: int = 6, seed: int = 11, v2: bool = False
+) -> SeasonRun:
+    engine, settings, start, users, admin_actor = start_season(tmp_path, players=players, v2=v2)
     run = SeasonRun(engine, settings, start + timedelta(days=days), users)
     rng = np.random.default_rng(seed)
     now = start

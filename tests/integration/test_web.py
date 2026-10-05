@@ -2,7 +2,6 @@ import re
 from datetime import date
 
 import pytest
-from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, select, update
 
@@ -55,17 +54,7 @@ def test_every_route_and_static_file_sends_security_headers(
     settings: Settings, migrated_engine: Engine
 ) -> None:
     app = create_app(settings)
-
-    def walk(routes: list[object]) -> list[APIRoute]:
-        found: list[APIRoute] = []
-        for r in routes:
-            if isinstance(r, APIRoute):
-                found.append(r)
-            elif hasattr(r, "original_router"):  # include_router wrapper
-                found += walk(r.original_router.routes)
-        return found
-
-    paths = {re.sub(r"\{[^}]+\}", "1", r.path) for r in walk(list(app.routes))}
+    paths = {re.sub(r"\{[^}]+\}", "1", r.path) for r in web.api_routes(app)}
     paths |= {"/static/app.js", "/static/app.css", "/static/vendor/htmx-2.0.11.min.js", "/nope"}
     with web.client(app) as c:
         for path in sorted(paths):

@@ -22,7 +22,7 @@ from app.worker.jobs import INFRA_JOBS, domain_jobs
 from app.worker.jobs.backup import AutoBackupJob
 from app.worker.jobs.commands import CommandsJob
 from app.worker.jobs.outbox import OutboxDispatchJob
-from app.worker.registry import Job, run_due
+from app.worker.registry import Job, recover_interrupted, run_due
 
 TICK_SECONDS = 60
 FAST_SECONDS = 2  # outbox fast loop while rows are waiting (BUILD_PLAN §1.4.5)
@@ -88,6 +88,7 @@ def main() -> None:
         log.info("waiting_for_schema")
         stop.wait(SCHEMA_POLL_SECONDS)
 
+    recover_interrupted(engine)  # a previous worker died mid-job: run those periods again
     domain_clock = app_clock(settings, engine)
     config = instance.load(engine, domain_clock, settings)
     jobs: Sequence[Job] = domain_jobs(settings, config)

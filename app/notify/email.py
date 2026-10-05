@@ -20,7 +20,6 @@ from app.models import InstanceSettingsRow
 from app.services import secrets
 
 TIMEOUT_SECONDS = 20
-TLS_MODES = ("starttls", "ssl", "none")
 
 
 class EmailError(Exception):
