@@ -15,7 +15,7 @@ from app.core.clock import Clock
 from app.core.config import Settings
 from app.core.db import immediate
 from app.models import Command
-from app.services import instance
+from app.services import ai_props, instance
 from app.services.sync import make_provider, run_sync
 from app.worker.registry import JobContext
 
@@ -72,4 +72,15 @@ class CommandsJob:
             provider = make_provider(self.settings, ctx.engine, self.domain_clock, tz=config.tz)
             sync = run_sync(ctx.engine, self.domain_clock, provider, tz=config.tz, unit=config.unit)
             return {"sync_status": sync.status, "rows_new": sync.rows_new}
+        if kind == "ai_props_now":
+            report = ai_props.run(
+                ctx.engine, self.domain_clock, ctx.clock, self.settings, "props_manual"
+            )
+            return {
+                "ai_status": report.status,
+                "ai_reason": report.reason,
+                "created": len(report.created),
+                "queued": len(report.queued),
+                "dropped": len(report.dropped),
+            }
         raise ValueError(f"unknown command {kind!r}")

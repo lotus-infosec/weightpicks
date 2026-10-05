@@ -14,6 +14,7 @@
       <a href="/markets/{{ c.market_id }}" class="market-title">{{ c.title }}</a>
       {% if c.provisional %}<span class="badge">provisional</span>{% endif %}
     </header>
+    {% if c.blurb %}<p class="muted small blurb" data-testid="blurb">{{ c.blurb }}</p>{% endif %}
     {% if c.line_x10 is not none %}<p class="market-line">O/U <strong>{{ c.line_x10 | line(c.metric) }}</strong></p>{% else %}<p class="market-line">Yes or no</p>{% endif %}
     {{ side_buttons(c) }}
     <p class="muted small">Locks {{ c.lock_at | local_time }}</p>

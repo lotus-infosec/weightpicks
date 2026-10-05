@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING"] = "INFO"
     log_format: Literal["json", "console"] = "json"
     ai_daily_neuron_cap: int = 5000
+    # Workers AI models (D-014): JSON Mode for proposals, the cheaper fp8-fast for hype.
+    ai_model_json: str = "@cf/meta/llama-3.1-8b-instruct"
+    ai_model_text: str = "@cf/meta/llama-3.1-8b-instruct-fp8-fast"
     backup_retention: int = 7
     data_dir: Path = Path("/data")
     # Overrides the SQLite file under data_dir (tests point this at a temp file).

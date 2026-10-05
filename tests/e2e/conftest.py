@@ -11,7 +11,7 @@ import threading
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -166,6 +166,7 @@ def rich_server(tmp_path: Path) -> Iterator[RichServer]:
         assert ledger.verify(conn).ok
     mark_setup_done(engine, settings)
     _props_and_parlays(engine, clock)
+    _ai_props(engine, clock)
     engine.dispose()
 
     port = _free_port()
@@ -385,3 +386,68 @@ def _props_and_parlays(engine: Any, clock: SimClock) -> None:
         except props.PropError:
             continue
     raise AssertionError("no priceable milestone for the e2e server")
+
+
+def _ai_props(engine: Any, clock: SimClock) -> None:
+    """STAGE13: AI props on, one published AI prop with a blurb, one waiting for review,
+    an AI run and an admin note (inserted directly: no Workers AI in e2e)."""
+    from sqlalchemy import insert, select, update
+
+    from app.models import AdminNote, AiProposal, AiRun, InstanceSettingsRow
+    from app.services import props
+
+    now = clock.now()
+    with immediate(engine) as conn:
+        flags = conn.execute(select(InstanceSettingsRow.flags)).scalar_one() or {}
+        conn.execute(update(InstanceSettingsRow).values(flags=dict(flags) | {"ai_props": True}))
+        config = instance.read(conn)
+        assert config is not None
+        run_id = conn.execute(
+            insert(AiRun)
+            .values(
+                kind="props_daily",
+                model="@cf/meta/llama-3.1-8b-instruct",
+                prompt_version="props_v1",
+                started_at=SystemClock().now(),  # the neuron quota runs on real time
+                input_tokens=812,
+                output_tokens=233,
+                neurons_est=39,
+                status="ok",
+                raw_output='{"proposals": [...]}',
+                errors=[{"index": 2, "template": "milestone_by", "reason": "link_or_markup"}],
+            )
+            .returning(AiRun.id)
+        ).scalar_one()
+        today = now.astimezone(config.tz).date()
+        published = props.preview(conn, config, today, "beat_last_week", {"metric": "steps"})
+        props.insert_prop(
+            conn,
+            clock,
+            config,
+            published,
+            origin="ai",
+            ai_run_id=run_id,
+            blurb="Last week set a high bar for steps. Can this week clear it?",
+        )
+        waiting = props.preview(conn, config, today, "beat_last_week", {"metric": "kcal"})
+        conn.execute(
+            insert(AiProposal).values(
+                ai_run_id=run_id,
+                template="beat_last_week",
+                form={"metric": "kcal"},
+                title=waiting.spec.title,
+                blurb="A big calorie week would make this one interesting.",
+                dedupe_key=waiting.spec.dedupe_key,
+                status="pending",
+                created_at=now,
+                expires_at=waiting.spec.lock_at,
+            )
+        )
+        conn.execute(
+            insert(AdminNote).values(
+                text="Traveling Thu-Sun",
+                active_from=today,
+                active_to=today + timedelta(days=4),
+                created_at=now,
+            )
+        )

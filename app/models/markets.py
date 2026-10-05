@@ -32,6 +32,7 @@ class Market(Base):
         CheckConstraint("origin IN ('core', 'ai', 'admin')", name="origin_valid"),
         CheckConstraint("window_end >= window_start", name="window_ordered"),
         Index("ix_markets_status_lock_at", "status", "lock_at"),
+        Index("ix_markets_ai_run_id", "ai_run_id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -51,7 +52,8 @@ class Market(Base):
     settle_deadline: Mapped[datetime | None] = mapped_column(UTCDateTime())
     correlation_keys: Mapped[list[str]] = mapped_column(JSON)
     dedupe_key: Mapped[str] = mapped_column(String(300), unique=True)
-    ai_run_id: Mapped[int | None]  # FK once ai_runs exists (STAGE13)
+    ai_run_id: Mapped[int | None]  # the ai_runs row that proposed it (origin 'ai')
+    blurb: Mapped[str | None] = mapped_column(String(160))  # AI flavour text, never terms
     created_at: Mapped[datetime] = mapped_column(UTCDateTime())
     status_changed_at: Mapped[datetime] = mapped_column(UTCDateTime())
 

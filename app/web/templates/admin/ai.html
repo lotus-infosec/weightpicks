@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}AI runs · Admin{% endblock %}
+{% block content %}
+<h1>AI runs</h1>
+<section class="card">
+  <p data-testid="ai-usage"><strong>{{ "{:,}".format(v.used) }}</strong> of {{ "{:,}".format(v.cap) }} neurons used today <span class="muted small">(resets 00:00 UTC; the free allocation is 10,000)</span></p>
+  {% if not configured %}<p class="muted">No Workers AI token is stored, so runs are skipped. Add one in <a href="/admin/discord">Settings</a>.</p>{% endif %}
+</section>
+<section class="card">
+  <h2>Recent runs</h2>
+  {% if not v.runs %}<p class="muted" data-testid="ai-runs-empty">No AI runs yet.</p>{% endif %}
+  <table class="table" data-testid="ai-runs">
+    <thead><tr><th>When (UTC)</th><th>Kind</th><th>Status</th><th>Tokens in/out</th><th>Neurons</th><th>Notes</th></tr></thead>
+    <tbody>
+    {% for r in v.runs %}
+    <tr>
+      <td>{{ r.started_at.strftime("%b %-d %H:%M") }}</td>
+      <td data-label="Kind">{{ r.kind.replace("_", " ") }}{% if r.prompt_version %} <span class="muted small">{{ r.prompt_version }}</span>{% endif %}</td>
+      <td data-label="Status"><span class="badge status-{{ r.status }}">{{ r.status }}</span>{% if r.skip_reason %} <span class="small">{{ r.skip_reason.replace("_", " ") }}</span>{% endif %}</td>
+      <td data-label="Tokens">{{ r.input_tokens }} / {{ r.output_tokens }}</td>
+      <td data-label="Neurons">{{ r.neurons_est }}</td>
+      <td data-label="Notes" class="small">
+        {% if r.errors %}{{ r.errors | length }} dropped: {% for e in r.errors %}{{ e.reason.replace("_", " ") }}{{ ", " if not loop.last }}{% endfor %}{% endif %}
+        {% if r.raw_output %}<details><summary>Raw output</summary><pre class="raw">{{ r.raw_output }}</pre></details>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

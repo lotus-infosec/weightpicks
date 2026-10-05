@@ -1,6 +1,7 @@
 from app.core.config import Settings
 from app.domain.markets import Timeframe
 from app.services.instance import InstanceConfig
+from app.worker.jobs.ai import AiHypeJob, AiPropsJob
 from app.worker.jobs.economy import DailyAllowanceJob, WeeklyStandingsJob
 from app.worker.jobs.garmin_sync import GarminSyncJob
 from app.worker.jobs.heartbeat import HeartbeatJob
@@ -22,6 +23,9 @@ def domain_jobs(settings: Settings, config: InstanceConfig) -> tuple[Job, ...]:
         DropJob(Timeframe.DAILY, config, locks),
         DropJob(Timeframe.WEEKLY, config, locks),
         DropJob(Timeframe.MONTHLY, config, locks),
+        AiPropsJob("props_daily", settings, config),
+        AiPropsJob("props_weekly", settings, config),
+        AiHypeJob(settings, config),
         LockMarketsJob(locks, settles),
         SettleMarketsJob(settles),
         DailyAllowanceJob(config),
@@ -32,6 +36,8 @@ def domain_jobs(settings: Settings, config: InstanceConfig) -> tuple[Job, ...]:
 
 __all__ = [
     "INFRA_JOBS",
+    "AiHypeJob",
+    "AiPropsJob",
     "DropJob",
     "GarminSyncJob",
     "HeartbeatJob",

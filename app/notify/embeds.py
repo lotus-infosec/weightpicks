@@ -246,6 +246,12 @@ def _test(category: str, p: dict[str, Any], ctx: Context) -> dict[str, Any]:
     return _embed(ctx, category, "Webhook test", text, GREEN)
 
 
+def _hype(category: str, p: dict[str, Any], ctx: Context) -> dict[str, Any]:
+    return _embed(
+        ctx, category, safe(p.get("title") or "Stat update"), safe(p.get("text"), 1000), GOLD
+    )
+
+
 def _fallback(category: str, p: dict[str, Any], ctx: Context) -> dict[str, Any]:
     text = safe(p.get("text") or p.get("title") or CATEGORY_LABELS.get(category, category), 1000)
     return _embed(ctx, category, CATEGORY_LABELS.get(category, category), text, BLURPLE)
@@ -260,6 +266,7 @@ BUILDERS: dict[str, Callable[[str, dict[str, Any], Context], dict[str, Any]]] = 
     "new_markets": _new_markets,
     "weekly_standings": _standings,
     "admin_alerts": _alert,
+    "hype": _hype,
 }
 
 
