@@ -45,7 +45,7 @@
   <ul class="plain stack">
   {% for b in backups %}
     <li class="proposal"><p><strong class="small">{{ b.name }}</strong> <span class="badge">{{ b.kind }}</span></p>
-      <p class="muted small">{{ "%.1f"|format(b.size / 1048576) }} MB · {{ b.modified | local_time }}</p>
+      <p class="muted small">{% if b.size >= 1048576 %}{{ "%.1f"|format(b.size / 1048576) }} MB{% else %}{{ (b.size / 1024) | round | int }} KB{% endif %} · {{ b.modified | local_time }}</p>
       {% if b.kind in ("auto", "manual") %}
       <details><summary class="small">Download or restore</summary>
         <form method="post" action="/admin/system/download" class="stack">

@@ -18,7 +18,7 @@
 
 <section class="card" data-testid="logo-card">
   <h2>Logo</h2>
-  <div class="row"><img src="/brand/logo-192.png?v={{ 'custom' if has_logo else 'default' }}" alt="Current logo" width="96" height="96" class="brand-preview" data-testid="logo-preview">
+  <div class="row"><img src="/brand/logo-192.png?v={{ instance.brand_version }}" alt="Current logo" width="96" height="96" class="brand-preview" data-testid="logo-preview">
     <p class="muted small">{{ "Your uploaded logo." if has_logo else "The WeightPicks logo (default)." }} It's used for the browser icon, the top bar and phone home screens.</p></div>
   {% if errors.logo %}<p class="alert" role="alert">{{ errors.logo }}</p>{% endif %}
   <form method="post" action="/admin/appearance/logo" enctype="multipart/form-data" class="stack">
@@ -28,11 +28,14 @@
     <button type="submit" class="primary">Upload logo</button>
   </form>
   {% if has_logo %}
-  <form method="post" action="/admin/appearance/logo/remove" class="stack">
-    <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    {{ password() }}
-    <button type="submit" class="ghost">Use the default logo</button>
-  </form>
+  <details>
+    <summary class="small">Go back to the default logo</summary>
+    <form method="post" action="/admin/appearance/logo/remove" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      {{ password() }}
+      <button type="submit" class="ghost">Use the default logo</button>
+    </form>
+  </details>
   {% endif %}
 </section>
 {% endblock %}

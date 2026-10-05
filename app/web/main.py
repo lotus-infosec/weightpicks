@@ -93,6 +93,15 @@ class LiveInstance:
         return self.config.palette if self.config else "ember"
 
     @property
+    def brand_version(self) -> str:
+        """Changes when an Appearance logo is uploaded or removed (cache-busting)."""
+        logo = self.settings.data_dir / "uploads" / "logo.png"
+        try:
+            return str(int(logo.stat().st_mtime))
+        except OSError:
+            return "default"
+
+    @property
     def frozen(self) -> bool:
         return bool(self.config and self.config.state == "frozen")
 
