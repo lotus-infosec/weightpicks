@@ -24,11 +24,11 @@
       <div class="row">
         <form method="post" action="/admin/props/ai/{{ p.id }}/approve" class="inline">
           <input type="hidden" name="csrf_token" value="{{ csrf }}">
-          <button type="submit" class="primary small" data-testid="approve">Approve</button>
+          <button type="submit" class="primary" data-testid="approve">Approve</button>
         </form>
         <form method="post" action="/admin/props/ai/{{ p.id }}/reject" class="inline">
           <input type="hidden" name="csrf_token" value="{{ csrf }}">
-          <button type="submit" class="small" data-testid="reject">Reject</button>
+          <button type="submit" class="ghost" data-testid="reject">Reject</button>
         </form>
       </div>
     </li>
@@ -37,7 +37,7 @@
   <div class="row wrap">
     <form method="post" action="/admin/props/ai/run" class="inline">
       <input type="hidden" name="csrf_token" value="{{ csrf }}">
-      <button type="submit" data-testid="ai-run-now" {{ "disabled" if not ai_on }}>Run AI props now</button>
+      <button type="submit" class="ghost" data-testid="ai-run-now" {{ "disabled" if not ai_on }}>Run AI props now</button>
     </form>
     <a href="/admin/ai" class="small">AI runs and usage</a>
   </div>

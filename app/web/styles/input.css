@@ -141,6 +141,8 @@
   .proposal p { @apply m-0; }
   .raw { @apply rounded-lg p-2 text-xs whitespace-pre-wrap max-h-60 overflow-auto; overflow-wrap: anywhere; background: var(--color-raised); }
   .blurb { @apply italic; }
+  .ghost { @apply rounded-xl px-4 text-sm font-medium; min-height: 44px; border: 1px solid var(--color-line); background: transparent; }
+  .row .primary { min-height: 44px; }
   .badge.status-ok, .badge.status-approved { color: var(--color-over); }
   .badge.status-error { color: var(--color-bad); }
   .badge.status-running, .badge.status-upcoming { color: var(--color-accent); }
