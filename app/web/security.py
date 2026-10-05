@@ -21,6 +21,9 @@ CSRF_COOKIE = "wp_csrf"
 CSRF_HEADER = "X-CSRF-Token"
 CSRF_FIELD = "csrf_token"
 MAX_FORM_BYTES = 16 * 1024
+# Multipart uploads (logo, backup restore): only on the admin routes that expect them.
+MAX_UPLOAD_BYTES = 512 * 1024 * 1024
+MULTIPART_PATHS = ("/admin/appearance/logo", "/admin/system/restore")
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
@@ -106,10 +109,17 @@ async def csrf_protect(request: Request) -> None:
     if request.method in SAFE_METHODS:
         return
     submitted = request.headers.get(CSRF_HEADER)
-    if not submitted and request.headers.get("content-type", "").startswith(
-        "application/x-www-form-urlencoded"
-    ):
+    content_type = request.headers.get("content-type", "")
+    if not submitted and content_type.startswith("application/x-www-form-urlencoded"):
         submitted = (await read_form(request)).get(CSRF_FIELD)
+    elif not submitted and content_type.startswith("multipart/form-data"):
+        if request.url.path not in MULTIPART_PATHS:
+            raise HTTPException(status_code=415, detail="uploads aren't accepted here")
+        if int(request.headers.get("content-length") or 0) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="upload too large")
+        form = await request.form(max_files=1, max_fields=10)
+        field = form.get(CSRF_FIELD)
+        submitted = field if isinstance(field, str) else None
     if not submitted:
         raise HTTPException(status_code=403, detail="missing CSRF token")
     expected = [request.cookies.get(CSRF_COOKIE) or ""]

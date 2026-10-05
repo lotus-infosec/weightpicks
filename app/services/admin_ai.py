@@ -172,3 +172,34 @@ def notes(conn: Connection, today: date) -> list[dict[str, Any]]:
 def runs_view(conn: Connection, real_now: datetime, cap: int, limit: int = 50) -> dict[str, Any]:
     rows = conn.execute(select(AiRun).order_by(AiRun.id.desc()).limit(limit)).all()
     return {"used": quota.used_today(conn, real_now), "cap": cap, "runs": rows}
+
+
+def audit_simple(
+    engine: Engine, clock: Clock, actor: Actor, action: str, after: dict[str, Any]
+) -> None:
+    with immediate(engine) as conn:
+        audit.record(
+            conn,
+            clock,
+            actor_id=actor.user_id,
+            ts=actor.acted_at,
+            ip=actor.ip,
+            action=action,
+            after=after,
+        )
+
+
+def clear_secrets(engine: Engine, clock: Clock, actor: Actor) -> int:
+    """Delete every stored secret (they can't be decrypted with this APP_SECRET_KEY)."""
+    with immediate(engine) as conn:
+        removed = secret_store.clear_all(conn)
+        audit.record(
+            conn,
+            clock,
+            actor_id=actor.user_id,
+            ts=actor.acted_at,
+            ip=actor.ip,
+            action="secrets.clear",
+            after={"removed": removed},
+        )
+    return removed

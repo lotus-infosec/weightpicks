@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "admin/_reauth.html" import password %}
+{% block title %}Appearance · Admin{% endblock %}
+{% block content %}
+<h1>Appearance</h1>
+<section class="card">
+  <h2>Name and colours</h2>
+  <form method="post" action="/admin/appearance" class="stack" data-testid="appearance-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>App name <input type="text" name="app_name" maxlength="40" value="{{ values.app_name }}" required></label>
+    {% if errors.app_name %}<p class="alert">{{ errors.app_name }}</p>{% endif %}
+    <fieldset class="stack"><legend>Palette</legend>
+      {% for key, label in palettes %}<label class="check"><input type="radio" name="palette" value="{{ key }}" {{ "checked" if values.palette == key }}> {{ label }}</label>{% endfor %}
+    </fieldset>
+    <button type="submit" class="primary">Save</button>
+  </form>
+</section>
+
+<section class="card" data-testid="logo-card">
+  <h2>Logo</h2>
+  <div class="row"><img src="/brand/logo-192.png?v={{ 'custom' if has_logo else 'default' }}" alt="Current logo" width="96" height="96" class="brand-preview" data-testid="logo-preview">
+    <p class="muted small">{{ "Your uploaded logo." if has_logo else "The WeightPicks logo (default)." }} It's used for the browser icon, the top bar and phone home screens.</p></div>
+  {% if errors.logo %}<p class="alert" role="alert">{{ errors.logo }}</p>{% endif %}
+  <form method="post" action="/admin/appearance/logo" enctype="multipart/form-data" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>Image (PNG, JPEG or WebP, up to 512 KB; square works best) <input type="file" name="file" accept="image/png,image/jpeg,image/webp" required data-testid="logo-file"></label>
+    {{ password() }}
+    <button type="submit" class="primary">Upload logo</button>
+  </form>
+  {% if has_logo %}
+  <form method="post" action="/admin/appearance/logo/remove" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    {{ password() }}
+    <button type="submit" class="ghost">Use the default logo</button>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

@@ -90,3 +90,22 @@ def names(conn: Connection) -> list[str]:
         for n in conn.execute(select(Secret.name).order_by(Secret.name)).scalars()
         if n != KEY_CHECK_NAME
     ]
+
+
+def key_status(conn: Connection, app_secret_key: str) -> str:
+    """ok | missing (no APP_SECRET_KEY) | wrong (secrets stored with another key) | none."""
+    if not names(conn):
+        return "none"
+    try:
+        check_key(conn, app_secret_key)
+    except SecretKeyMissing:
+        return "missing"
+    except WrongSecretKey:
+        return "wrong"
+    return "ok"
+
+
+def clear_all(conn: Connection) -> int:
+    """Delete every stored secret and the key check (after a restore with another key:
+    the old values can't be decrypted, so they must be entered again)."""
+    return conn.execute(delete(Secret)).rowcount

@@ -264,3 +264,71 @@ def pools(conn: Connection, limit: int = 30) -> list[dict[str, Any]]:
         ).all()
         out.append({"pool": p, "entries": entries, "pot_cents": p.buy_in_cents * len(entries)})
     return out
+
+
+def system_health(conn: Connection, now: datetime, cap: int) -> dict[str, Any]:
+    """Admin -> System (BUILD_PLAN §2.9): data freshness, jobs, backlog, AI, integrity."""
+    from app.ai import quota
+    from app.models import AiRun, Heartbeat, JobRun, Settlement, SyncRun
+    from app.services.observations import latest_complete_through
+
+    last_ok = conn.execute(
+        select(SyncRun.finished_at)
+        .where(SyncRun.status == "ok")
+        .order_by(SyncRun.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    last_failed = conn.execute(
+        select(SyncRun.finished_at, SyncRun.error)
+        .where(SyncRun.status != "ok")
+        .order_by(SyncRun.id.desc())
+        .limit(1)
+    ).one_or_none()
+    locked = conn.execute(select(func.count()).where(Market.status == "locked")).scalar_one()
+    overdue = conn.execute(
+        select(func.count()).where(Market.status == "locked", Market.settle_deadline < now)
+    ).scalar_one()
+    outbox = dict(
+        conn.execute(
+            select(OutboxMessage.status, func.count())
+            .where(OutboxMessage.status.in_(("pending", "dead")))
+            .group_by(OutboxMessage.status)
+        ).all()
+    )
+    ledger_run = conn.execute(
+        select(JobRun.status, JobRun.finished_at, JobRun.error)
+        .where(JobRun.job == "ledger_verify")
+        .order_by(JobRun.id.desc())
+        .limit(1)
+    ).one_or_none()
+    backup_run = conn.execute(
+        select(JobRun.status, JobRun.finished_at, JobRun.error)
+        .where(JobRun.job == "auto_backup")
+        .order_by(JobRun.id.desc())
+        .limit(1)
+    ).one_or_none()
+    beats = conn.execute(select(Heartbeat.component, Heartbeat.beat_at)).all()
+    ai_failures = conn.execute(
+        select(func.count()).where(
+            AiRun.status == "error", AiRun.started_at >= now - timedelta(days=1)
+        )
+    ).scalar_one()
+    return {
+        "last_ok_sync": last_ok,
+        "last_failed_sync": last_failed,
+        "complete_through": latest_complete_through(conn),
+        "last_drop": conn.execute(
+            select(func.max(Market.created_at)).where(Market.origin == "core")
+        ).scalar_one(),
+        "last_settlement": conn.execute(select(func.max(Settlement.created_at))).scalar_one(),
+        "locked": int(locked),
+        "overdue": int(overdue),
+        "outbox_pending": int(outbox.get("pending", 0)),
+        "outbox_dead": int(outbox.get("dead", 0)),
+        "neurons_used": quota.used_today(conn, now),
+        "neurons_cap": cap,
+        "ai_failures_24h": int(ai_failures),
+        "ledger_run": ledger_run,
+        "backup_run": backup_run,
+        "heartbeats": [(c, b, now - b < timedelta(minutes=3)) for c, b in beats],
+    }

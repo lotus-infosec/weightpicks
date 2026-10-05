@@ -19,6 +19,8 @@
       Parlays <span class="muted">(when off, the slip takes single bets only)</span></label>
     <label class="check"><input type="checkbox" name="special_events" {{ "checked" if flags.special_events }}>
       Special events <span class="muted">(Price Is Right pools: Events tab and Admin → Events)</span></label>
+    <label class="check"><input type="checkbox" name="backup_ui" {{ "checked" if flags.backup_ui }}>
+      Backups <span class="muted">(backup, download and restore screens in Admin → System)</span></label>
     <label class="check"><input type="checkbox" name="ai_props" {{ "checked" if flags.ai_props }}>
       AI props <span class="muted">(Workers AI suggests props after each drop; Admin → Props)</span></label>
     <label class="check"><input type="checkbox" name="ai_hype" {{ "checked" if flags.ai_hype }}>

@@ -128,11 +128,27 @@ UNGATED_PATHS = frozenset({"/healthz", "/robots.txt", "/manifest.webmanifest"})
 BRAND_FILES = {
     "logo.png": "logo-512.png",
     "logo-192.png": "logo-192.png",
-    "favicon.png": "favicon-32.png",
+    "favicon.png": "favicon-32.png",  # names match services/appearance.BRAND_SIZES
     "apple-touch-icon.png": "apple-touch-icon.png",
     "mark.png": "mark-64.png",
 }
 FROZEN_BLOCKED = ("/api/bets", "/api/pools")
+
+
+def restart_container() -> None:
+    """Stop this container so the restart policy brings it back and the entrypoint applies
+    the staged restore/reset. PID 1 is the server (the entrypoint `exec`s it). Outside a
+    container this only logs: restart the app yourself."""
+    import os
+    import signal
+    import time
+
+    if Path("/.dockerenv").exists():
+        time.sleep(1)  # let the response reach the browser first
+        log.warning("restarting_for_maintenance")
+        os.kill(1, signal.SIGTERM)
+    else:
+        log.warning("restart_required", hint="restart the app to apply the staged action")
 
 
 def announce_setup_token(engine: Engine, clock: Clock) -> None:
@@ -186,6 +202,7 @@ def create_app(
     app.state.domain_clock = domain_clock or LazyAppClock(settings, engine)
     app.state.live = live
     app.state.setup_done = False  # cached once true; only a factory reset undoes it
+    app.state.restart = restart_container  # after staging a restore/reset (tests replace it)
 
     def refresh() -> bool | None:
         """Load the settings row; None if the schema isn't ready yet."""

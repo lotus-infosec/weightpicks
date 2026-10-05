@@ -473,6 +473,7 @@ ADMIN_FLAGS = (  # /admin/discord (Settings)
     "ai_props",
     "ai_hype",
     "special_events",
+    "backup_ui",
 )
 
 

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Restarting · Admin{% endblock %}
+{% block content %}
+<section class="card" data-testid="restarting">
+  <h1>{{ "Restoring" if kind == "restore" else "Resetting" }}…</h1>
+  <p>The {{ kind }} is staged. The app restarts now and applies it before anything else runs; this usually takes under a minute.</p>
+  {% if kind == "reset" %}<p>Afterwards, open <code>/setup</code> with the new setup token from the logs: <code>docker compose logs web | grep SETUP</code>.</p>
+  {% else %}<p>Then log in again. The previous database is kept in backups.</p>{% endif %}
+  <p><a href="/admin">Back to the dashboard</a> (try again in a minute)</p>
+</section>
+{% endblock %}

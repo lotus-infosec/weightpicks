@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% from "admin/_reauth.html" import password %}
+{% block title %}System · Admin{% endblock %}
+{% block content %}
+<h1>System</h1>
+{% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+{% if staged %}<p class="alert" data-testid="staged">A {{ staged.kind }} is staged and will be applied when the app restarts.</p>{% endif %}
+{% if key_status == "wrong" %}
+<section class="card danger" data-testid="key-wrong">
+  <h2>Secrets can't be read</h2>
+  <p>The stored integration secrets (Workers AI, webhooks, SMTP) were saved with a different APP_SECRET_KEY, probably by the instance this backup came from. Integrations act as if they aren't set up. Clear them and enter them again in Settings.</p>
+  <form method="post" action="/admin/system/secrets/clear" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    {{ password() }}
+    <button type="submit" class="danger-button">Clear unreadable secrets</button>
+  </form>
+</section>
+{% elif key_status == "missing" %}<p class="alert">APP_SECRET_KEY isn't set, so stored secrets can't be used.</p>{% endif %}
+
+<section class="card" data-testid="health">
+  <h2>Health</h2>
+  <dl class="facts">
+    <dt>Version</dt><dd>{{ version }} · schema {{ revision }}{% if revision != head %} <span class="badge status-error">expected {{ head }}</span>{% endif %}</dd>
+    <dt>Workers</dt><dd>{% for name, beat, ok in h.heartbeats %}{{ name }} <span class="badge status-{{ 'ok' if ok else 'error' }}">{{ beat | local_time }}</span>{{ " " }}{% else %}<span class="badge status-error">no heartbeat</span>{% endfor %}</dd>
+    <dt>Last good sync</dt><dd>{{ h.last_ok_sync | local_time if h.last_ok_sync else "never" }}{% if h.last_failed_sync %} <span class="muted small">(last failure {{ h.last_failed_sync.finished_at | local_time }})</span>{% endif %}</dd>
+    <dt>Data complete through</dt><dd class="small">{% for metric, day in h.complete_through.items() %}{{ metric.replace("_", " ") }} {{ day.strftime("%b %-d") }}{{ " · " if not loop.last }}{% else %}no data yet{% endfor %}</dd>
+    <dt>Last drop / settlement</dt><dd>{{ h.last_drop | local_time if h.last_drop else "none" }} / {{ h.last_settlement | local_time if h.last_settlement else "none" }}</dd>
+    <dt>Locked markets</dt><dd>{{ h.locked }}{% if h.overdue %} <span class="badge status-error">{{ h.overdue }} overdue</span>{% endif %}</dd>
+    <dt>Discord/email queue</dt><dd>{{ h.outbox_pending }} waiting{% if h.outbox_dead %} · <span class="badge status-error">{{ h.outbox_dead }} gave up</span>{% endif %}</dd>
+    <dt>Workers AI today</dt><dd>{{ "{:,}".format(h.neurons_used) }} of {{ "{:,}".format(h.neurons_cap) }} neurons{% if h.ai_failures_24h %} · {{ h.ai_failures_24h }} failures (24 h){% endif %}</dd>
+    <dt>Ledger check</dt><dd>{% if h.ledger_run %}<span class="badge status-{{ h.ledger_run.status }}">{{ h.ledger_run.status }}</span> {{ h.ledger_run.finished_at | local_time if h.ledger_run.finished_at else "" }}{% else %}not run yet{% endif %}</dd>
+    <dt>Nightly backup</dt><dd>{% if h.backup_run %}<span class="badge status-{{ h.backup_run.status }}">{{ h.backup_run.status }}</span> {{ h.backup_run.finished_at | local_time if h.backup_run.finished_at else "" }}{% else %}not run yet{% endif %}</dd>
+  </dl>
+</section>
+
+{% if backups_on %}
+<section class="card" data-testid="backups">
+  <h2>Backups</h2>
+  <p class="muted">A backup holds the database and uploaded logo. Garmin data and tokens and your .env are never in one. One is made every night at 03:30 (the newest 7 are kept). Copy them off this machine regularly: see docs/backups.md.</p>
+  <form method="post" action="/admin/system/backup" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <button type="submit" class="ghost" data-testid="backup-now">Back up now</button>
+  </form>
+  {% if not backups %}<p class="muted">No backups yet.</p>{% endif %}
+  <ul class="plain stack">
+  {% for b in backups %}
+    <li class="proposal"><p><strong class="small">{{ b.name }}</strong> <span class="badge">{{ b.kind }}</span></p>
+      <p class="muted small">{{ "%.1f"|format(b.size / 1048576) }} MB · {{ b.modified | local_time }}</p>
+      {% if b.kind in ("auto", "manual") %}
+      <details><summary class="small">Download or restore</summary>
+        <form method="post" action="/admin/system/download" class="stack">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="name" value="{{ b.name }}">
+          {{ password() }}
+          <button type="submit" class="ghost">Download</button>
+        </form>
+        <form method="post" action="/admin/system/restore" enctype="multipart/form-data" class="stack">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="name" value="{{ b.name }}">
+          {{ password() }}
+          <button type="submit" class="danger-button">Restore this backup</button>
+        </form>
+      </details>{% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+</section>
+
+<details class="card">
+  <summary><h2 class="inline">Restore from a file</h2></summary>
+  <p class="muted">Upload a backup (.tar.gz) made by WeightPicks. It's checked, then applied when the app restarts in a moment. The current database is kept in backups.</p>
+  <form method="post" action="/admin/system/restore" enctype="multipart/form-data" class="stack" data-testid="restore-upload">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>Backup file <input type="file" name="file" accept=".gz,application/gzip" required></label>
+    {{ password() }}
+    <button type="submit" class="danger-button">Check and restore</button>
+  </form>
+</details>
+{% else %}
+<p class="muted">The backup and restore screens are off (Settings → Backups). The <code>wp backup</code> commands still work.</p>
+{% endif %}
+
+<details class="card danger">
+  <summary><h2 class="inline">Factory reset</h2></summary>
+  <p class="muted">Start over: the database is archived in backups and a fresh one is created, with a new setup token in the logs. Everyone's accounts, bets and history are gone from the app.</p>
+  <form method="post" action="/admin/system/reset" class="stack" data-testid="reset-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>Type the instance name, <strong>{{ app_name }}</strong>, to confirm <input type="text" name="confirm" autocomplete="off" required></label>
+    <label class="check"><input type="checkbox" name="wipe_garmin"> Also delete Garmin data and the login token</label>
+    {{ password() }}
+    <button type="submit" class="danger-button">Factory reset</button>
+  </form>
+</details>
+{% endblock %}
