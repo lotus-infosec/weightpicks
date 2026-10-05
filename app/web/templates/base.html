@@ -18,7 +18,7 @@
   {% if session %}
   <header class="topbar">
     <a class="brand" href="/">{{ instance.app_name }}</a>
-    {% if wallet %}<span class="wallet" data-testid="balance">{{ wallet.balance_cents | money }}</span>{% endif %}
+    {% if wallet %}<span class="wallet" id="balance" data-testid="balance">{{ wallet.balance_cents | money }}</span>{% endif %}
     <form method="post" action="/api/auth/logout" class="inline">
       <input type="hidden" name="csrf_token" value="{{ csrf }}">
       <button type="submit" class="link">Log out</button>

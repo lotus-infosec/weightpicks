@@ -8,7 +8,7 @@
 {% if current %}
 <section class="card" data-testid="season-current">
   <h2>Season {{ current.number }}</h2>
-  <p>{% if current.start_x10 %}{{ "%.1f"|format(current.start_x10 / 10) }}{% else %}?{% endif %} → goal <strong>{% if current.goal_x10 %}{{ "%.1f"|format(current.goal_x10 / 10) }}{% else %}not set{% endif %}</strong> {{ unit }}
+  <p>{% if current.goal_x10 %}{% if current.start_x10 %}{{ "%.1f"|format(current.start_x10 / 10) }} → {% endif %}goal <strong>{{ "%.1f"|format(current.goal_x10 / 10) }} {{ unit }}</strong>{% else %}No goal set, so Goal Reached can only be triggered by hand.{% endif %}
     · <span class="badge status-{{ current.status }}">{{ "goal reached" if current.status == "frozen" else current.status }}</span>
     {% if frozen %}<span class="badge status-frozen">instance frozen</span>{% endif %}</p>
   <p class="muted small">Started {{ current.started_at | local_time }}{% if current.goal_reached_at %} · goal reached {{ current.goal_reached_at | local_time }}{% endif %}. Latest weigh-in: {{ latest or "none" }}.</p>
@@ -61,7 +61,7 @@
     <tbody>
     {% for s in seasons %}
     <tr><td>{{ s.number }}</td>
-      <td data-label="Start → goal">{% if s.start_x10 %}{{ "%.1f"|format(s.start_x10 / 10) }}{% else %}?{% endif %} → {% if s.goal_x10 %}{{ "%.1f"|format(s.goal_x10 / 10) }}{% else %}?{% endif %}</td>
+      <td data-label="Start → goal">{% if s.goal_x10 %}{% if s.start_x10 %}{{ "%.1f"|format(s.start_x10 / 10) }} → {% endif %}{{ "%.1f"|format(s.goal_x10 / 10) }}{% else %}<span class="muted">no goal</span>{% endif %}</td>
       <td data-label="Status">{{ "goal reached" if s.status == "frozen" else s.status }}</td>
       <td data-label="Dates" class="small">{{ s.started_at.strftime("%b %-d, %Y") }}{% if s.ended_at %} – {{ s.ended_at.strftime("%b %-d, %Y") }}{% endif %}</td></tr>
     {% endfor %}

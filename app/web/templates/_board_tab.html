@@ -7,6 +7,7 @@
   {% endfor %}
 </div>
 {% if tab == "events" %}
+{% if pool_message and wallet %}<span class="wallet" id="balance" data-testid="balance" hx-swap-oob="true">{{ wallet.balance_cents | money }}</span>{% endif %}
 {% if not pools %}<p class="muted empty">No special events yet. Watch this space.</p>{% endif %}
 <div class="cards" data-testid="events">
   {% for p in pools %}
@@ -15,7 +16,10 @@
     <p>{{ p.question }}</p>
     <p class="small">Weight on <strong>{{ p.target_date.strftime("%a %b %-d") }}</strong> · buy-in <strong>{{ p.buy_in_cents | money }}</strong> · {{ p.entries }} in · pot <strong data-testid="pot">{{ p.pot_cents | money }}</strong></p>
     {% if pool_message and pool_id == p.pool_id %}<p class="{{ 'notice' if pool_ok else 'alert' }}" role="status" data-testid="pool-message">{{ pool_message }}</p>{% endif %}
-    {% if p.open %}
+    {% if p.open and instance.frozen %}
+    {% if p.my_guess_x10 %}<p class="small">Your guess: <strong>{{ "%.1f"|format(p.my_guess_x10 / 10) }}</strong></p>{% endif %}
+    <p class="muted small">Entries are paused while betting is paused.</p>
+    {% elif p.open %}
     <form hx-post="/api/pools/{{ p.pool_id }}/enter" hx-target="#board" method="post" action="/api/pools/{{ p.pool_id }}/enter" class="pool-form">
       <input type="hidden" name="csrf_token" value="{{ csrf }}">
       <label>Your guess ({{ instance.unit }})
