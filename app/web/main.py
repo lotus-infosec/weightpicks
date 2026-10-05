@@ -1,5 +1,6 @@
 """FastAPI app factory: security headers, CSRF, sessions, pages and health checks."""
 
+import contextlib
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -9,7 +10,13 @@ from zoneinfo import ZoneInfo
 import structlog
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import Engine
@@ -20,7 +27,7 @@ from app.core.config import Settings
 from app.core.db import make_engine
 from app.core.logging import configure_logging
 from app.core.migrations import is_at_head
-from app.services import instance
+from app.services import instance, maintenance
 from app.services import setup as setup_service
 from app.services.instance import InstanceConfig
 from app.web import format as fmt
@@ -108,6 +115,14 @@ def _is_setup_path(path: str) -> bool:
     return path == "/setup" or path.startswith("/setup/")
 
 
+MAINTENANCE_PAGE = (
+    "<!doctype html><html lang=en><meta charset=utf-8>"
+    "<meta name=viewport content='width=device-width, initial-scale=1'>"
+    "<meta name=robots content='noindex, nofollow'><title>Back soon</title>"
+    "<body style='font-family:system-ui;background:#0e1116;color:#e6e6e6;padding:2rem'>"
+    "<h1>Back in a minute</h1><p>The app is restoring a backup or resetting. "
+    "This page will work again shortly.</p></body></html>"
+)
 UNGATED_PATHS = frozenset({"/healthz", "/robots.txt", "/manifest.webmanifest"})
 # /brand/<name> -> the default file in static/brand (an Appearance upload overrides it).
 BRAND_FILES = {
@@ -148,6 +163,9 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log.info("web_started", app_env=settings.app_env)
+        # After a restore/reset, log it in the new database (no schema yet in some tests).
+        with contextlib.suppress(OperationalError):
+            maintenance.record_done(engine, settings, app.state.auth_clock)
         announce_setup_token(engine, app.state.auth_clock)
         yield
         engine.dispose()
@@ -188,6 +206,10 @@ def create_app(
         path = request.url.path
         if path.startswith(("/static/", "/brand/")) or path in UNGATED_PATHS:
             return await call_next(request)
+        if maintenance.pending_action(settings) is not None:
+            # A restore or reset is staged: nothing touches the database until it's applied
+            # at the next start (BUILD_PLAN §1.5).
+            return HTMLResponse(MAINTENANCE_PAGE, status_code=503, headers={"Retry-After": "30"})
         done = await run_in_threadpool(refresh)
         if done is None:
             return await call_next(request)

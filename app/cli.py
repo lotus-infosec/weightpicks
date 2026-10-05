@@ -286,6 +286,52 @@ def _backup(settings: Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def _maintenance(settings: Settings, args: argparse.Namespace) -> int:
+    """Entrypoint steps (apply/wait) and CLI staging/cancelling (BUILD_PLAN §1.5)."""
+    from app.services import backups, maintenance
+
+    cmd = args.maintenance_command
+    if cmd == "apply":
+        result = maintenance.apply(settings)
+        if result.status != "none":
+            print(f"maintenance: {result.status} {result.detail}".strip())
+        return 0 if result.status in ("none", "restored", "reset") else 1
+    if cmd == "wait":
+        maintenance.wait_until_clear(settings)
+        return 0
+    if cmd == "status":
+        action = maintenance.pending_action(settings)
+        print(f"staged: {action}" if action else "nothing staged")
+        return 0
+    if cmd == "cancel":
+        print("cancelled" if maintenance.cancel(settings) else "nothing staged")
+        return 0
+    engine = make_engine(settings.db_url)
+    try:
+        if cmd == "restore":
+            path = backups.resolve(settings, args.name)
+            if path is None:
+                print("no such backup (see `wp backup list`)")
+                return 1
+            maintenance.stage_restore(engine, settings, SystemClock(), None, path)
+        else:
+            maintenance.stage_reset(
+                engine,
+                settings,
+                SystemClock(),
+                None,
+                confirm=args.confirm,
+                wipe_garmin=args.wipe_garmin,
+            )
+    except maintenance.MaintenanceError as exc:
+        print(f"refused: {exc.message}")
+        return 1
+    finally:
+        engine.dispose()
+    print("staged: restart the containers to apply (docker compose restart)")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="wp", description="WeightPicks command line")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -336,6 +382,17 @@ def main(argv: list[str] | None = None) -> int:
     verify_cmd.add_argument("name", nargs="?")
     verify_cmd.add_argument("--latest", action="store_true")
     backup_sub.add_parser("list", help="list backups, newest first")
+    m_cmd = commands.add_parser("maintenance", help="staged restore / factory reset")
+    m_sub = m_cmd.add_subparsers(dest="maintenance_command", required=True)
+    m_sub.add_parser("apply", help="entrypoint (web): apply a staged action before migrating")
+    m_sub.add_parser("wait", help="entrypoint (worker): wait while an action is staged")
+    m_sub.add_parser("status", help="show what is staged")
+    m_sub.add_parser("cancel", help="drop a staged action before it's applied")
+    restore_cmd = m_sub.add_parser("restore", help="stage a restore from a listed backup")
+    restore_cmd.add_argument("name")
+    reset_cmd = m_sub.add_parser("reset", help="stage a factory reset")
+    reset_cmd.add_argument("--confirm", required=True, help="the instance name, exactly")
+    reset_cmd.add_argument("--wipe-garmin", action="store_true")
     args = parser.parse_args(argv)
 
     if args.command == "health" and args.web:
@@ -362,6 +419,8 @@ def main(argv: list[str] | None = None) -> int:
         return _ai(settings, args)
     if args.command == "backup":
         return _backup(settings, args)
+    if args.command == "maintenance":
+        return _maintenance(settings, args)
     return _health_worker(settings)
 
 

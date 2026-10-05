@@ -15,7 +15,7 @@ from app.core.db import make_engine
 from app.core.logging import configure_logging
 from app.core.migrations import is_at_head
 from app.notify.dispatcher import Dispatcher
-from app.services import instance
+from app.services import instance, maintenance
 from app.services.instance import InstanceConfig
 from app.services.sim import app_clock
 from app.worker.jobs import INFRA_JOBS, domain_jobs
@@ -97,6 +97,8 @@ def main() -> None:
     )
     next_tick = 0.0
     while not stop.is_set():
+        if maintenance.worker_should_stop(settings):  # restore/reset staged: hand over
+            break
         try:
             if time.monotonic() >= next_tick:
                 next_tick = time.monotonic() + TICK_SECONDS
