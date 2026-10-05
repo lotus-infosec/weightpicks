@@ -3,7 +3,7 @@ from datetime import date
 from typing import Any
 
 import pytest
-from fastapi.routing import APIRoute
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from sqlalchemy import select, update
@@ -34,22 +34,13 @@ def clients(world: World) -> tuple[TestClient, TestClient, World]:
     return admin_client, player_client, world
 
 
-def admin_routes(app: object) -> set[tuple[str, str]]:
-    def walk(routes: list[object]) -> list[APIRoute]:
-        found: list[APIRoute] = []
-        for r in routes:
-            if isinstance(r, APIRoute):
-                found.append(r)
-            elif hasattr(r, "original_router"):
-                found += walk(r.original_router.routes)
-        return found
-
+def admin_routes(app: FastAPI) -> set[tuple[str, str]]:
     actions = {
         "/admin/users/{user_id}/{action}": ("freeze", "unfreeze", "ban", "reset-password"),
         "/admin/bank/{action}": ("bailout", "adjust", "economy"),
     }
     found: set[tuple[str, str]] = set()
-    for r in walk(list(app.routes)):  # type: ignore[attr-defined]
+    for r in web.api_routes(app):
         if not r.path.startswith("/admin"):
             continue
         for action in actions.get(r.path, (None,)):
@@ -60,7 +51,7 @@ def admin_routes(app: object) -> set[tuple[str, str]]:
 
 def test_permission_matrix(clients: tuple[TestClient, TestClient, World]) -> None:
     admin_c, player_c, w = clients
-    routes = admin_routes(admin_c.app)
+    routes = admin_routes(admin_c.app)  # type: ignore[arg-type]
     assert len(routes) == 53  # STAGE13 +9 (AI); STAGE14 +7 (events, season); STAGE15 +12
     anon = web.client(create_app(w.settings, domain_clock=w.clock))
     with anon:

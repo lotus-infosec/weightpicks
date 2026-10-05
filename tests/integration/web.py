@@ -3,6 +3,7 @@
 import re
 
 from fastapi import FastAPI
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, select, update
 
@@ -19,6 +20,21 @@ _META = re.compile(r'<meta name="csrf-token" content="([^"]*)"')
 def client(app: FastAPI) -> TestClient:
     """HTTPS base URL so the Secure session cookie is sent back, like a real browser."""
     return TestClient(app, base_url="https://testserver")
+
+
+def api_routes(app: FastAPI) -> list[APIRoute]:
+    """Every route, including those inside included routers."""
+
+    def walk(routes: list[object]) -> list[APIRoute]:
+        found: list[APIRoute] = []
+        for r in routes:
+            if isinstance(r, APIRoute):
+                found.append(r)
+            elif hasattr(r, "original_router"):  # include_router wrapper
+                found += walk(r.original_router.routes)
+        return found
+
+    return walk(list(app.routes))
 
 
 def open_registration(engine: Engine) -> None:
