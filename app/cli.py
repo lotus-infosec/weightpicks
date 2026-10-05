@@ -256,6 +256,36 @@ def _ai(settings: Settings, args: argparse.Namespace) -> int:
     return 0 if report.status in ("ok", "skipped", "off") else 1
 
 
+def _backup(settings: Settings, args: argparse.Namespace) -> int:
+    from app.services import backups
+
+    if args.backup_command == "list":
+        for b in backups.listing(settings):
+            print(f"{b.name}  {b.size / 1024:,.0f} KB  {b.kind}  {b.modified:%Y-%m-%d %H:%M} UTC")
+        return 0
+    if args.backup_command == "verify":
+        names = [b.name for b in backups.listing(settings) if b.kind in ("auto", "manual")]
+        name = names[0] if args.latest and names else args.name
+        path = backups.resolve(settings, name or "")
+        if path is None:
+            print("no such backup")
+            return 1
+        result = backups.verify(path)
+        if result.ok and result.manifest is not None:
+            m = result.manifest
+            print(f"OK {path.name}: revision {m.revision}, {len(m.files)} files, {m.created_at}")
+            return 0
+        print(f"BAD {path.name}: " + "; ".join(result.problems))
+        return 1
+    engine = make_engine(settings.db_url)
+    try:
+        path = backups.create(engine, settings, SystemClock(), label=args.label)
+    finally:
+        engine.dispose()
+    print(f"created {path.name} ({path.stat().st_size / 1024:,.0f} KB)")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="wp", description="WeightPicks command line")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -298,6 +328,14 @@ def main(argv: list[str] | None = None) -> int:
     ai_run = ai_sub.add_parser("run", help="run one AI prop cycle now")
     ai_run.add_argument("kind", choices=("daily", "weekly", "manual"))
     ai_sub.add_parser("quota", help="neurons used today vs the daily cap")
+    backup_cmd = commands.add_parser("backup", help="backups (BUILD_PLAN §1.6)")
+    backup_sub = backup_cmd.add_subparsers(dest="backup_command", required=True)
+    create_cmd = backup_sub.add_parser("create", help="snapshot the database and uploads now")
+    create_cmd.add_argument("--label", default=None)
+    verify_cmd = backup_sub.add_parser("verify", help="check a backup's files and checksums")
+    verify_cmd.add_argument("name", nargs="?")
+    verify_cmd.add_argument("--latest", action="store_true")
+    backup_sub.add_parser("list", help="list backups, newest first")
     args = parser.parse_args(argv)
 
     if args.command == "health" and args.web:
@@ -322,6 +360,8 @@ def main(argv: list[str] | None = None) -> int:
         return _reconcile(settings, args.days)
     if args.command == "ai":
         return _ai(settings, args)
+    if args.command == "backup":
+        return _backup(settings, args)
     return _health_worker(settings)
 
 

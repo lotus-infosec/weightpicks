@@ -26,6 +26,11 @@ def head_revision() -> str | None:
     return ScriptDirectory.from_config(_config()).get_current_head()
 
 
+def known_revisions() -> set[str]:
+    """Every revision this code knows; a backup from a newer schema isn't among them."""
+    return {r.revision for r in ScriptDirectory.from_config(_config()).walk_revisions()}
+
+
 def current_revision(engine: Engine) -> str | None:
     with engine.connect() as conn:
         return MigrationContext.configure(conn).get_current_revision()

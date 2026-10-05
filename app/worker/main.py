@@ -19,6 +19,7 @@ from app.services import instance
 from app.services.instance import InstanceConfig
 from app.services.sim import app_clock
 from app.worker.jobs import INFRA_JOBS, domain_jobs
+from app.worker.jobs.backup import AutoBackupJob
 from app.worker.jobs.commands import CommandsJob
 from app.worker.jobs.outbox import OutboxDispatchJob
 from app.worker.registry import Job, run_due
@@ -81,7 +82,12 @@ def main() -> None:
     config = instance.load(engine, domain_clock, settings)
     jobs: Sequence[Job] = domain_jobs(settings, config)
     dispatch = OutboxDispatchJob(Dispatcher(settings, clock, domain_clock))
-    infra: tuple[Job, ...] = (*INFRA_JOBS, CommandsJob(settings, domain_clock), dispatch)
+    infra: tuple[Job, ...] = (
+        *INFRA_JOBS,
+        CommandsJob(settings, domain_clock),
+        dispatch,
+        AutoBackupJob(settings, config.tz),
+    )
     seen: dict[str, str] = {}
     log.info(
         "worker_started",
