@@ -229,6 +229,33 @@ def _reconcile(settings: Settings, days: int) -> int:
     return 0
 
 
+def _ai(settings: Settings, args: argparse.Namespace) -> int:
+    """Run one AI prop cycle now, or show today's neuron usage. AI problems never raise;
+    the outcome is printed and recorded in ai_runs like a scheduled run."""
+    from app.ai import quota
+    from app.services import ai_props
+
+    engine = make_engine(settings.db_url)
+    try:
+        if args.ai_command == "quota":
+            with engine.connect() as conn:
+                used = quota.used_today(conn, SystemClock().now())
+            print(f"neurons used today (UTC): {used:,} of {settings.ai_daily_neuron_cap:,}")
+            return 0
+        report = ai_props.run(
+            engine, sim.app_clock(settings, engine), SystemClock(), settings, f"props_{args.kind}"
+        )
+    finally:
+        engine.dispose()
+    print(
+        f"ai {args.kind}: {report.status}"
+        + (f" ({report.reason})" if report.reason else "")
+        + f"; queued {len(report.queued)}, posted {len(report.created)}, "
+        f"dropped {[d['reason'] for d in report.dropped]}"
+    )
+    return 0 if report.status in ("ok", "skipped", "off") else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="wp", description="WeightPicks command line")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -266,6 +293,11 @@ def main(argv: list[str] | None = None) -> int:
     report_sub = report_cmd.add_subparsers(dest="report_command", required=True)
     rec = report_sub.add_parser("reconcile", help="engine inputs vs raw Garmin data, by day")
     rec.add_argument("--days", type=int, default=7)
+    ai_cmd = commands.add_parser("ai", help="Workers AI props (STAGE13)")
+    ai_sub = ai_cmd.add_subparsers(dest="ai_command", required=True)
+    ai_run = ai_sub.add_parser("run", help="run one AI prop cycle now")
+    ai_run.add_argument("kind", choices=("daily", "weekly", "manual"))
+    ai_sub.add_parser("quota", help="neurons used today vs the daily cap")
     args = parser.parse_args(argv)
 
     if args.command == "health" and args.web:
@@ -288,6 +320,8 @@ def main(argv: list[str] | None = None) -> int:
         return _setup_token(settings)
     if args.command == "report":
         return _reconcile(settings, args.days)
+    if args.command == "ai":
+        return _ai(settings, args)
     return _health_worker(settings)
 
 

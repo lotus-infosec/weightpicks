@@ -65,3 +65,13 @@ def test_web_health_fails_when_nothing_listens(
     # Use a port that was just free so a running dev stack on :8000 can't interfere.
     monkeypatch.setattr("app.cli.WEB_HEALTH_URL", f"http://127.0.0.1:{_closed_port()}/healthz")
     assert main(["health", "--web"]) == 1
+
+
+def test_ai_commands_without_setup_or_token(
+    cli_env: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["migrate"]) == 0
+    assert main(["ai", "quota"]) == 0
+    assert "neurons used today (UTC): 0 of 5,000" in capsys.readouterr().out
+    assert main(["ai", "run", "daily"]) == 0  # no settings row: AI is simply off
+    assert "ai daily: off" in capsys.readouterr().out
