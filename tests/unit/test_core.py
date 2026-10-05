@@ -107,7 +107,7 @@ def _pragmas(engine: Engine) -> dict[str, object]:
 
 
 def test_pragmas_applied_on_every_new_connection(engine: Engine) -> None:
-    expected = {"journal_mode": "wal", "synchronous": 1, "foreign_keys": 1, "busy_timeout": 5000}
+    expected = {"journal_mode": "wal", "synchronous": 1, "foreign_keys": 1, "busy_timeout": 10000}
     assert _pragmas(engine) == expected
     engine.dispose()  # force brand-new DBAPI connections
     assert _pragmas(engine) == expected

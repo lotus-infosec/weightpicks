@@ -162,9 +162,10 @@ def _balance(engine: Engine, user: int) -> int:
     return value
 
 
-def run_season(
-    tmp_path: Path, *, days: int = 60, players: int = 6, seed: int = 11, v2: bool = False
-) -> SeasonRun:
+def start_season(
+    tmp_path: Path, *, players: int = 6, v2: bool = False
+) -> tuple[Engine, Settings, datetime, list[int], Actor]:
+    """A migrated instance on Oct 1, set up, with funded bettors and an admin."""
     settings = Settings(
         app_env="dev",
         data_dir=tmp_path,
@@ -204,7 +205,13 @@ def run_season(
         display_name="Admin",
         password="correct horse battery",
     )
-    admin_actor = Actor(admin_id)
+    return engine, settings, start, users, Actor(admin_id)
+
+
+def run_season(
+    tmp_path: Path, *, days: int = 60, players: int = 6, seed: int = 11, v2: bool = False
+) -> SeasonRun:
+    engine, settings, start, users, admin_actor = start_season(tmp_path, players=players, v2=v2)
     run = SeasonRun(engine, settings, start + timedelta(days=days), users)
     rng = np.random.default_rng(seed)
     now = start
