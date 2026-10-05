@@ -60,6 +60,13 @@ ENV PATH=/opt/venv/bin:$PATH \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DATA_DIR=/data
+# Debian security fixes newer than the pinned base image (Trivy, STAGE16): the runtime
+# image ships with every published fix even before Dependabot bumps the digest.
+# The base image's own pip is never used (the app runs from the uv-built venv): remove it.
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/* \
+ && python -m pip uninstall -y --no-input pip
 RUN groupadd --system --gid 10001 wp \
  && useradd --system --uid 10001 --gid wp --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin wp \
  && mkdir -p /data /garmin/.GarminDb \
