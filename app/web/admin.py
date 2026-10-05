@@ -1,7 +1,7 @@
 """Admin panel I (BUILD_PLAN §1.5, CONCEPT §8, D-037). Every route requires the admin;
 destructive and money actions re-prompt for the admin's password."""
 
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -13,8 +13,8 @@ from sqlalchemy import select
 from app.core.security import verify_password
 from app.domain import setup as setup_steps
 from app.domain.economy import VIG_PRESETS, Economy
-from app.models import Market, User
-from app.services import admin, admin_views, board, instance
+from app.models import Command, Market, User
+from app.services import admin, admin_ai, admin_views, ai_props, board, instance
 from app.services import props as props_service
 from app.services import secrets as secret_store
 from app.services import stats as stats_service
@@ -37,6 +37,13 @@ MESSAGES = {
     "test": "Test post queued. It should appear in Discord within a minute.",
     "flags": "Settings saved.",
     "prop": "Prop posted. Players can bet on it until tonight's lock.",
+    "approved": "AI prop approved: re-priced and posted.",
+    "rejected": "AI proposal rejected.",
+    "ai_mode": "AI publishing mode saved.",
+    "ai_run": "AI run requested. The worker picks it up within a minute.",
+    "workers_ai": "Workers AI settings saved.",
+    "note": "Note saved.",
+    "note_ended": "Note ended.",
 }
 REAUTH_FAILED_MESSAGE = "That's not your password. Nothing was changed."
 
@@ -378,13 +385,31 @@ def build_router() -> APIRouter:
                 conn.execute(
                     select(Market.id.label("market_id"), Market.title, Market.status)
                     .where(
-                        Market.origin == "admin",
+                        Market.origin.in_(("admin", "ai")),
                         Market.status.in_(("open", "locked")),
                     )
                     .order_by(Market.id.desc())
                     .limit(30)
                 ).all()
             )
+            ai_queue: list[dict[str, Any]] = []
+            for proposal in ai_props.pending(conn, now):
+                if config is None:
+                    break
+                try:
+                    priced = props_service.preview(
+                        conn, config, today, proposal.template, dict(proposal.form)
+                    )
+                except props_service.PropError:
+                    priced = None
+                ai_queue.append({"row": proposal, "preview": priced})
+            last_run = conn.execute(
+                select(Command.status, Command.result, Command.created_at)
+                .where(Command.type == "ai_props_now")
+                .order_by(Command.id.desc())
+                .limit(1)
+            ).one_or_none()
+            ai_configured = admin_ai.workers_ai_configured(conn)
         unit = config.unit if config else state.settings.wp_unit
         latest = canon[-1].value / 10 if canon else None
         metrics = [
@@ -420,6 +445,11 @@ def build_router() -> APIRouter:
                 "max_future": (today + timedelta(days=120)).isoformat(),
                 "metrics": metrics,
                 "open_props": open_props,
+                "ai_queue": ai_queue,
+                "ai_on": bool(config and config.flags.get("ai_props")),
+                "ai_mode": config.ai_mode if config else "review",
+                "ai_configured": ai_configured,
+                "ai_last_run": last_run,
                 "active": "props",
             },
             status,
@@ -467,6 +497,147 @@ def build_router() -> APIRouter:
             return props_page(request, template, dict(form), error=exc.message, status=400)
         return RedirectResponse(f"/admin/props?template={template}&ok=prop", status_code=303)
 
+    # ---- AI review queue, mode, runs and notes (D-042) ------------------------------------
+
+    @router.post("/props/ai/{proposal_id}/approve")
+    async def ai_approve(request: Request, session: Admin, proposal_id: int) -> Response:
+        state = request.app.state
+        try:
+            await run_in_threadpool(
+                ai_props.approve,
+                state.engine,
+                state.domain_clock,
+                actor(request, session),
+                proposal_id,
+            )
+        except ai_props.ApprovalError as exc:
+            return props_page(request, "milestone_by", error=exc.message, status=409)
+        return back("/admin/props", "approved")
+
+    @router.post("/props/ai/{proposal_id}/reject")
+    async def ai_reject(request: Request, session: Admin, proposal_id: int) -> Response:
+        state = request.app.state
+        try:
+            await run_in_threadpool(
+                ai_props.reject,
+                state.engine,
+                state.domain_clock,
+                actor(request, session),
+                proposal_id,
+            )
+        except ai_props.ApprovalError as exc:
+            return props_page(request, "milestone_by", error=exc.message, status=409)
+        return back("/admin/props", "rejected")
+
+    @router.post("/props/ai/mode")
+    async def ai_mode(request: Request, session: Admin) -> Response:
+        form = await read_form(request)
+        state = request.app.state
+        if not await reauth(request, session, form, "settings.ai_mode"):
+            return props_page(request, "milestone_by", error=REAUTH_FAILED_MESSAGE, status=403)
+        try:
+            await run_in_threadpool(
+                admin_ai.set_ai_mode,
+                state.engine,
+                state.auth_clock,
+                actor(request, session),
+                form.get("ai_mode", ""),
+            )
+        except AdminError as exc:
+            return props_page(request, "milestone_by", error=exc.message, status=400)
+        return back("/admin/props", "ai_mode")
+
+    @router.post("/props/ai/run")
+    async def ai_run_now(request: Request, session: Admin) -> Response:
+        state = request.app.state
+        await run_in_threadpool(
+            admin.request_command,
+            state.engine,
+            state.auth_clock,
+            actor(request, session),
+            "ai_props_now",
+        )
+        return back("/admin/props", "ai_run")
+
+    @router.get("/ai")
+    def ai_runs(request: Request, session: Admin) -> Response:
+        state = request.app.state
+        with state.engine.connect() as conn:
+            view = admin_ai.runs_view(
+                conn, state.auth_clock.now(), state.settings.ai_daily_neuron_cap
+            )
+            configured = admin_ai.workers_ai_configured(conn)
+        return render(
+            request, "admin/ai.html", {"v": view, "configured": configured, "active": "ai"}
+        )
+
+    def notes_page(request: Request, error: str | None = None, status: int = 200) -> Response:
+        state = request.app.state
+        with state.engine.connect() as conn:
+            config = instance.read(conn)
+            tz = config.tz if config else state.settings.tz
+            today = state.domain_clock.now().astimezone(tz).date()
+            rows = admin_ai.notes(conn, today)
+        return render(
+            request,
+            "admin/notes.html",
+            {
+                "notes": rows,
+                "today": today.isoformat(),
+                "max_to": (today + timedelta(days=admin_ai.NOTE_MAX_DAYS)).isoformat(),
+                "error": error,
+                "active": "notes",
+            },
+            status,
+        )
+
+    @router.get("/notes")
+    def notes(request: Request, session: Admin) -> Response:
+        return notes_page(request)
+
+    @router.post("/notes")
+    async def notes_add(request: Request, session: Admin) -> Response:
+        form = await read_form(request)
+        state = request.app.state
+        try:
+            start = date.fromisoformat(form.get("active_from", ""))
+            end = date.fromisoformat(form.get("active_to", ""))
+        except ValueError:
+            return notes_page(request, "Pick a start and end date.", 400)
+        try:
+            await run_in_threadpool(
+                admin_ai.add_note,
+                state.engine,
+                state.auth_clock,
+                actor(request, session),
+                form.get("text", ""),
+                start,
+                end,
+            )
+        except AdminError as exc:
+            return notes_page(request, exc.message, 400)
+        return back("/admin/notes", "note")
+
+    @router.post("/notes/{note_id}/end")
+    async def notes_end(request: Request, session: Admin, note_id: int) -> Response:
+        state = request.app.state
+        with state.engine.connect() as conn:
+            config = instance.read(conn)
+        tz = config.tz if config else state.settings.tz
+        today = state.domain_clock.now().astimezone(tz).date()
+        try:
+            await run_in_threadpool(
+                admin_ai.end_note,
+                state.engine,
+                state.auth_clock,
+                actor(request, session),
+                note_id,
+                today,
+            )
+        except AdminError as exc:
+            return notes_page(request, exc.message, 404)
+        return back("/admin/notes", "note_ended")
+
     # ---- discord and flags -----------------------------------------------------------------------
 
     def discord_page(request: Request, error: str | None = None, status: int = 200) -> Response:
@@ -477,6 +648,7 @@ def build_router() -> APIRouter:
             }
             config = instance.read(conn)
             recent = admin_views.recent_outbox(conn)
+            ai_configured = admin_ai.workers_ai_configured(conn)
         return render(
             request,
             "admin/discord.html",
@@ -486,6 +658,7 @@ def build_router() -> APIRouter:
                 "configured": configured,
                 "flags": config.flags if config else {},
                 "recent": recent,
+                "ai_configured": ai_configured,
                 "can_store": bool(state.settings.app_secret_key.get_secret_value()),
                 "error": error,
                 "active": "discord",
@@ -516,6 +689,27 @@ def build_router() -> APIRouter:
         except AdminError as exc:
             return discord_page(request, exc.message, 400)
         return back("/admin/discord", "webhook")
+
+    @router.post("/discord/workers-ai")
+    async def discord_workers_ai(request: Request, session: Admin) -> Response:
+        form = await read_form(request)
+        state = request.app.state
+        if not await reauth(request, session, form, "integrations.workers_ai"):
+            return discord_page(request, REAUTH_FAILED_MESSAGE, 403)
+        try:
+            await run_in_threadpool(
+                admin_ai.set_workers_ai,
+                state.engine,
+                state.auth_clock,
+                actor(request, session),
+                state.settings.app_secret_key.get_secret_value(),
+                form.get("account_id", ""),
+                form.get("token", ""),
+                form.get("clear") == "on",
+            )
+        except AdminError as exc:
+            return discord_page(request, exc.message, 400)
+        return back("/admin/discord", "workers_ai")
 
     @router.post("/discord/test/{category}")
     async def discord_test(request: Request, session: Admin, category: str) -> Response:

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Notes · Admin{% endblock %}
+{% block content %}
+<h1>Notes for the AI</h1>
+{% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+<p class="muted">Short context Workers AI can turn into props, like "Traveling Thu-Sun" or "Tailgate Sunday". Active notes go into each AI digest. Keep them free of anything private.</p>
+<section class="card">
+  <h2>Add a note</h2>
+  <form method="post" action="/admin/notes" class="stack" data-testid="note-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>Note <input type="text" name="text" maxlength="200" required></label>
+    <div class="row wrap">
+      <label>From <input type="date" name="active_from" value="{{ today }}" required></label>
+      <label>To <input type="date" name="active_to" value="{{ today }}" max="{{ max_to }}" required></label>
+    </div>
+    <button type="submit" class="primary">Save note</button>
+  </form>
+</section>
+<section class="card">
+  <h2>Notes</h2>
+  {% if not notes %}<p class="muted">No notes yet.</p>{% endif %}
+  <ul class="plain stack" data-testid="notes">
+  {% for n in notes %}
+    <li><span class="badge status-{{ 'open' if n.state == 'active' else ('pending' if n.state == 'upcoming' else 'settled') }}">{{ n.state }}</span>
+      {{ n.text }} <span class="muted small">{{ n.from.strftime("%b %-d") }} – {{ n.to.strftime("%b %-d") }}</span>
+      {% if n.state != "ended" %}
+      <form method="post" action="/admin/notes/{{ n.id }}/end" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <button type="submit" class="small">End</button>
+      </form>{% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+</section>
+{% endblock %}

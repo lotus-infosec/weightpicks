@@ -17,6 +17,10 @@
       Props and futures <span class="muted">(Props/Futures tabs and Admin → Props)</span></label>
     <label class="check"><input type="checkbox" name="parlays" {{ "checked" if flags.parlays }}>
       Parlays <span class="muted">(when off, the slip takes single bets only)</span></label>
+    <label class="check"><input type="checkbox" name="ai_props" {{ "checked" if flags.ai_props }}>
+      AI props <span class="muted">(Workers AI suggests props after each drop; Admin → Props)</span></label>
+    <label class="check"><input type="checkbox" name="ai_hype" {{ "checked" if flags.ai_hype }}>
+      Stat-update posts <span class="muted">(to the hype webhook, worded by Workers AI when a token is set)</span></label>
     <button type="submit">Save</button>
   </form>
 </section>
@@ -55,6 +59,21 @@
     </label>
     {{ password() }}
     <button type="submit" class="primary">Save webhook</button>
+  </form>
+</section>
+
+<section class="card" data-testid="workers-ai">
+  <h2>Workers AI</h2>
+  <p>Status: {% if ai_configured %}<span class="badge good" data-testid="ai-configured">configured</span>{% else %}<span class="muted" data-testid="ai-configured">not set</span>{% endif %}</p>
+  {% if not can_store %}<p class="alert">APP_SECRET_KEY isn't set, so the token can't be stored.</p>{% endif %}
+  <p class="muted">Cloudflare account ID and an API token with Workers AI permissions. Stored encrypted and never shown again. Without them, AI features skip quietly and everything else works.</p>
+  <form method="post" action="/admin/discord/workers-ai" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>Account ID <input type="text" name="account_id" autocomplete="off" spellcheck="false" {{ "disabled" if not can_store }}></label>
+    <label>API token <input type="password" name="token" autocomplete="off" spellcheck="false" {{ "disabled" if not can_store }}></label>
+    <label class="check"><input type="checkbox" name="clear"> Clear both</label>
+    {{ password() }}
+    <button type="submit" class="primary" {{ "disabled" if not can_store }}>Save Workers AI</button>
   </form>
 </section>
 

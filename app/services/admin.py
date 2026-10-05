@@ -409,12 +409,16 @@ def reauth_failed(engine: Engine, clock: Clock, actor: Actor, action: str) -> No
 # ---- commands -----------------------------------------------------------------------------
 
 
-def request_sync(engine: Engine, clock: Clock, actor: Actor) -> int:
-    """Queue a sync-now command for the worker (one pending at a time)."""
+COMMANDS = {"sync_now": "sync.request", "ai_props_now": "ai.run_request"}
+
+
+def request_command(engine: Engine, clock: Clock, actor: Actor, kind: str) -> int:
+    """Queue a command for the worker (one pending of each kind at a time)."""
+    action = COMMANDS[kind]
     with immediate(engine) as conn:
         pending = conn.execute(
             select(Command.id).where(
-                Command.type == "sync_now", Command.status.in_(("pending", "running"))
+                Command.type == kind, Command.status.in_(("pending", "running"))
             )
         ).scalar_one_or_none()
         if pending is not None:
@@ -422,7 +426,7 @@ def request_sync(engine: Engine, clock: Clock, actor: Actor) -> int:
         command_id: int = conn.execute(
             insert(Command)
             .values(
-                type="sync_now",
+                type=kind,
                 args={},
                 status="pending",
                 created_by=actor.user_id,
@@ -435,11 +439,16 @@ def request_sync(engine: Engine, clock: Clock, actor: Actor) -> int:
             clock,
             actor_id=actor.user_id,
             ts=actor.acted_at,
-            action="sync.request",
+            action=action,
             target=("command", command_id),
             ip=actor.ip,
         )
     return command_id
+
+
+def request_sync(engine: Engine, clock: Clock, actor: Actor) -> int:
+    """Queue a sync-now command for the worker (one pending at a time)."""
+    return request_command(engine, clock, actor, "sync_now")
 
 
 __all__ = ["Actor", "AdminError"]
@@ -447,7 +456,14 @@ __all__ = ["Actor", "AdminError"]
 
 # ---- Discord and flags (STAGE11, D-040) ----------------------------------------------
 
-ADMIN_FLAGS = ("registration_open", "discord_public", "props_futures", "parlays")  # /admin/discord
+ADMIN_FLAGS = (  # /admin/discord (Settings)
+    "registration_open",
+    "discord_public",
+    "props_futures",
+    "parlays",
+    "ai_props",
+    "ai_hype",
+)
 
 
 def set_webhook(

@@ -7,6 +7,53 @@
 {% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
 <p class="muted">Pick a template and its parameters. The engine sets the odds; nobody prices by hand. Props open now, lock tonight at the bet lock and settle on their own (milestones and streaks as soon as they're decided).</p>
 
+<section class="card" data-testid="ai-queue">
+  <h2>AI suggestions</h2>
+  {% if not ai_on %}<p class="muted">AI props are off. Turn them on in <a href="/admin/discord">Settings</a>{% if not ai_configured %} and add a Workers AI token{% endif %}.</p>
+  {% elif not ai_configured %}<p class="alert">AI props are on, but no Workers AI token is stored (<a href="/admin/discord">Settings</a>). Cycles are skipped.</p>{% endif %}
+  <p class="muted">Workers AI suggests props from the same templates; the engine prices them and code checks every rule. {% if ai_mode == "auto" %}<strong>Auto-publish is on</strong>: valid suggestions post straight away.{% else %}Review mode: nothing posts until you approve it. Approving re-prices with the latest data.{% endif %}</p>
+  {% if not ai_queue %}<p class="muted" data-testid="ai-queue-empty">Nothing waiting for review.</p>{% endif %}
+  <ul class="plain stack">
+  {% for item in ai_queue %}{% set p = item.row %}{% set pv = item.preview %}
+    <li class="proposal" data-testid="proposal">
+      <p><strong>{{ pv.spec.title if pv else p.title }}</strong> <span class="muted small">({{ short[p.template] }})</span></p>
+      {% if p.blurb %}<p class="muted small">{{ p.blurb }}</p>{% endif %}
+      {% if pv %}<p class="small">{{ "Over" if pv.spec.sides[0] == "over" else "Yes" }} {{ pv.pricing.odds_over | odds }} · {{ "Under" if pv.spec.sides[1] == "under" else "No" }} {{ pv.pricing.odds_under | odds }} <span class="muted">(fair chance {{ "%.0f"|format(pv.pricing.p_over * 100) }}%)</span></p>
+      {% else %}<p class="small alert">The engine won't price this now. Approving will fail; reject it.</p>{% endif %}
+      <p class="muted small">Expires {{ p.expires_at | local_time }}</p>
+      <div class="row">
+        <form method="post" action="/admin/props/ai/{{ p.id }}/approve" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          <button type="submit" class="primary small" data-testid="approve">Approve</button>
+        </form>
+        <form method="post" action="/admin/props/ai/{{ p.id }}/reject" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          <button type="submit" class="small" data-testid="reject">Reject</button>
+        </form>
+      </div>
+    </li>
+  {% endfor %}
+  </ul>
+  <div class="row wrap">
+    <form method="post" action="/admin/props/ai/run" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <button type="submit" data-testid="ai-run-now" {{ "disabled" if not ai_on }}>Run AI props now</button>
+    </form>
+    <a href="/admin/ai" class="small">AI runs and usage</a>
+  </div>
+  {% if ai_last_run %}<p class="muted small" data-testid="ai-last-run">Last manual run: {{ ai_last_run.status }}{% if ai_last_run.result %} · {{ ai_last_run.result.ai_status }}{% if ai_last_run.result.ai_reason %} ({{ ai_last_run.result.ai_reason }}){% endif %}, {{ ai_last_run.result.queued or 0 }} queued, {{ ai_last_run.result.created or 0 }} posted, {{ ai_last_run.result.dropped or 0 }} dropped{% endif %}</p>{% endif %}
+  <details>
+    <summary class="small">Publishing mode</summary>
+    <form method="post" action="/admin/props/ai/mode" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <label class="check"><input type="radio" name="ai_mode" value="review" {{ "checked" if ai_mode != "auto" }}> Review (approve each one)</label>
+      <label class="check"><input type="radio" name="ai_mode" value="auto" {{ "checked" if ai_mode == "auto" }}> Auto-publish valid suggestions</label>
+      {{ password() }}
+      <button type="submit">Save mode</button>
+    </form>
+  </details>
+</section>
+
 <nav class="tabs" aria-label="Template">
   {% for key, label in templates %}<a href="/admin/props?template={{ key }}" class="tab{{ ' active' if key == template }}">{{ short[key] }}</a>{% endfor %}
 </nav>
