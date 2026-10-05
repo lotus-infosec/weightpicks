@@ -131,3 +131,24 @@ def test_neuron_estimates_match_the_plan_budget() -> None:
 )
 def test_text_checks(text: str, reason: str | None) -> None:
     assert problem(text, ["Phil", "A"]) == reason
+
+
+def test_live_envelope_shape_with_choices() -> None:
+    """Recorded from a live STAGE13 call (2026-10-04): Workers AI now also returns an
+    OpenAI-style `choices` list next to `response`; `response` and `usage` are read."""
+    content = '{"proposals": [{"template": "milestone_by", "params": {"threshold": 220.0}}]}'
+    body = {
+        "success": True,
+        "errors": [],
+        "result": {
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": content}}],
+            "model": "@cf/meta/llama-3.1-8b-fast-v2",
+            "object": "chat.completion",
+            "response": {"proposals": [{"template": "milestone_by", "params": {"threshold": 220}}]},
+            "usage": {"prompt_tokens": 779, "completion_tokens": 187},
+        },
+    }
+    rec = Recorder(lambda request: httpx.Response(200, json=body))
+    result = client(rec).run(MODEL, MESSAGES, max_tokens=600, json_schema=SCHEMA)
+    assert result.data["proposals"][0]["params"]["threshold"] == 220
+    assert (result.input_tokens, result.output_tokens) == (779, 187)
