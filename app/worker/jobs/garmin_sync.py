@@ -12,14 +12,28 @@ class SyncFailed(Exception):
     pass
 
 
+class SyncSignal:
+    """Bumped after each successful scheduled sync, so jobs that only care about new data
+    (the goal watch) can skip the database until there is some."""
+
+    def __init__(self) -> None:
+        self.version = 0
+
+    def bump(self) -> None:
+        self.version += 1
+
+
 class GarminSyncJob:
     """Sync + ingest: every 15 min in the weigh-in window, every 2 h otherwise."""
 
     name = "garmin_sync"
 
-    def __init__(self, settings: Settings, config: InstanceConfig) -> None:
+    def __init__(
+        self, settings: Settings, config: InstanceConfig, signal: SyncSignal | None = None
+    ) -> None:
         self.settings = settings
         self.config = config  # zone and unit come from the settings row (D-036)
+        self.signal = signal or SyncSignal()
         self._provider: DataProvider | None = None
 
     def due(self, now: datetime) -> str:
@@ -37,3 +51,4 @@ class GarminSyncJob:
         result = run_sync(ctx.engine, ctx.clock, provider, tz=self.config.tz, unit=self.config.unit)
         if result.status != "ok":
             raise SyncFailed(result.error)
+        self.signal.bump()

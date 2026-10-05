@@ -45,6 +45,7 @@
   <header class="topbar"><span class="brand">{{ instance.app_name }}</span></header>
   {% endif %}
   <main class="page{{ ' wide' if session and session.role == 'admin' }}">
+    {% if instance.frozen and session %}<p class="alert frozen-banner" data-testid="frozen-banner">{% if session.role == "admin" %}The instance is frozen: no bets or pool entries. Admin → Season to unfreeze or start a new season.{% else %}Betting is paused. Your history and the leaderboard are still here.{% endif %}</p>{% endif %}
     {% if message %}<p class="notice" role="status">{{ message }}</p>{% endif %}
     {% block content %}{% endblock %}
   </main>

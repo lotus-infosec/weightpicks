@@ -253,6 +253,12 @@ def enter(engine: Engine, clock: Clock, *, user_id: int, pool_id: int, guess_x10
 
 
 def lock_due(engine: Engine, now: datetime) -> int:
+    with engine.connect() as conn:  # read first: most passes have nothing to lock
+        if (
+            conn.execute(select(Pool.id).where(Pool.status == OPEN, Pool.lock_at <= now)).first()
+            is None
+        ):
+            return 0
     with immediate(engine) as conn:
         return conn.execute(
             update(Pool).where(Pool.status == OPEN, Pool.lock_at <= now).values(status=LOCKED)
@@ -385,30 +391,24 @@ class PoolPass:
 
 
 def tick(engine: Engine, clock: Clock) -> PoolPass:
-    """Every-tick pass: lock due pools, then settle the ready ones."""
+    """Every-tick pass: lock due pools, then settle the ready ones. One read when idle."""
     now = clock.now()
-    locked = lock_due(engine, now)
     with engine.connect() as conn:
-        due = (
-            conn.execute(
-                select(Pool.id)
-                .where(Pool.status == LOCKED, Pool.settle_after <= now)
-                .order_by(Pool.id)
+        live = conn.execute(
+            select(Pool.id, Pool.status, Pool.lock_at, Pool.settle_after).where(
+                Pool.status.in_((OPEN, LOCKED))
             )
-            .scalars()
-            .all()
-        )
+        ).all()
+    locked = (
+        lock_due(engine, now) if any(p.status == OPEN and p.lock_at <= now for p in live) else 0
+    )
+    due = sorted(
+        p.id for p in live if p.settle_after <= now and (p.status == LOCKED or p.lock_at <= now)
+    )
     finished = sum(1 for pool_id in due if settle_pool(engine, clock, pool_id))
-    with engine.connect() as conn:
-        next_lock = conn.execute(
-            select(func.min(Pool.lock_at)).where(Pool.status == OPEN)
-        ).scalar_one()
-        next_settle = conn.execute(
-            select(func.min(Pool.settle_after)).where(
-                Pool.status == LOCKED, Pool.settle_after > now
-            )
-        ).scalar_one()
-    upcoming = [t for t in (next_lock, next_settle) if t is not None]
+    upcoming = [p.lock_at for p in live if p.status == OPEN and p.lock_at > now] + [
+        p.settle_after for p in live if p.settle_after > now
+    ]
     return PoolPass(locked, finished, min(upcoming) if upcoming else None)
 
 

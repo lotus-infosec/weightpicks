@@ -19,15 +19,16 @@ class DueCache:
     """In-process cache of the next time an every-tick pass has work (earliest open
     lock_at, earliest locked settle_after). Whoever creates that work invalidates it."""
 
-    def __init__(self) -> None:
+    def __init__(self, recheck: timedelta = RECHECK) -> None:
         self.next_due: datetime | None = None
         self.checked_at: datetime | None = None
+        self.recheck = recheck
 
     def invalidate(self) -> None:
         self.checked_at = None
 
     def needs_check(self, now: datetime) -> bool:
-        if self.checked_at is None or not self.checked_at <= now < self.checked_at + RECHECK:
+        if self.checked_at is None or not self.checked_at <= now < self.checked_at + self.recheck:
             return True
         return self.next_due is not None and now >= self.next_due
 

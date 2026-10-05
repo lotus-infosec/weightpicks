@@ -85,6 +85,10 @@ class LiveInstance:
     def palette(self) -> str:
         return self.config.palette if self.config else "ember"
 
+    @property
+    def frozen(self) -> bool:
+        return bool(self.config and self.config.state == "frozen")
+
 
 def build_templates(live: LiveInstance) -> Jinja2Templates:
     templates = Jinja2Templates(directory=TEMPLATES_DIR)
@@ -105,6 +109,7 @@ def _is_setup_path(path: str) -> bool:
 
 
 UNGATED_PATHS = frozenset({"/healthz", "/robots.txt"})
+FROZEN_BLOCKED = ("/api/bets", "/api/pools")
 
 
 def announce_setup_token(engine: Engine, clock: Clock) -> None:
@@ -182,6 +187,13 @@ def create_app(
             return PlainTextResponse("Not found", status_code=404)
         if not _is_setup_path(path) and not done:
             return RedirectResponse("/setup", status_code=303)
+        if live.frozen and request.method != "GET" and path.startswith(FROZEN_BLOCKED):
+            # Freeze middleware (D-043): money-moving player routes stop here; the
+            # services refuse too, as the backstop. History stays viewable.
+            return JSONResponse(
+                {"ok": False, "reason": "instance_frozen", "message": "Betting is paused."},
+                status_code=423,
+            )
         return await call_next(request)
 
     @app.middleware("http")

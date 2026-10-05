@@ -89,6 +89,7 @@ def test_registered_jobs_have_unique_names(
     assert names == [
         "heartbeat",
         "garmin_sync",
+        "goal_watch",
         "daily_drop",
         "weekly_drop",
         "monthly_drop",

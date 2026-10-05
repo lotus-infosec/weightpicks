@@ -119,6 +119,45 @@ def _void_bets(conn: Connection, clock: Clock, bet_rows: list[Any], reason: str)
 # ---- markets ----------------------------------------------------------------------------
 
 
+def void_open_market(conn: Connection, clock: Clock, market_id: int, reason: str) -> int:
+    """Void one open or locked market in the caller's transaction: refund its single bets,
+    void its parlay legs (each parlay is re-evaluated) and post the result. Returns bets
+    voided. Shared by the admin's void and Goal Reached (D-011)."""
+    market = conn.execute(select(Market.status, Market.title).where(Market.id == market_id)).one()
+    bets = conn.execute(
+        select(Bet.id, Bet.account_id, Bet.user_id, Bet.stake_cents)
+        .join(BetLeg, BetLeg.bet_id == Bet.id)
+        .where(BetLeg.market_id == market_id, BetLeg.status == "open", Bet.kind == "single")
+        .order_by(Bet.id)
+    ).all()
+    voided = _void_bets(conn, clock, list(bets), reason)
+    # In a parlay only this leg is voided: it drops out and the parlay is re-evaluated.
+    parlay_legs = conn.execute(
+        select(BetLeg.id, BetLeg.bet_id)
+        .join(Bet, Bet.id == BetLeg.bet_id)
+        .where(BetLeg.market_id == market_id, BetLeg.status == "open", Bet.kind == "parlay")
+        .order_by(BetLeg.id)
+    ).all()
+    for leg_id, bet_id in parlay_legs:
+        conn.execute(update(BetLeg).where(BetLeg.id == leg_id).values(status="void"))
+        reevaluate_parlay(conn, clock, bet_id, clock.now())
+    voided += len(parlay_legs)
+    set_status(conn, [market_id], MarketStatus(market.status), MarketStatus.VOIDED, clock.now())
+    enqueue(
+        conn,
+        clock,
+        category=Category.MARKET_SETTLEMENTS,
+        payload={
+            "market_id": market_id,
+            "title": market.title,
+            "result": "void",
+            "reason": reason,
+        },
+        dedupe_key=f"market_voided:{market_id}",
+    )
+    return voided
+
+
 def void_market(engine: Engine, clock: Clock, actor: Actor, market_id: int, reason: str) -> int:
     """Void an open or locked market and refund every open bet on it. Returns bets voided;
     voiding an already voided market is a no-op (0)."""
@@ -135,37 +174,7 @@ def void_market(engine: Engine, clock: Clock, actor: Actor, market_id: int, reas
             return 0
         if market.status not in (MarketStatus.OPEN.value, MarketStatus.LOCKED.value):
             raise AdminError("not_voidable", f"A {market.status} market can't be voided.")
-        bets = conn.execute(
-            select(Bet.id, Bet.account_id, Bet.user_id, Bet.stake_cents)
-            .join(BetLeg, BetLeg.bet_id == Bet.id)
-            .where(BetLeg.market_id == market_id, BetLeg.status == "open", Bet.kind == "single")
-            .order_by(Bet.id)
-        ).all()
-        voided = _void_bets(conn, clock, list(bets), "market voided")
-        # In a parlay only this leg is voided: it drops out and the parlay is re-evaluated.
-        parlay_legs = conn.execute(
-            select(BetLeg.id, BetLeg.bet_id)
-            .join(Bet, Bet.id == BetLeg.bet_id)
-            .where(BetLeg.market_id == market_id, BetLeg.status == "open", Bet.kind == "parlay")
-            .order_by(BetLeg.id)
-        ).all()
-        for leg_id, bet_id in parlay_legs:
-            conn.execute(update(BetLeg).where(BetLeg.id == leg_id).values(status="void"))
-            reevaluate_parlay(conn, clock, bet_id, clock.now())
-        voided += len(parlay_legs)
-        set_status(conn, [market_id], MarketStatus(market.status), MarketStatus.VOIDED, clock.now())
-        enqueue(
-            conn,
-            clock,
-            category=Category.MARKET_SETTLEMENTS,
-            payload={
-                "market_id": market_id,
-                "title": market.title,
-                "result": "void",
-                "reason": reason,
-            },
-            dedupe_key=f"market_voided:{market_id}",
-        )
+        voided = void_open_market(conn, clock, market_id, "market voided")
         audit.record(
             conn,
             clock,
