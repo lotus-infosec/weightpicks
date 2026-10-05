@@ -36,6 +36,9 @@ BURST, BURST_WINDOW = 5, 2.0  # per webhook URL
 PER_MINUTE = 30  # one channel per webhook
 TIMEOUT = 10.0
 REMOVED_PLAYER = "Removed player"
+# One email per pass (the fast loop runs every 2 s while anything waits): providers such as
+# Mailtrap answer 550 to back-to-back sends, which would dead-letter the message.
+EMAILS_PER_PASS = 1
 
 
 @dataclass(slots=True)
@@ -209,10 +212,13 @@ class Dispatcher:
                     OutboxMessage.next_attempt_at <= now,
                 )
                 .order_by(OutboxMessage.id)
-                .limit(BATCH)
+                .limit(EMAILS_PER_PASS + 1)
             ).all()
             if not rows:
                 return
+            if len(rows) > EMAILS_PER_PASS:  # the rest go on the next (2 s) fast-loop pass
+                result.waiting += len(rows) - EMAILS_PER_PASS
+                rows = rows[:EMAILS_PER_PASS]
             cfg = email.load(conn, self.settings)
             config = instance.read(conn)
             users = {

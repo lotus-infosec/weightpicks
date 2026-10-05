@@ -238,3 +238,16 @@ def test_smtp_failures_retry_or_give_up(
     configure(c, 1)  # nothing listens on port 1: a network error, retried later
     post(c, "/admin/discord", "/admin/discord/smtp/test", {})
     assert dispatch(w, real).retried == 1
+
+
+def test_emails_are_paced_one_per_pass(
+    site: tuple[TestClient, World, SimClock], smtp: FakeSmtp
+) -> None:
+    c, w, real = site
+    configure(c, smtp.port)
+    for _ in range(3):
+        post(c, "/admin/discord", "/admin/discord/smtp/test", {})
+    first = dispatch(w, real)
+    assert first.sent == 1 and first.waiting >= 1 and first.more  # the fast loop comes back
+    assert [dispatch(w, real).sent for _ in range(3)] == [1, 1, 0]
+    assert len(smtp.inbox.messages) == 3
