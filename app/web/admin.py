@@ -75,7 +75,6 @@ MESSAGES = {
     "smtp_test": "Test email queued to your address. It should arrive within a minute.",
 }
 REAUTH_FAILED_MESSAGE = "That's not your password. Nothing was changed."
-MAX_RESTORE_BYTES = 512 * 1024 * 1024
 
 
 def _tenths(raw: str) -> int | None:
@@ -988,14 +987,8 @@ def build_router() -> APIRouter:
             folder = backups.backups_dir(state.settings)
             folder.mkdir(parents=True, exist_ok=True)
             source = folder / f"wp-uploaded-{state.auth_clock.now():%Y%m%d-%H%M%S}-manual.tar.gz"
-            written = 0
-            with source.open("wb") as out:
+            with source.open("wb") as out:  # size already capped by BodyLimit
                 while chunk := await upload.read(1024 * 1024):
-                    written += len(chunk)
-                    if written > MAX_RESTORE_BYTES:
-                        out.close()
-                        source.unlink(missing_ok=True)
-                        return system_page(request, "That file is too large.", 413)
                     out.write(chunk)
         elif fields.get("name"):
             source = backups.resolve(state.settings, fields["name"])

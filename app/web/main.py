@@ -31,7 +31,7 @@ from app.services import instance, maintenance
 from app.services import setup as setup_service
 from app.services.instance import InstanceConfig
 from app.web import format as fmt
-from app.web.security import Forbidden, LoginRequired, csrf_protect
+from app.web.security import BodyLimit, Forbidden, LoginRequired, csrf_protect
 
 WEB_DIR = Path(__file__).parent
 TEMPLATES_DIR = WEB_DIR / "templates"
@@ -261,6 +261,8 @@ def create_app(
         if not request.url.path.startswith(("/static/", "/brand/")):
             response.headers["Cache-Control"] = "no-store"
         return response
+
+    app.add_middleware(BodyLimit)  # outermost: caps bodies before anything reads them
 
     @app.exception_handler(LoginRequired)
     async def login_required(request: Request, _exc: LoginRequired) -> Response:
