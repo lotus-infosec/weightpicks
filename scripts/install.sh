@@ -202,7 +202,7 @@ start_app() {
     docker build -q -f "$REPO_DIR/docker/Dockerfile" -t weightpicks:local "$REPO_DIR" >/dev/null
   else
     say "Pulling $(env_get WP_IMAGE):$(env_get WP_VERSION)"
-    compose pull -q web worker
+    pull_images
   fi
   say "Starting WeightPicks"
   compose up -d web worker
@@ -264,11 +264,11 @@ main() {
   preflight
   [ "$CHECK_ONLY" = 1 ] && { say "Checks done; nothing changed"; exit 0; }
   install_docker
-  docker info >/dev/null 2>&1 || die "can't reach Docker as $(id -un): run it with sudo"
   if [ "$PREREQS_ONLY" = 1 ]; then
-    [ "$TUNNEL" = 1 ] && install_cloudflared
+    if [ "$TUNNEL" = 1 ]; then install_cloudflared; fi
     say "Packages installed"; exit 0
   fi
+  docker info >/dev/null 2>&1 || die "can't reach Docker as $(id -un): run it with sudo"
   write_env
   start_app
   setup_tunnel

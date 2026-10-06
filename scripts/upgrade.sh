@@ -3,6 +3,7 @@
 #
 #   sudo ./scripts/upgrade.sh 1.1.0          # a published release
 #   sudo ./scripts/upgrade.sh --build        # rebuild from this clone (for --build installs)
+#   (--no-checkout keeps the clone's files as they are)
 #
 # Steps: health and ledger checks -> verified backup -> check out the release's files ->
 # pull and restart (the web container migrates before serving) -> health -> done, or
@@ -11,11 +12,12 @@ set -euo pipefail
 # shellcheck source=scripts/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-TARGET="" BUILD=0
+TARGET="" BUILD=0 CHECKOUT=1
 while [ $# -gt 0 ]; do
   case "$1" in
     --build) BUILD=1; shift ;;
-    -h | --help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --no-checkout) CHECKOUT=0; shift ;;  # leave the clone's files alone (CI, custom setups)
+    -h | --help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) die "unknown option: $1" ;;
     *) TARGET="${1#v}"; shift ;;
   esac
@@ -54,7 +56,7 @@ EOF
 }
 trap 'rollback_hint' ERR
 
-if [ "$BUILD" = 0 ] && repo_git rev-parse --git-dir >/dev/null 2>&1; then
+if [ "$BUILD" = 0 ] && [ "$CHECKOUT" = 1 ] && repo_git rev-parse --git-dir >/dev/null 2>&1; then
   if [ -n "$(repo_git status --porcelain --untracked-files=no)" ]; then
     warn "local changes in the clone; leaving its files as they are"
   else
@@ -73,7 +75,7 @@ else
   case "$(env_get WP_IMAGE)" in "" | weightpicks | *OWNER*) env_set WP_IMAGE "$DEFAULT_IMAGE" ;; esac
   env_set WP_VERSION "$TARGET"
   say "Pulling $(env_get WP_IMAGE):$TARGET"
-  compose pull -q web worker
+  pull_images
 fi
 
 say "Restarting (the web container migrates the database before serving)"

@@ -12,6 +12,9 @@ die() { printf '\033[31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
 compose() { docker compose -f "$REPO_DIR/docker-compose.yml" "$@"; }
 
+# WP_SKIP_PULL=1 uses images already on the host (e.g. loaded with `docker load`).
+pull_images() { [ "${WP_SKIP_PULL:-0}" = 1 ] || compose pull -q web worker; }
+
 # git as root on a clone owned by someone else needs safe.directory.
 repo_git() { git -c safe.directory="$REPO_DIR" -C "$REPO_DIR" "$@"; }
 
