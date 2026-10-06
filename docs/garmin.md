@@ -1,4 +1,6 @@
-# Real Garmin data
+# Real Garmin data (development machine)
+
+> **Installing on a server?** Use [self-host/garmin.md](self-host/garmin.md). This page is for running real data on a development machine.
 
 WeightPicks reads your weigh-ins, daily totals and workouts from Garmin Connect through
 [GarminDB](https://github.com/tcgoetz/GarminDB). Your Garmin password is typed once and

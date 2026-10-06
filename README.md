@@ -2,9 +2,25 @@
 
 # WeightPicks
 
+[![ci](https://github.com/lotus-infosec/weightpicks/actions/workflows/ci.yml/badge.svg)](https://github.com/lotus-infosec/weightpicks/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/lotus-infosec/weightpicks?include_prereleases&sort=semver)](https://github.com/lotus-infosec/weightpicks/releases)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Self-hosted, fake-money, pick'em-style betting on one person's Garmin weigh-ins and health stats. Friends and family bet against an automated house; lines come from math, bets settle from Garmin data, Discord carries the trash talk.
 
-> **Status:** Feature-complete for v1 and security-reviewed (STAGE16), running locally. Self-host instructions arrive with the release (STAGE17).
+> **Status:** v1 release candidate. Feature-complete, security-reviewed, with an installer for Ubuntu and published multi-arch images.
+
+## Quick start
+
+On an Ubuntu 22.04/24.04 machine (amd64 or arm64), with a domain on Cloudflare:
+
+```bash
+sudo git clone https://github.com/lotus-infosec/weightpicks.git /opt/weightpicks
+cd /opt/weightpicks && sudo git checkout "$(sudo git describe --tags --abbrev=0 --match 'v*')"   # latest release
+sudo ./scripts/install.sh
+```
+
+The installer sets up Docker, the app and the Cloudflare Tunnel, then prints a one-time token for the first-run wizard at `https://<your hostname>/setup`. The full walkthrough, with the Cloudflare and Garmin steps, is in **[docs/self-host](docs/self-host/README.md)**.
 
 ## Built with AI — fully vibe-coded
 
@@ -20,12 +36,15 @@ This project is **entirely vibe-coded with [Claude Code](https://claude.com/clau
 
 ## Guides
 
-- [Garmin](docs/garmin.md) · [Discord](docs/discord.md) · [Workers AI](docs/ai.md) · [Seasons and special events](docs/seasons.md) · [Backups, restore and reset](docs/backups.md)
+- **Self-hosting:** [overview](docs/self-host/README.md) · [install](docs/self-host/install.md) · [Cloudflare Tunnel](docs/self-host/cloudflared.md) · [Garmin](docs/self-host/garmin.md) · [upgrade](docs/self-host/upgrade.md) · [operations](docs/self-host/operations.md) · [troubleshooting](docs/self-host/troubleshooting.md) · [going live](docs/self-host/go-live.md)
+- [Discord](docs/discord.md) · [Workers AI](docs/ai.md) · [Seasons and special events](docs/seasons.md) · [Backups, restore and reset](docs/backups.md)
 - [Threat model](docs/threat-model.md) · [Security policy](SECURITY.md) · [Architecture decision](docs/adr/0001-single-image-sqlite-tick-loop.md) · [Line-engine calibration](docs/calibration/)
 
-## Project documents
+## Contributing and license
 
-Planning documents (concept, build plan, stage checklists, progress, decision and troubleshooting logs) and AI-agent instructions are kept **outside version control** on the owner's machine. The repository holds the project's tooling and, from STAGE01 on, the application.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports go through [private vulnerability reporting](SECURITY.md). WeightPicks is [MIT-licensed](LICENSE); bundled third-party software is listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+The project's planning documents (concept, build plan, stage checklists, decision logs) and AI-agent instructions are kept outside version control.
 
 ## Layout
 
@@ -35,16 +54,12 @@ migrations/              Alembic migrations (SQLite)
 tests/                   Unit, integration (incl. route matrix, load test), season simulations
                          (incl. chaos run, restore drill) and browser (e2e) tests
 docker/                  Dockerfile and entrypoint; docker-compose*.yml at the root
-scripts/                 Dev helpers (CSS build, browser for e2e, brand icons)
+scripts/                 install.sh, upgrade.sh; dev helpers (CSS build, e2e browser, brand icons)
 docs/                    Guides, threat model, ADRs, calibration reports, logo
 SECURITY.md              Vulnerability reporting + security baseline
-.github/                 CI workflow, Dependabot config, PR template
+.github/                 CI and release workflows, Dependabot, issue and PR templates
 .pre-commit-config.yaml  Hygiene hooks, gitleaks, noreply-identity guard, ruff, mypy
 ```
-
-## Workflow in one paragraph
-
-Work one stage at a time on a branch `stage/NN-name`. Every commit is signed and uses your GitHub noreply address. Open a PR, let CI pass, squash-merge, tick the stage's sign-off list and tag `stage-NN-done`.
 
 ## Roadmap
 
