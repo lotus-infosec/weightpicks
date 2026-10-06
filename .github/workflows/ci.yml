@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:  # the release workflow runs the full CI on the tagged commit
 
 permissions:
   contents: read
@@ -111,3 +112,80 @@ jobs:
           docker run --rm --read-only --tmpfs /tmp --cap-drop ALL \
             -e APP_ENV=dev -e DATA_DIR=/tmp weightpicks:ci cli migrate
           test "$(docker run --rm --entrypoint id weightpicks:ci -u)" = "10001"
+      - name: Trivy (fixable CRITICAL/HIGH fail the build)
+        run: |
+          docker save weightpicks:ci -o "$RUNNER_TEMP/image.tar"
+          docker run --rm -v "$RUNNER_TEMP:/scan" \
+            aquasec/trivy:0.69.3@sha256:bcc376de8d77cfe086a917230e818dc9f8528e3c852f7b1aff648949b6258d1c \
+            image --input /scan/image.tar --scanners vuln --severity CRITICAL,HIGH \
+            --ignore-unfixed --exit-code 1 --no-progress
+
+  shellcheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: actionlint (workflows, including their shell scripts)
+        run: >-
+          docker run --rm -v "$GITHUB_WORKSPACE:/repo:ro" -w /repo
+          rhysd/actionlint:1.7.7@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9
+          -color
+      - name: shellcheck (scripts)
+        run: >-
+          docker run --rm -v "$GITHUB_WORKSPACE:/mnt:ro" -w /mnt
+          koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
+          -x scripts/install.sh scripts/upgrade.sh scripts/lib.sh scripts/build-css.sh
+          scripts/browser.sh scripts/init-dev-env.sh docker/entrypoint.sh
+          .github/scripts/upgrade-test.sh
+
+  install-smoke:
+    # A fresh runner stands in for a fresh host: install, re-run, upgrade, factory reset.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: install.sh
+        run: ./scripts/install.sh --build --yes --no-tunnel --hostname picks.example.com | tee "$RUNNER_TEMP/install.log"
+      - name: Healthy, setup token printed, /setup answers
+        run: |
+          grep -q 'SETUP TOKEN: ' "$RUNNER_TEMP/install.log"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/healthz)" = 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/setup)" = 200
+          test "$(stat -c %a .env)" = 600
+          grep -q '^WP_BASE_URL=https://picks.example.com$' .env
+      - name: Re-running keeps the secret key
+        run: |
+          before="$(grep '^APP_SECRET_KEY=' .env | sha256sum)"
+          ./scripts/install.sh --build --yes --no-tunnel
+          test "$before" = "$(grep '^APP_SECRET_KEY=' .env | sha256sum)"
+          test "$(grep -c '^APP_SECRET_KEY=' .env)" = 1
+      - name: upgrade.sh (rebuild) backs up and comes back healthy
+        run: ./scripts/upgrade.sh --build | tee "$RUNNER_TEMP/upgrade.log" && grep -q 'Upgraded ' "$RUNNER_TEMP/upgrade.log"
+      - name: Factory reset on the image issues a new setup token
+        run: |
+          before="$(docker compose logs web | grep -o 'SETUP TOKEN: [A-Za-z0-9_-]*' | tail -n 1)"
+          docker compose exec -T worker wp maintenance reset --confirm WeightPicks
+          docker compose restart
+          . scripts/lib.sh && wait_healthy
+          after="$(docker compose logs web | grep -o 'SETUP TOKEN: [A-Za-z0-9_-]*' | tail -n 1)"
+          test -n "$after" && test "$before" != "$after"
+      - if: always()
+        run: docker compose logs --tail 60 web worker; docker compose down
+
+  install-prereqs:
+    # The Docker and cloudflared apt steps on both supported Ubuntu releases (no daemon).
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        ubuntu: ["22.04", "24.04"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: >-
+          docker run --rm -v "$GITHUB_WORKSPACE:/src:ro" ubuntu:${{ matrix.ubuntu }}
+          bash -c 'apt-get update -qq && apt-get install -y -qq curl ca-certificates >/dev/null
+          && /src/scripts/install.sh --prereqs-only --yes
+          && docker --version && docker compose version && cloudflared --version'

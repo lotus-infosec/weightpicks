@@ -4,6 +4,8 @@
 !pyproject.toml
 !uv.lock
 !README.md
+!LICENSE
+!THIRD_PARTY_NOTICES.md
 !alembic.ini
 !app/
 app/web/static/build/

@@ -1,0 +1,197 @@
+name: release
+
+# A signed tag vX.Y.Z (or vX.Y.Z-rc.N) on main publishes a release:
+#   full CI -> multi-arch image on GHCR (X.Y.Z, X.Y for stable, sha-...) with SBOM and
+#   build provenance -> Trivy on the pushed image -> upgrade test from the previous
+#   release -> GitHub release with notes and the migrations it adds.
+# Run it by hand (workflow_dispatch) for a dry run: everything builds, nothing is pushed.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+      previous: ${{ steps.v.outputs.previous }}
+      publish: ${{ steps.v.outputs.publish }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: v
+        run: |
+          if [ "$GITHUB_REF_TYPE" != tag ]; then
+            echo "Dry run on $GITHUB_REF_NAME: build only"
+            { echo "version=0.0.0-dryrun"; echo "prerelease=true"; echo "previous="; echo "publish=false"; } >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          tag="$GITHUB_REF_NAME" version="${GITHUB_REF_NAME#v}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]] || { echo "::error::$tag is not vX.Y.Z or vX.Y.Z-rc.N"; exit 1; }
+          grep -qx "version = \"${version%%-*}\"" pyproject.toml || { echo "::error::pyproject.toml version is not ${version%%-*}"; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$tag is not on main"; exit 1; }
+          [ "$(git cat-file -t "$tag")" = tag ] || { echo "::error::$tag must be an annotated, signed tag"; exit 1; }
+          previous="$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -vx "$tag" | head -n 1 || true)"
+          prerelease=false; [[ "$version" == *-rc.* ]] && prerelease=true
+          { echo "version=$version"; echo "prerelease=$prerelease"; echo "previous=${previous#v}"; echo "publish=true"; } >>"$GITHUB_OUTPUT"
+          echo "Releasing $version (prerelease=$prerelease, previous=${previous:-none})"
+
+  ci:
+    needs: verify
+    uses: ./.github/workflows/ci.yml
+
+  image:
+    needs: [verify, ci]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - if: needs.verify.outputs.publish == 'true'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-,format=short
+          labels: |
+            org.opencontainers.image.licenses=MIT
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ needs.verify.outputs.publish == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ needs.verify.outputs.version }}
+            REVISION=${{ github.sha }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - if: needs.verify.outputs.publish == 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - if: needs.verify.outputs.publish == 'true'
+        name: Trivy on the published image (fixable CRITICAL/HIGH fail the release)
+        env:
+          REF: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+        run: |
+          docker pull --platform linux/amd64 "$REF"
+          docker save "$REF" -o "$RUNNER_TEMP/image.tar"
+          docker run --rm -v "$RUNNER_TEMP:/scan" \
+            aquasec/trivy:0.69.3@sha256:bcc376de8d77cfe086a917230e818dc9f8528e3c852f7b1aff648949b6258d1c \
+            image --input /scan/image.tar --scanners vuln --severity CRITICAL,HIGH \
+            --ignore-unfixed --exit-code 1 --no-progress
+
+  upgrade-test:
+    needs: [verify, image]
+    if: needs.verify.outputs.publish == 'true' && needs.verify.outputs.previous != ''
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upgrade the previous release to this one, data intact
+        env:
+          PREVIOUS: ${{ needs.verify.outputs.previous }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: .github/scripts/upgrade-test.sh "$PREVIOUS" "$VERSION"
+      - if: always()
+        run: docker compose logs --tail 60 web worker; docker compose down
+
+  release:
+    needs: [verify, image, upgrade-test]
+    if: >-
+      always() && needs.verify.outputs.publish == 'true' && needs.image.result == 'success'
+      && (needs.upgrade-test.result == 'success' || needs.upgrade-test.result == 'skipped')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          PREVIOUS: ${{ needs.verify.outputs.previous }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+        run: |
+          tag="v$VERSION"
+          if [ -n "$PREVIOUS" ]; then
+            migrations="$(git diff --name-only --diff-filter=A "v$PREVIOUS" "$tag" -- migrations/versions | awk -F/ '{ print "- \x60" $NF "\x60" }')"
+            since="since v$PREVIOUS"
+          else
+            migrations="$(git ls-files migrations/versions | awk -F/ '{ print "- \x60" $NF "\x60" }')"
+            since="(first release: the full schema)"
+          fi
+          {
+            echo "## Install or upgrade"
+            echo
+            echo "- **New install:** follow [docs/self-host/install.md](https://github.com/$GITHUB_REPOSITORY/blob/$tag/docs/self-host/install.md) and check out \`$tag\`."
+            echo "- **Upgrade:** \`sudo ./scripts/upgrade.sh $VERSION\` (backs up first; see [upgrade.md](https://github.com/$GITHUB_REPOSITORY/blob/$tag/docs/self-host/upgrade.md))."
+            echo
+            echo "## Image"
+            echo
+            echo "\`$IMAGE:$VERSION\` (linux/amd64, linux/arm64), digest \`$DIGEST\`."
+            echo "Verify: \`gh attestation verify oci://$IMAGE:$VERSION --owner ${GITHUB_REPOSITORY_OWNER}\`"
+            echo
+            echo "## Database migrations $since"
+            echo
+            echo "${migrations:-None.}"
+            echo
+            echo "The web container applies them on start, after \`upgrade.sh\` has taken a verified backup."
+          } >"$RUNNER_TEMP/notes.md"
+          flags=(--verify-tag --title "WeightPicks $VERSION" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes)
+          [ "$PRERELEASE" = true ] && flags+=(--prerelease)
+          [ -n "$PREVIOUS" ] && flags+=(--notes-start-tag "v$PREVIOUS")
+          gh release create "$tag" "${flags[@]}"
