@@ -101,7 +101,8 @@ preflight() {
   fi
   local port="${BIND##*:}"
   if command -v ss >/dev/null 2>&1 && ss -Hltn "sport = :$port" | grep -q .; then
-    if ! compose ps --status running 2>/dev/null | grep -q web; then
+    # Busy is fine when it's this install's own web container publishing that address.
+    if [ "$(compose port web 8000 2>/dev/null || true)" != "$BIND" ]; then
       die "port $port is already in use; pick another with --bind 127.0.0.1:PORT"
     fi
   fi
