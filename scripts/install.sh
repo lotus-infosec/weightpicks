@@ -154,7 +154,28 @@ install_cloudflared() {
 # ---- 3. settings -------------------------------------------------------------------------
 
 host_timezone() {
-  timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || echo UTC
+  # The host's zone, or UTC. Containers (LXC) and cloud images are often left on UTC.
+  local zone=""
+  zone="$(timedatectl show -p Timezone --value 2>/dev/null || true)"
+  [ -n "$zone" ] || zone="$(cat /etc/timezone 2>/dev/null || true)"
+  [ -n "$zone" ] || zone="$(readlink /etc/localtime 2>/dev/null | sed 's|.*/zoneinfo/||' || true)"
+  case "$zone" in "" | Etc/UTC | Etc/Universal | Universal | Zulu | UCT | Etc/UCT) zone=UTC ;; esac
+  printf '%s' "$zone"
+}
+
+choose_timezone() {
+  # --timezone, else the host's zone, confirmed at the prompt. It becomes the default
+  # on /setup's Schedule step, which is what the app actually uses (issue #30).
+  local zone="${TZ_ARG:-}"
+  if [ -z "$zone" ]; then
+    zone="$(host_timezone)"
+    [ "$zone" != UTC ] || warn "this machine is set to UTC; enter your own zone (e.g. America/Chicago)"
+    zone="$(ask "Time zone for weigh-in days, drops and locks" "$zone")"
+  fi
+  if [ -d /usr/share/zoneinfo ] && [ ! -f "/usr/share/zoneinfo/$zone" ]; then
+    die "unknown time zone '$zone' (see: timedatectl list-timezones)"
+  fi
+  printf '%s' "$zone"
 }
 
 write_env() {
@@ -167,6 +188,8 @@ write_env() {
       hostname="$(ask "Public hostname for the tunnel (e.g. picks.example.com)" "")"
       [ -n "$hostname" ] || die "a public hostname is needed (or use --no-tunnel to set it up later)"
     fi
+    local zone
+    zone="$(choose_timezone)"
     umask 077
     cp "$REPO_DIR/.env.example" "$ENV_FILE"
     chmod 600 "$ENV_FILE"
@@ -176,7 +199,7 @@ write_env() {
     else
       env_set WP_BASE_URL "http://$BIND"
     fi
-    env_set WP_TIMEZONE "${TZ_ARG:-$(host_timezone)}"
+    env_set WP_TIMEZONE "$zone"
     env_set WP_UNIT "$UNIT"
   fi
   env_set WP_BIND "$BIND"
@@ -217,6 +240,7 @@ show_setup_token() {
   if [ -n "$token" ]; then
     say "Finish in the browser: $(env_get WP_BASE_URL)/setup"
     echo "  $token   (valid 24 hours; print it again: sudo docker compose logs web | grep 'SETUP TOKEN')"
+    echo "  Check the time zone on the Schedule step. Changing it later (Admin -> Settings) refunds open bets."
   else
     say "Setup is already done. Open $(env_get WP_BASE_URL)"
   fi

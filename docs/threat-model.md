@@ -56,7 +56,7 @@ This covers one self-hosted WeightPicks instance: a Docker Compose stack (`web` 
 | | Threat | Mitigation |
 | --- | --- | --- |
 | S | Someone else finishes `/setup` first | One-time 256-bit token printed only to the web container's logs, valid 24 h, 5 wrong tries per IP per hour; `/setup` returns 404 once done. |
-| S | Reset-link poisoning | Links use `WP_BASE_URL`, never the request's Host header. |
+| S | Reset-link poisoning | Links use the public URL set by the admin (re-checked password, audited) or `WP_BASE_URL`, never the request's Host header. |
 | I | Account enumeration | The reset request always gives the same answer. Login errors don't say which part was wrong. |
 | T | Reset token replay | 256-bit, hash-only, 1 h, single use. Using one ends every session and voids other open links. The token sits encrypted in the outbox until the email is sent, then is dropped. |
 

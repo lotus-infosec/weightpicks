@@ -48,7 +48,7 @@ curl -sI https://picks.example.com/healthz   # HTTP/2 200
 
 The tunnel shows **Healthy** in the dashboard. The app logs a `cf_header_missing` warning if requests ever reach it without going through Cloudflare; if you see it, something else is exposing the port.
 
-`WP_BASE_URL` in `/opt/weightpicks/.env` must be your public address (`https://picks.example.com`); it's used in emails and Discord posts. After changing it: `sudo docker compose up -d`.
+`WP_BASE_URL` in `/opt/weightpicks/.env` must be your public address (`https://picks.example.com`); it's used in emails and Discord posts. After changing it: `sudo docker compose up -d`. Or set it in Admin → Settings → Public URL, which takes precedence and needs no restart.
 
 ## Rotate or remove
 
