@@ -1,4 +1,4 @@
-"""Parlay maths (BUILD_PLAN §1.4.2, D-041). Pure: no I/O.
+"""Parlay maths. Pure: no I/O.
 
 Decimal odds are exact `Fraction`s: 1 + 100/|A| for negative American odds, 1 + A/100
 for positive. A parlay loses the moment any leg loses; pushed or voided legs drop out;
@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Literal
 
-PAYOUT_CAP_MULTIPLE = 100  # owner decision, D-041
+PAYOUT_CAP_MULTIPLE = 100  # owner decision
 MIN_LEGS = 2
 
 LegStatus = Literal["open", "won", "lost", "push", "void"]

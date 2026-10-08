@@ -39,7 +39,7 @@ def test_fit_recovers_slope_and_noise() -> None:
 
 
 def test_long_window_sigma_is_used_and_ignores_trend_changes() -> None:
-    """D-029: sigma from 12 weeks of day-to-day changes, robust to a bend in the trend."""
+    """Sigma from 12 weeks of day-to-day changes, robust to a bend in the trend."""
     rng = np.random.default_rng(7)
     points = []
     for t in range(-83, 1):
@@ -67,7 +67,7 @@ def test_only_the_last_14_days_drive_the_trend() -> None:
     with_old = recent + [(t, 250.0 + (t % 3)) for t in range(-60, -14)]
     short, long = fit_weight(recent, "lb"), fit_weight(with_old, "lb")
     assert (long.a, long.b, long.n) == pytest.approx((short.a, short.b, short.n))
-    # ...while older days do feed the 12-week noise estimate (D-029).
+    # ...while older days do feed the 12-week noise estimate.
     assert (short.sigma_source, long.sigma_source) == ("short", "long")
 
 
@@ -99,7 +99,7 @@ def test_start_known_mean_reverts_and_has_less_variance() -> None:
     assert unknown_mu == pytest.approx(fit.b)
     assert known_sd < unknown_sd
     q = UNIT_PARAMS["lb"].drift_q
-    fitted_var = fit.var_a + 2 * fit.cov_ab + fit.var_b  # Var(a + b·1), D-029
+    fitted_var = fit.var_a + 2 * fit.cov_ab + fit.var_b  # Var(a + b·1)
     assert known_sd == pytest.approx(math.sqrt(fit.sigma**2 + fitted_var + q))
     assert unknown_sd == pytest.approx(math.sqrt(2 * fit.sigma**2 + fit.var_b + q))
     assert fit.var_a > 0  # level uncertainty is part of the start-known variance
@@ -139,7 +139,7 @@ def test_student_t_widens_the_tails() -> None:
 
 
 def test_even_market_prices_minus_110_both_sides() -> None:
-    """STAGE04 measure of success: p = 0.5 at the default hold -> -110/-110."""
+    """Measure of success: p = 0.5 at the default hold -> -110/-110."""
     pricing = price_over_under(mu=-0.5, sd=1.2, line=-0.5, hold=DEFAULT_HOLD)
     assert pricing.p_over == pytest.approx(0.5)
     assert (pricing.odds_over, pricing.odds_under) == (-110, -110)

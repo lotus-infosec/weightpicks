@@ -1,4 +1,4 @@
-"""Local-time rules (D-009). Pure functions of an aware timestamp and a time zone;
+"""Local-time rules. Pure functions of an aware timestamp and a time zone;
 all wall-clock math goes through zoneinfo so DST days behave."""
 
 from datetime import UTC, date, datetime, time, timedelta
@@ -48,7 +48,7 @@ def sync_period_key(now: datetime, tz: ZoneInfo) -> str:
     return f"{loc:%Y-%m-%d}T{hour:02d}h"
 
 
-# ---- market drop and lock schedule (STAGE05) ---------------------------------------
+# ---- market drop and lock schedule ---------------------------------------
 # Wall-clock times are resolved per day from the local date, so a DST change moves the
 # UTC instant but never the local time. A nonexistent spring-forward time (02:30 on the
 # March change) resolves with the pre-change offset, i.e. 03:30 local; times in the

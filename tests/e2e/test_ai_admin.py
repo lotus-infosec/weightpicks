@@ -1,4 +1,4 @@
-"""STAGE13: the AI review queue, AI runs and notes pages, and an AI prop's blurb on the
+"""The AI review queue, AI runs and notes pages, and an AI prop's blurb on the
 board, on a phone and a desktop. Screenshots go to test-screens/ for review."""
 
 import pytest

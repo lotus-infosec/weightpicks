@@ -1,4 +1,4 @@
-"""STAGE07 measure: on a phone-sized screen, register -> place a single -> see it in the feed."""
+"""On a phone-sized screen, register -> place a single -> see it in the feed."""
 
 import re
 

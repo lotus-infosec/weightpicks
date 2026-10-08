@@ -1,4 +1,4 @@
-"""Special events and the season: freeze, Goal Reached, new season (D-011, D-043)."""
+"""Special events and the season: freeze, Goal Reached, new season."""
 
 from datetime import timedelta
 from typing import Any
@@ -23,7 +23,7 @@ from app.web.security import Admin, read_form
 
 
 def register(router: APIRouter) -> None:
-    # ---- special events (pools, D-043) -----------------------------------------------------
+    # ---- special events (pools) -----------------------------------------------------
 
     def events_page(
         request: Request,
@@ -174,7 +174,7 @@ def register(router: APIRouter) -> None:
             return events_page(request, error=exc.message, status=400)
         return back("/admin/events", "pool_void")
 
-    # ---- season: freeze, Goal Reached, new season (D-011, D-043) ------------------------------
+    # ---- season: freeze, Goal Reached, new season ------------------------------
 
     def season_page(request: Request, error: str | None = None, status: int = 200) -> Response:
         state = request.app.state

@@ -76,7 +76,7 @@ def test_money_str_round_trips_through_parse(cents: int) -> None:
 @pytest.mark.parametrize(
     ("stake", "odds", "expected"),
     [
-        (10000, -110, 19090),  # BUILD_PLAN §1.3 worked example: P&L +9090
+        (10000, -110, 19090),  # worked example: P&L +9090
         (10000, 150, 25000),
         (10000, -100, 20000),
         (10000, 100, 20000),

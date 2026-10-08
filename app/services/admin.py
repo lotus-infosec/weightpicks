@@ -1,4 +1,4 @@
-"""Admin actions (BUILD_PLAN §1.5, CONCEPT §8, D-012, D-037). Each action is one short
+"""Admin actions. Each action is one short
 BEGIN IMMEDIATE transaction that also writes the audit row, so an action and its audit
 entry can never disagree. Password re-prompts are enforced by the web layer.
 """
@@ -116,7 +116,7 @@ def void_open_market(
     """Void one open or locked market in the caller's transaction: refund its single bets,
     void its parlay legs (each parlay is re-evaluated) and post the result (`announce`;
     a time zone change posts one summary instead). Returns bets voided. Shared by the
-    admin's void, Goal Reached (D-011) and time zone changes (D-049)."""
+    admin's void, Goal Reached and time zone changes."""
     market = conn.execute(select(Market.status, Market.title).where(Market.id == market_id)).one()
     bets = conn.execute(
         select(Bet.id, Bet.account_id, Bet.user_id, Bet.stake_cents)
@@ -210,7 +210,7 @@ def set_frozen(engine: Engine, clock: Clock, actor: Actor, user_id: int, frozen:
 
 
 def ban(engine: Engine, clock: Clock, actor: Actor, user_id: int, reason: str) -> int:
-    """D-012: remove a player. Sessions end, the email is blocked, open bets are voided
+    """Remove a player. Sessions end, the email is blocked, open bets are voided
     and refunded; history stays (shown as a removed player). Returns bets refunded."""
     reason = reason.strip()
     if not reason:
@@ -274,8 +274,8 @@ def reset_password(engine: Engine, clock: Clock, actor: Actor, user_id: int) -> 
 
 
 def bailout(engine: Engine, clock: Clock, actor: Actor, user_id: int) -> int:
-    """D-037: only for a player who is bust, once the post-bust cooldown has passed.
-    Returns the amount paid. Bailouts never touch P&L (D-007)."""
+    """Only for a player who is bust, once the post-bust cooldown has passed.
+    Returns the amount paid. Bailouts never touch P&L."""
     now = clock.now()
     with immediate(engine) as conn:
         _player(conn, user_id)
@@ -462,7 +462,7 @@ def request_sync(engine: Engine, clock: Clock, actor: Actor) -> int:
     return request_command(engine, clock, actor, "sync_now")
 
 
-# ---- Discord and flags (STAGE11, D-040) ----------------------------------------------
+# ---- Discord and flags ----------------------------------------------
 
 ADMIN_FLAGS = (  # /admin/discord (Settings)
     "registration_open",

@@ -1,4 +1,4 @@
-"""Edge cases for staged maintenance, backups and password reset (STAGE15)."""
+"""Edge cases for staged maintenance, backups and password reset."""
 
 import io
 import json

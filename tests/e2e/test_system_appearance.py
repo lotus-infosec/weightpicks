@@ -1,4 +1,4 @@
-"""STAGE15: Admin -> System (health, backup now), Appearance with an uploaded logo (the
+"""Admin -> System (health, backup now), Appearance with an uploaded logo (the
 top bar and favicon follow it), and the password-reset request page. Phone and desktop;
 screenshots go to test-screens/ for review."""
 

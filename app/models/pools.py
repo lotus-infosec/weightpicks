@@ -1,4 +1,4 @@
-"""Special events: Price Is Right pools and their entries (BUILD_PLAN §1.3, D-010, D-043).
+"""Special events: Price Is Right pools and their entries.
 Each pool has its own escrow account (kind `pool`); buy-ins, payouts and refunds move
 money between it and the players' accounts."""
 

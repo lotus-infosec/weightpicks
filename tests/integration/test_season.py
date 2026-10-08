@@ -1,4 +1,4 @@
-"""Goal Reached (D-011), freeze, and new seasons with carried balances (D-043)."""
+"""Goal Reached, freeze, and new seasons with carried balances."""
 
 from datetime import date
 from typing import Any

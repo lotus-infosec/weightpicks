@@ -232,7 +232,7 @@ def test_garmindb_provider_needs_a_token(
     assert make_provider(prod_like, migrated_engine, clock, provider) is provider
 
 
-# ---- failure alerts and staleness (STAGE10) ------------------------------------------
+# ---- failure alerts and staleness ------------------------------------------
 
 
 def _alerts(engine: Engine) -> list[tuple[str, dict[str, object]]]:

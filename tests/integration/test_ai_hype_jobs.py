@@ -1,4 +1,4 @@
-"""Stat-update hype (flag-gated, template fallback) and the AI jobs (D-042)."""
+"""Stat-update hype (flag-gated, template fallback) and the AI jobs."""
 
 from datetime import timedelta
 

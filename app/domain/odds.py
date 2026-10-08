@@ -7,7 +7,7 @@ favourites round away from zero, underdogs round toward zero, both to multiples 
 import math
 from dataclasses import dataclass
 
-# The standard -110/-110 hold is 1/22 (~4.545%, shown as "4.55%" in the plan). See D-024.
+# The standard -110/-110 hold is 1/22 (~4.545%, often rounded to "4.55%").
 DEFAULT_HOLD = 1 / 22
 Q_MIN = 0.05
 Q_MAX = 0.95

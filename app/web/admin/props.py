@@ -1,4 +1,4 @@
-"""Props and futures, the AI review queue, AI runs and notes (D-041, D-042)."""
+"""Props and futures, the AI review queue, AI runs and notes."""
 
 from datetime import date, timedelta
 from typing import Any
@@ -22,7 +22,7 @@ from app.web.security import Admin, read_form
 
 
 def register(router: APIRouter) -> None:
-    # ---- props and futures (D-041) ---------------------------------------------------------
+    # ---- props and futures ---------------------------------------------------------
 
     def props_page(
         request: Request,
@@ -124,7 +124,7 @@ def register(router: APIRouter) -> None:
             return props_page(request, template, dict(form), error=exc.message, status=400)
         return RedirectResponse(f"/admin/props?template={template}&ok=prop", status_code=303)
 
-    # ---- AI review queue, mode, runs and notes (D-042) ------------------------------------
+    # ---- AI review queue, mode, runs and notes ------------------------------------
 
     @router.post("/props/ai/{proposal_id}/approve")
     async def ai_approve(request: Request, session: Admin, proposal_id: int) -> Response:

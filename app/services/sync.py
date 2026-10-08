@@ -1,4 +1,4 @@
-"""Provider sync and ingest (BUILD_PLAN §1.4.6, §2.3).
+"""Provider sync and ingest.
 
 The provider is called outside any database transaction (the real GarminDB sync is a
 slow subprocess); only the ingest itself is one short BEGIN IMMEDIATE write.
@@ -196,7 +196,7 @@ def run_sync(
 
 def _stale_since(engine: Engine, now: datetime) -> datetime | None:
     """During an active season, when new data last arrived if that was STALE_AFTER ago
-    or more (BUILD_PLAN §2.3); None while data is fresh or no season is running."""
+    or more; None while data is fresh or no season is running."""
     with engine.connect() as conn:
         if active_season_id(conn) is None:
             return None

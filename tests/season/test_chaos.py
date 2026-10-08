@@ -1,4 +1,4 @@
-"""STAGE16 chaos run: 30 simulated days of the real worker jobs while the worker is killed
+"""Chaos run: 30 simulated days of the real worker jobs while the worker is killed
 at random (before a job's work, or after it but before its claim is marked done), restarted
 at random, and one Garmin sync in five fails. Bettors keep betting through it.
 

@@ -1,4 +1,4 @@
-"""`docker compose run --rm garmin-login`: the one interactive Garmin Connect login (D-038).
+"""`docker compose run --rm garmin-login`: the one interactive Garmin Connect login.
 
 Runs under GarminDB's own venv (/opt/garmindb), so it imports only the standard library
 and garminconnect. It writes the token file GarminDB reuses, plus a GarminDB config with
@@ -62,7 +62,7 @@ def garmindb_config(today: date) -> dict[str, Any]:
             "sleep": False,
             "rhr": False,
             "hrv": False,
-            "weight": False,  # garmin_recent.py fetches weigh-ins (D-038)
+            "weight": False,  # garmin_recent.py fetches weigh-ins
             "activities": True,
         },
         "course_views": {"steps": []},
@@ -106,7 +106,7 @@ def _password_login(token_file: Path, factory: Factory, ask: Ask, ask_secret: As
 def _browser_login(token_file: Path, factory: Factory, ask: Ask, ask_secret: Ask) -> Any:
     """Sign in on Garmin's own page in a normal browser, then trade the one-time ticket
     it hands back for the same tokens a password login gets. Avoids the scripted SSO
-    login that Garmin rate-limits (T-011)."""
+    login that Garmin rate-limits."""
     print(
         "\n1. Open this link in your browser and sign in (MFA as usual):\n"
         f"   {BROWSER_URL}\n"

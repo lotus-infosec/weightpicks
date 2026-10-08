@@ -1,5 +1,5 @@
 """Leaderboard: players ranked by season P&L (betting results only), then balance
-(BUILD_PLAN §1.5, D-007). Removed (banned) players are hidden (C5). Read-only."""
+. Removed (banned) players are hidden (C5). Read-only."""
 
 from dataclasses import dataclass
 

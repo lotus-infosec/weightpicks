@@ -1,4 +1,4 @@
-"""Encryption for integration secrets (BUILD_PLAN §1.6).
+"""Encryption for integration secrets.
 
 The Fernet key is derived from APP_SECRET_KEY with HKDF-SHA256, so `.env` holds only
 one secret. A key-check value (an encrypted constant stored with the secrets) detects

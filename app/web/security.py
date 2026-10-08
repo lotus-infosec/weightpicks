@@ -1,5 +1,5 @@
 """Request-level security: client IP, form parsing, session cookies, CSRF and roles
-(BUILD_PLAN §1.6, D-034).
+.
 
 CSRF: every non-GET/HEAD/OPTIONS request must carry a token in the `X-CSRF-Token`
 header or a `csrf_token` form field. With a session it must match the session's
@@ -10,7 +10,7 @@ subdomain) are refused outright. The check is a global FastAPI dependency, so no
 can forget it.
 
 Body size: `BodyLimit` (ASGI middleware) counts bytes as they stream in, before any
-route, form parser or auth check reads them (STAGE16 S1).
+route, form parser or auth check reads them (security review S1, issue #18).
 """
 
 from typing import Annotated

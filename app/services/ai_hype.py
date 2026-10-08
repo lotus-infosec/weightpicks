@@ -1,4 +1,4 @@
-"""Stat-update ("hype") posts (BUILD_PLAN §1.4.5; D-042).
+"""Stat-update ("hype") posts.
 
 Only while the `ai_hype` flag is on. Code detects up to 4 stat events a day and writes
 the template text; Workers AI (fp8-fast) may rewrite the wording. The rewrite must keep

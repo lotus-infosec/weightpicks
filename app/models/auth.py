@@ -1,5 +1,5 @@
 """Sessions, auth attempts (rate limits), registration codes and banned emails
-(BUILD_PLAN §1.3, §1.6). Tokens and codes are stored only as SHA-256 hashes."""
+. Tokens and codes are stored only as SHA-256 hashes."""
 
 from datetime import datetime
 
@@ -15,7 +15,7 @@ class Session(Base):
 
     id_hash: Mapped[str] = mapped_column(String(64), primary_key=True)  # sha256(token) hex
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    csrf_token: Mapped[str] = mapped_column(String(64))  # synchronizer token (D-034)
+    csrf_token: Mapped[str] = mapped_column(String(64))  # synchronizer token
     created_at: Mapped[datetime] = mapped_column(UTCDateTime())
     last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime())
     expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), index=True)
@@ -64,7 +64,7 @@ class BannedEmail(Base):
 
 
 class PasswordReset(Base):
-    """A password-reset link sent by email (STAGE15): only the token's hash is stored;
+    """A password-reset link sent by email: only the token's hash is stored;
     single use, short-lived."""
 
     __tablename__ = "password_resets"

@@ -1,8 +1,8 @@
-"""Economy settings (CONCEPT §6.1). Defaults apply until /setup or the admin changes them.
+"""Economy settings. Defaults apply until /setup or the admin changes them.
 
-`hold` is the house margin as an exact Fraction (D-024: 1/22 prices an even market at
+`hold` is the house margin as an exact Fraction (1/22 prices an even market at
 -110/-110). It is offered as a few presets, named by the price of an even market,
-because a typed percentage like 4.55% rounds to -115 (D-024).
+because a typed percentage like 4.55% rounds to -115.
 """
 
 from dataclasses import asdict, dataclass, replace
@@ -27,7 +27,7 @@ class Economy:
     max_bet_cents: int | None = None  # none: all-in allowed
     max_parlay_legs: int = 6
     high_roller_cents: int = 50_000  # $500
-    pool_buyin_cents: int = 10_000  # $100: default special-event buy-in (D-043)
+    pool_buyin_cents: int = 10_000  # $100: default special-event buy-in
 
     def __post_init__(self) -> None:
         for name in ("starting_bankroll_cents", "daily_allowance_cents", "bailout_cents"):
@@ -51,7 +51,7 @@ class Economy:
 
     @property
     def max_pool_buyin_cents(self) -> int:
-        """Buy-ins are clamped to $1 ... half the starting bankroll (D-043)."""
+        """Buy-ins are clamped to $1 ... half the starting bankroll."""
         return max(100, self.starting_bankroll_cents // 2)
 
     def clamp_pool_buyin(self, cents: int) -> int:

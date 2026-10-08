@@ -61,6 +61,6 @@ SECURITY.md              Vulnerability reporting + security baseline
 .pre-commit-config.yaml  Hygiene hooks, gitleaks, noreply-identity guard, ruff, mypy
 ```
 
-## Roadmap
+## Status
 
-STAGE00 setup → STAGE01–07 core engine (ledger, lines, settlement, accounts) → STAGE08 first deploy (**R1**) → STAGE10 real Garmin dry run (**R2**) → STAGE11 private beta (**R3**) → STAGE15 full v1 (**R4**) → STAGE16 hardening and security review → STAGE17 self-host release (**R5**).
+Version 1 is released: the betting engine and ledger, automatic settlement from Garmin, Discord posts, AI-packaged props, special events, seasons, backups and the self-host installer. What changed in each version is on the [Releases](https://github.com/lotus-infosec/weightpicks/releases) page.

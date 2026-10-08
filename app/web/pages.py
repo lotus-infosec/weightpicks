@@ -1,4 +1,4 @@
-"""Player pages and the auth/bet API (BUILD_PLAN §1.5 page map).
+"""Player pages and the auth/bet API.
 
 HTML forms post to `/api/auth/*` and get 303 redirects (errors re-render the form).
 The bet slip posts JSON to `/api/bets`. CSRF is enforced globally (app.web.security).
@@ -28,8 +28,8 @@ from app.web.security import (
 )
 
 TABS = ("daily", "weekly", "monthly")
-PROP_TABS = ("prop", "future")  # shown while the props_futures flag is on (D-041)
-EVENT_TABS = ("events",)  # shown while the special_events flag is on (D-043)
+PROP_TABS = ("prop", "future")  # shown while the props_futures flag is on
+EVENT_TABS = ("events",)  # shown while the special_events flag is on
 BET_MESSAGES = {
     "locked": "This market just locked.",
     "stale_odds": "The odds changed. Refresh the board and try again.",
@@ -225,7 +225,7 @@ def build_router() -> APIRouter:
     async def register(request: Request) -> Response:
         form = await read_form(request)
         state = request.app.state
-        if not registration_open(request):  # BUILD_PLAN §4.2: invite closed
+        if not registration_open(request):  # invites closed
             return anon_form(
                 request, "register.html", {"error": None, "form": {}, "closed": True}, 403
             )

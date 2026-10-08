@@ -1,4 +1,4 @@
-"""Staged restore and factory reset with a worker handshake (BUILD_PLAN §1.5, §1.6).
+"""Staged restore and factory reset with a worker handshake.
 
 Nothing is ever swapped under a live connection:
 

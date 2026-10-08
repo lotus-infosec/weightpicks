@@ -1,5 +1,5 @@
 """Markets: the lifecycle state machine, the drop schedule and the template registry
-(BUILD_PLAN §1.4.3, §1.4.2, D-009). Pure: callers pass dates, the zone and the data.
+. Pure: callers pass dates, the zone and the data.
 
 A template declares its params schema, how it is priced (line engine only, never AI),
 how it settles, the observations its result depends on (correlation keys)
@@ -75,11 +75,11 @@ class Timeframe(StrEnum):
     DAILY = "daily"
     WEEKLY = "weekly"
     MONTHLY = "monthly"
-    PROP = "prop"  # admin-created props (milestones, streaks, week vs week), D-041
+    PROP = "prop"  # admin-created props (milestones, streaks, week vs week)
     FUTURE = "future"
 
 
-# ---- schedule (D-009 defaults; edited in /setup from STAGE08) ----------------------
+# ---- schedule (defaults; edited in /setup) -----------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,7 +176,7 @@ SETTLE_GRACE = timedelta(hours=24)  # locked past settle_after + this -> admin a
 
 def dedupe_key(template: str, params: Mapping[str, Any], zone: str) -> str:
     """Same template, parameters and time zone = the same market. The zone is part of it
-    because its days and lock times are; after a zone change (D-049) today's markets can
+    because its days and lock times are; after a zone change today's markets can
     be offered again next to the voided ones."""
     body = json.dumps(params, sort_keys=True, separators=(",", ":"))
     return f"{template}:{body}@{zone}"
@@ -295,7 +295,7 @@ class WeightChangeOU:
             metric="weight",
             window=(p.d0, p.d1),
             title=f"Weight change, {_day(p.d0)} → {_day(p.d1)} ({unit})",
-            # Lock the night of the start day (D-031): daily markets lock the night before
+            # Lock the night of the start day: daily markets lock the night before
             # d1's weigh-in; weekly/monthly ones lock on drop night and are held to settle,
             # so nobody bets late with days of extra information against fixed odds.
             lock_at=at_local(p.d0, schedule.bet_lock, tz),

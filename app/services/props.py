@@ -1,4 +1,4 @@
-"""Admin-created props and futures (D-041): the admin picks a template and its
+"""Admin-created props and futures: the admin picks a template and its
 parameters; the engine prices it (never by hand). Read the form, build the params from
 live data (current streak, season-start weight...), preview, then create."""
 
@@ -146,7 +146,7 @@ def insert_prop(
     blurb: str | None = None,
 ) -> int:
     """Insert a previewed prop and queue its `new_markets` post, in the caller's write
-    transaction. Shared by the admin form and AI proposals (D-042)."""
+    transaction. Shared by the admin form and AI proposals."""
     season_id = active_season_id(conn)
     if season_id is None:
         raise PropError("No season is running.")

@@ -1,5 +1,5 @@
 """Outbox: every external side effect is a row written in the same transaction as the
-business change, delivered later by the worker (BUILD_PLAN §1.4.5, STAGE11)."""
+business change, delivered later by the worker."""
 
 from datetime import datetime
 from typing import Any

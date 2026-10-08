@@ -1,4 +1,4 @@
-"""Market drops and locks (BUILD_PLAN §1.4.3).
+"""Market drops and locks.
 
 A drop prices its markets from observations *before* taking the write lock, then
 inserts market + selections + odds version 1 for every new market in one short
@@ -6,7 +6,7 @@ BEGIN IMMEDIATE transaction. `markets.dedupe_key` is unique and re-checked under
 lock, so a repeated, overlapping or restarted drop never duplicates a market. A
 market whose lock time has already passed is never opened, and a drop caught up after
 its local day has ended posts nothing: it would be priced on data older than what
-bettors can already see (D-030).
+bettors can already see.
 """
 
 from collections import Counter, defaultdict
@@ -190,7 +190,7 @@ def drop(
         unit=config.unit,
         enabled_metrics=config.enabled_metrics,
     )
-    vig = float(config.economy.hold) if hold is None else hold  # settings, D-036
+    vig = float(config.economy.hold) if hold is None else hold  # from the settings row
     now = clock.now()
     if local_date(now, config.tz) != day:
         result.skipped = dict.fromkeys((s.dedupe_key for s in specs), "stale_drop")
@@ -217,7 +217,7 @@ def drop(
             and pricing.model_inputs.get("provisional")
         ):
             # A provisional prior (slope 0) over 7-28 days makes "under" nearly free for
-            # a subject who is losing weight; only the daily line is offered (D-039).
+            # a subject who is losing weight; only the daily line is offered.
             result.skipped[spec.dedupe_key] = "provisional"
             continue
         priced.append((spec, pricing))

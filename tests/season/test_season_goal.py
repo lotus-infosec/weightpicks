@@ -1,4 +1,4 @@
-"""STAGE14 measure: a simulated season on the `goal-in-30-days` preset ends, freezes, and
+"""A simulated season on the `goal-in-30-days` preset ends, freezes, and
 a new season starts cleanly. Time moves only through `sim.advance` (the real worker jobs:
 sync -> goal watch -> drops -> lock -> settle -> pools), with scripted bettors, parlays
 and two pools: one due before the goal, one after it."""

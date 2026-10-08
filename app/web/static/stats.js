@@ -1,4 +1,4 @@
-// Stats charts (BUILD_PLAN §1.5). Data comes from the JSON block the page renders; no
+// Stats charts. Data comes from the JSON block the page renders; no
 // inline script, so the CSP stays script-src 'self'. Colours follow the palette.
 (function () {
   "use strict";

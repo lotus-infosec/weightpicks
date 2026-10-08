@@ -1,4 +1,4 @@
-"""The admin audit log (BUILD_PLAN §1.5: every admin mutation is recorded). Rows are
+"""The admin audit log (every admin mutation is recorded). Rows are
 append-only (triggers). Values under sensitive-looking keys are never stored."""
 
 from dataclasses import dataclass

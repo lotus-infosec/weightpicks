@@ -176,7 +176,7 @@ def rich_server(tmp_path: Path) -> Iterator[RichServer]:
     _props_and_parlays(engine, clock)
     _ai_props(engine, clock)
     _special_event(engine, clock)
-    _stage15(engine)
+    _backups_and_email(engine)
     engine.dispose()
 
     port = _free_port()
@@ -353,7 +353,7 @@ def ops_server(tmp_path: Path) -> Iterator[OpsServer]:
 
 
 def _props_and_parlays(engine: Any, clock: SimClock) -> None:
-    """Turn props/futures and parlays on and post one engine-priced milestone (STAGE12)."""
+    """Turn props/futures and parlays on and post one engine-priced milestone."""
     from datetime import timedelta
 
     from sqlalchemy import select, update
@@ -397,7 +397,7 @@ def _props_and_parlays(engine: Any, clock: SimClock) -> None:
 
 
 def _ai_props(engine: Any, clock: SimClock) -> None:
-    """STAGE13: AI props on, one published AI prop with a blurb, one waiting for review,
+    """AI props on, one published AI prop with a blurb, one waiting for review,
     an AI run and an admin note (inserted directly: no Workers AI in e2e)."""
     from sqlalchemy import insert, select, update
 
@@ -462,7 +462,7 @@ def _ai_props(engine: Any, clock: SimClock) -> None:
 
 
 def _special_event(engine: Any, clock: SimClock) -> None:
-    """STAGE14: special events on, one open pot with an entry from Alex (p2)."""
+    """Special events on, one open pot with an entry from Alex (p2)."""
     from sqlalchemy import select, update
 
     from app.models import InstanceSettingsRow, User
@@ -486,8 +486,8 @@ def _special_event(engine: Any, clock: SimClock) -> None:
     pools.enter(engine, clock, user_id=alex, pool_id=pool_id, guess_x10=2185)
 
 
-def _stage15(engine: Any) -> None:
-    """STAGE15: the Backups screens on and email set up (so password reset shows)."""
+def _backups_and_email(engine: Any) -> None:
+    """The Backups screens on and email set up (so password reset shows)."""
     from sqlalchemy import select, update
 
     from app.models import InstanceSettingsRow

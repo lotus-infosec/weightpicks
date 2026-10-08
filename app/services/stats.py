@@ -1,4 +1,4 @@
-"""Player stats view (BUILD_PLAN §1.5): served from `observations` only, so raw Garmin
+"""Player stats view: served from `observations` only, so raw Garmin
 history never leaves the server. The trend, band and projection are the line engine's
 own fit, the same numbers behind the open weight lines. Read-only."""
 

@@ -172,7 +172,7 @@ def test_sim_cli_refuses_without_dev_simulated(
 def test_sim_advance_90_days_under_10_seconds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """STAGE03 measure of success."""
+    """`wp sim advance --days 90` stays fast enough for daily dev use."""
     for key, value in {
         "APP_ENV": "dev",
         "DATA_PROVIDER": "simulated",
@@ -186,7 +186,7 @@ def test_sim_advance_90_days_under_10_seconds(
     assert main(["sim", "advance", "--days", "90"]) == 0
     elapsed = time.perf_counter() - started
     out = capsys.readouterr().out
-    # 10 s on the dev machine; CI sets PERF_BUDGET_SCALE=2 for slower shared runners (D-028).
+    # 10 s on the dev machine; CI sets PERF_BUDGET_SCALE=2 for slower shared runners.
     budget = 10 * float(os.environ.get("PERF_BUDGET_SCALE", "1"))
     assert elapsed < budget, out
 

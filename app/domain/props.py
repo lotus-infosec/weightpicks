@@ -1,10 +1,11 @@
-"""Props and futures (BUILD_PLAN §1.4.1 step 5, §1.4.2; D-041). Pure: no I/O.
+"""Props and futures. Pure: no I/O.
 
 Created by the admin on local day C, a prop opens at once, locks at C's bet-lock time
 and is held until it resolves; its observation window starts at C+1, so the day's
 canonical weigh-in (already known) can never decide it. Weight props need a real
 trend: with fewer than 7 recent weigh-ins (a provisional fit) they are not priced
-(same reasoning as D-039). Milestones and streaks can settle early.
+(same reasoning as the provisional weekly/monthly weight lines). Milestones and
+streaks can settle early.
 """
 
 import hashlib
@@ -97,7 +98,7 @@ def _fit_inputs(fit: WeightFit, unit: Unit, hold: float) -> dict[str, Any]:
     }
 
 
-MAX_VIGGED_Q = 0.95  # the odds clamp (BUILD_PLAN §1.4.1 step 4)
+MAX_VIGGED_Q = 0.95  # the odds clamp
 
 
 def _offered(pricing: Pricing, hold: float) -> Pricing | None:

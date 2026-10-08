@@ -1,4 +1,4 @@
-"""Scheduled economy and social jobs on the app clock (BUILD_PLAN §1.4.6)."""
+"""Scheduled economy and social jobs on the app clock."""
 
 from datetime import date, datetime, time, timedelta
 

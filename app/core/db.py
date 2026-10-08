@@ -7,7 +7,7 @@ lock up front, so it can never fail half-way with "database is locked".
 
 Within one process, write transactions also queue on a lock before BEGIN IMMEDIATE.
 SQLite's busy handler polls with sleeps rather than queueing, so under many concurrent
-writers (the STAGE16 load test: 50 bettors while settlement runs) an unlucky thread
+writers (the load test: 50 bettors while settlement runs) an unlucky thread
 could wait past busy_timeout. With the lock, threads wait their turn in Python and
 busy_timeout only covers the other process (web vs worker).
 """

@@ -1,6 +1,6 @@
-"""Backfill settings.setup_completed_at for databases bootstrapped before /setup (STAGE16)
+"""Backfill settings.setup_completed_at for databases bootstrapped before /setup
 
-Before STAGE08 an admin was created from the CLI, and "an admin exists" counted as setup
+Before /setup existed an admin was created from the CLI, and "an admin exists" counted as setup
 done. That fallback is gone; this marks those databases as set up instead.
 
 Revision ID: 0012

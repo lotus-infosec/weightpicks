@@ -1,4 +1,4 @@
-"""Infra job: drain the outbox to Discord on real time (BUILD_PLAN §1.4.5, D-040)."""
+"""Infra job: drain the outbox to Discord on real time."""
 
 from datetime import datetime
 

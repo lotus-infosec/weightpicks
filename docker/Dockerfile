@@ -47,7 +47,7 @@ COPY app ./app
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 # GarminDB gets its own venv: the worker runs it only as a subprocess, so its dependencies
-# never mix with the app's (D-038). Exact versions and hashes are pinned.
+# never mix with the app's. Exact versions and hashes are pinned.
 COPY docker/garmindb-requirements.txt /tmp/garmindb-requirements.txt
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv venv /opt/garmindb \
@@ -68,7 +68,7 @@ ENV PATH=/opt/venv/bin:$PATH \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DATA_DIR=/data
-# Debian security fixes newer than the pinned base image (Trivy, STAGE16): the runtime
+# Debian security fixes newer than the pinned base image (Trivy): the runtime
 # image ships with every published fix even before Dependabot bumps the digest.
 # The base image's own pip is never used (the app runs from the uv-built venv): remove it.
 RUN apt-get update \

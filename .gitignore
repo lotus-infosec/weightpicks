@@ -87,7 +87,7 @@ CLAUDE.local.md
 *.log
 /logs/
 
-# ---- Private planning kit & AI-agent files (local only — see weightpicks/DECISIONS.md D-018) ----
+# ---- Private planning kit & AI-agent files (local only) ----
 /weightpicks/
 /CLAUDE.md
 /AGENTS.md

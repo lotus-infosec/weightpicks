@@ -1,4 +1,4 @@
-"""STAGE12: build a 3-leg parlay on a phone, see the combined odds, place it; the Props
+"""Build a 3-leg parlay on a phone, see the combined odds, place it; the Props
 tab shows yes/no markets. Screenshots go to test-screens/ for review."""
 
 import re

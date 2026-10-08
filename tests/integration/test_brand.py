@@ -1,4 +1,4 @@
-"""Brand images: project defaults, overridden by an Appearance upload (STAGE15)."""
+"""Brand images: project defaults, overridden by an Appearance upload."""
 
 from pathlib import Path
 

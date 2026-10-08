@@ -1,4 +1,4 @@
-"""Job protocol and the exactly-once runner (BUILD_PLAN §1.4.6).
+"""Job protocol and the exactly-once runner.
 
 A job says *which period is due* (`due(now) -> period_key | None`). The runner
 claims `(job, period_key)` in `job_runs` inside one BEGIN IMMEDIATE transaction;

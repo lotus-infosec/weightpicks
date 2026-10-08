@@ -1,4 +1,4 @@
-"""Integration secrets stored encrypted in the `secrets` table (BUILD_PLAN §1.6).
+"""Integration secrets stored encrypted in the `secrets` table.
 
 Names: `workers_ai.account_id`, `workers_ai.token`, `webhook.<category>`,
 `smtp.password`. Values are never logged. Without APP_SECRET_KEY, or with the wrong

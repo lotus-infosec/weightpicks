@@ -1,4 +1,4 @@
-"""Transactional settlement (BUILD_PLAN §1.4.2).
+"""Transactional settlement.
 
 `settle_market` does everything in one BEGIN IMMEDIATE transaction: the readiness
 gate, the `settlements` row (unique market_id = the idempotency guard), ledger
@@ -325,7 +325,7 @@ def settle_due(engine: Engine, clock: Clock) -> SettlePass:
         pending = conn.execute(
             select(func.min(Market.settle_after)).where(locked, Market.settle_after > now)
         ).scalar_one()
-    if settled:  # bust_check after each settlement batch (BUILD_PLAN §1.4.6)
+    if settled:  # bust_check after each settlement batch
         with immediate(engine) as conn:
             season_id = ledger.active_season_id(conn)
             if season_id is not None:
@@ -334,7 +334,7 @@ def settle_due(engine: Engine, clock: Clock) -> SettlePass:
 
 
 def reevaluate_parlay(conn: Connection, clock: Clock, bet_id: int, now: datetime) -> str:
-    """Resolve an open parlay from its legs (D-041): any lost leg loses it at once (the
+    """Resolve an open parlay from its legs: any lost leg loses it at once (the
     other open legs are voided); once every leg is in, pushed/void legs drop out and it
     pays floor(stake x the product of the won legs' decimal odds), or refunds the stake
     when every leg dropped out. Same transaction as the leg change; returns the status."""
@@ -381,7 +381,7 @@ def reevaluate_parlay(conn: Connection, clock: Clock, bet_id: int, now: datetime
     enqueue(
         conn,
         clock,
-        category=Category.PARLAY_RESULTS,  # CONCEPT §9: hits and busted parlays
+        category=Category.PARLAY_RESULTS,  # hits and busted parlays
         payload={
             "bet_id": bet_id,
             "user_id": bet.user_id,

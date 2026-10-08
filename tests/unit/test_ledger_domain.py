@@ -26,7 +26,7 @@ def test_betting_kinds_are_exactly_the_six_from_the_plan() -> None:
         "allowance",
         "bailout",
         "admin_adjust",
-        "season_carry",  # D-043: carried balances never count as profit
+        "season_carry",  # carried balances never count as profit
     }
 
 
@@ -80,7 +80,7 @@ def test_fingerprint_is_order_independent_and_content_sensitive() -> None:
 
 
 def test_economy_defaults_match_concept() -> None:
-    # CONCEPT §6 defaults; configurable in /setup from STAGE08.
+    # The default economy; configurable in /setup.
     assert DEFAULT_ECONOMY.starting_bankroll_cents == 100_000
     assert DEFAULT_ECONOMY.daily_allowance_cents == 5_000
     assert DEFAULT_ECONOMY.bailout_cents == 50_000

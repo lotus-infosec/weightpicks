@@ -1,4 +1,4 @@
-"""AI jobs (BUILD_PLAN §1.4.4, §1.4.6; D-042): prop proposals after the daily and weekly
+"""AI jobs: prop proposals after the daily and weekly
 drops, and stat-update hype after the daily drop. Each runs once per period on the app
 clock; the neuron quota uses real time. With the flag off they do nothing, and any AI
 problem is recorded as an `ai_run`, never raised: core markets never wait on AI."""
@@ -69,5 +69,5 @@ class AiHypeJob:
 
     def run(self, ctx: JobContext) -> int:
         if ctx.period_key != local_date(ctx.now, self.config.tz).isoformat():
-            return 0  # catch-up: skip (BUILD_PLAN §1.4.6)
+            return 0  # catch-up: skip
         return ai_hype.run(ctx.engine, ctx.clock, self.real_clock, self.settings)

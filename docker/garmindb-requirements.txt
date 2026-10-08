@@ -1,4 +1,4 @@
-# GarminDB runs as a separate program in its own venv (/opt/garmindb), D-038.
+# GarminDB runs as a separate program in its own venv (/opt/garmindb).
 # Regenerate: uv pip compile --universal --python-version 3.12 --generate-hashes --no-header docker/garmindb-requirements.in -o docker/garmindb-requirements.txt
 cached-property==2.0.1 \
     --hash=sha256:484d617105e3ee0e4f1f58725e72a8ef9e93deee462222dbd51cd91230897641 \

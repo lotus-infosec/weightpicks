@@ -257,7 +257,7 @@ def recent_outbox(conn: Connection, limit: int = 10) -> list[Any]:
 
 
 def pools(conn: Connection, limit: int = 30) -> list[dict[str, Any]]:
-    """Special events, newest first, each with its entries (D-043)."""
+    """Special events, newest first, each with its entries."""
     rows = conn.execute(select(Pool).order_by(Pool.id.desc()).limit(limit)).all()
     entries = entries_by_pool(conn, [p.id for p in rows])
     return [
@@ -267,7 +267,7 @@ def pools(conn: Connection, limit: int = 30) -> list[dict[str, Any]]:
 
 
 def system_health(conn: Connection, now: datetime, cap: int) -> dict[str, Any]:
-    """Admin -> System (BUILD_PLAN §2.9): data freshness, jobs, backlog, AI, integrity."""
+    """Admin -> System: data freshness, jobs, backlog, AI, integrity."""
     from app.ai import quota
     from app.models import AiRun, Heartbeat, JobRun, Settlement, SyncRun
     from app.services.observations import latest_complete_through
@@ -353,7 +353,7 @@ class PropsData:
 
 
 def props(conn: Connection, now: datetime, default_tz: ZoneInfo) -> PropsData:
-    """Everything the admin Props page shows (D-041, D-042)."""
+    """Everything the admin Props page shows."""
     config = instance.read(conn)
     today = now.astimezone(config.tz if config else default_tz).date()
     canon = canonical_weigh_ins(conn, today - timedelta(days=13), today)

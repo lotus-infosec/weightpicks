@@ -1,4 +1,4 @@
-"""Admin controls for Workers AI (D-042): review vs auto-publish, the Workers AI account
+"""Admin controls for Workers AI: review vs auto-publish, the Workers AI account
 id and token (encrypted, never shown back), admin notes for the digest, and the AI runs
 view. Every mutation is audited; secrets never reach the audit log."""
 
@@ -183,7 +183,7 @@ def clear_secrets(engine: Engine, clock: Clock, actor: Actor) -> int:
     return removed
 
 
-# ---- SMTP (STAGE15) -------------------------------------------------------------------------
+# ---- SMTP -------------------------------------------------------------------------
 
 
 def set_smtp(

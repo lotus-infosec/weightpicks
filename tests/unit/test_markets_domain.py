@@ -207,7 +207,7 @@ def test_weekly_drop() -> None:
     assert len(out) == 6  # weight + 5 counts incl. workouts
     weight = out[0]
     assert (weight.window_start, weight.window_end) == (sunday, date(2026, 10, 11))
-    assert weight.lock_at == local(2026, 10, 4, 22)  # drop night, held to settle (D-031)
+    assert weight.lock_at == local(2026, 10, 4, 22)  # drop night, held to settle
     for count in out[1:]:
         assert (count.window_start, count.window_end) == (date(2026, 10, 5), date(2026, 10, 11))
         assert count.lock_at == local(2026, 10, 4, 22)  # the drop night
@@ -252,7 +252,7 @@ def test_dedupe_keys_are_canonical_and_distinct() -> None:
         unit="lb",
         enabled_metrics=ALL,
     )
-    assert not {s.dedupe_key for s in a} & {s.dedupe_key for s in other_zone}  # D-049
+    assert not {s.dedupe_key for s in a} & {s.dedupe_key for s in other_zone}  # zone in the key
 
 
 def test_params_are_validated() -> None:

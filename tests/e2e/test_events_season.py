@@ -1,4 +1,4 @@
-"""STAGE14: buy into a special event and change the guess on a phone and a desktop; the
+"""Buy into a special event and change the guess on a phone and a desktop; the
 admin event preview and Season page; the frozen banner. Screenshots go to test-screens/."""
 
 import pytest

@@ -1,5 +1,5 @@
 """Admin → Events (AI draft and manual, preview, publish, void) and Admin → Season
-(freeze, Goal Reached, new season) over HTTP (D-043)."""
+(freeze, Goal Reached, new season) over HTTP."""
 
 from collections.abc import Iterator
 from datetime import date

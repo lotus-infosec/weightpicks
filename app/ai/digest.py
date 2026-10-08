@@ -1,4 +1,4 @@
-"""The AI digest and template menu, built by code (BUILD_PLAN §1.4.4 step 2; D-042).
+"""The AI digest and template menu, built by code; the model only picks from it.
 
 Pure functions over a snapshot the service gathers. The menu holds the only parameter
 values a proposal may use; `Menu.form` turns a proposal into the admin prop form, or

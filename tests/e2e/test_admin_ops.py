@@ -1,4 +1,4 @@
-"""STAGE09 measure: a simulated week operated from the admin UI only (no SQL, no CLI)."""
+"""A simulated week operated from the admin UI only (no SQL, no CLI)."""
 
 import re
 

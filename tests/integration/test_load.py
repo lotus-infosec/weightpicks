@@ -1,4 +1,4 @@
-"""STAGE16 load test: 50 virtual users place bets over HTTP against a real uvicorn server
+"""Load test: 50 virtual users place bets over HTTP against a real uvicorn server
 while settlement, the dispatcher and ledger checks run on the same SQLite file.
 
 Pass: no 5xx, no `database is locked`, the settled market paid every pre-placed bet

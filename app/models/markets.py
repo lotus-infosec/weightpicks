@@ -1,4 +1,4 @@
-"""Markets, their two selections and their priced odds versions (BUILD_PLAN §1.3, §1.4.3).
+"""Markets, their two selections and their priced odds versions.
 
 Status changes are decided by `app.domain.markets.transition` only. `dedupe_key`
 (template + canonical params) is unique, so a repeated or restarted drop can never

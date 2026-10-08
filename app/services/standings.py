@@ -1,4 +1,4 @@
-"""Weekly standings post (BUILD_PLAN §1.4.6): Monday 09:00, the top 10 by season P&L with
+"""Weekly standings post: Monday 09:00, the top 10 by season P&L with
 last week's P&L change (week = Mon-Sun, local)."""
 
 from datetime import date, datetime, time, timedelta

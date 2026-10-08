@@ -1,4 +1,4 @@
-"""STAGE08: a fresh instance sets itself up through /setup at phone size."""
+"""A fresh instance sets itself up through /setup at phone size."""
 
 import pytest
 from playwright.sync_api import Browser, ConsoleMessage, Page, expect

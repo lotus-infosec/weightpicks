@@ -1,4 +1,4 @@
-"""Market jobs: the daily/weekly/monthly drops and the every-tick lock pass (D-009)."""
+"""Market jobs: the daily/weekly/monthly drops and the every-tick lock pass."""
 
 from datetime import date, datetime, timedelta
 
@@ -11,7 +11,7 @@ from app.worker.registry import JobContext
 # Every-tick passes re-read their next due time at least this often (app time), so work
 # created by another process is still picked up. Freezing locks in its own transaction,
 # bet placement checks `lock_at` itself, and settlement already waits for 2-hourly syncs,
-# so this lag only delays a status flip, never lets a late bet in (D-030, D-033).
+# so this lag only delays a status flip, never lets a late bet in.
 RECHECK = timedelta(minutes=30)
 
 

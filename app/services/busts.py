@@ -21,7 +21,7 @@ def check(conn: Connection, clock: Clock, season_id: int) -> list[int]:
     Returns the new bust ids."""
     now = clock.now()
     open_bet = exists().where(Bet.account_id == Account.id, Bet.status == "open")
-    open_pool = exists().where(  # money in a pot that hasn't paid out yet (D-043)
+    open_pool = exists().where(  # money in a pot that hasn't paid out yet
         PoolEntry.account_id == Account.id,
         PoolEntry.pool_id == Pool.id,
         Pool.status.in_(("open", "locked")),

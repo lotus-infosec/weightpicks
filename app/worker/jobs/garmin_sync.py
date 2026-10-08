@@ -32,7 +32,7 @@ class GarminSyncJob:
         self, settings: Settings, config: InstanceConfig, signal: SyncSignal | None = None
     ) -> None:
         self.settings = settings
-        self.config = config  # zone and unit come from the settings row (D-036)
+        self.config = config  # zone and unit come from the settings row
         self.signal = signal or SyncSignal()
         self._provider: DataProvider | None = None
 

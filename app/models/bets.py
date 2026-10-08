@@ -1,4 +1,4 @@
-"""Bets, their legs, and market settlements (BUILD_PLAN §1.3, §1.4.2).
+"""Bets, their legs, and market settlements.
 
 A bet pins the odds version it was placed at; each leg snapshots the American odds
 and line. `settlements.market_id` is unique: inserting that row in the same

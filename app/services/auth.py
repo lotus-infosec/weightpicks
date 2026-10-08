@@ -1,4 +1,4 @@
-"""Registration, login, sessions and registration codes (BUILD_PLAN §1.6, D-034).
+"""Registration, login, sessions and registration codes.
 
 Every write path is one short BEGIN IMMEDIATE transaction; password hashing (slow by
 design) runs outside it where possible. Rate limits are counted from `auth_attempts`.

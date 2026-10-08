@@ -1,4 +1,4 @@
-"""Seeded Monte Carlo for props, milestones and futures (BUILD_PLAN §1.4.1 step 5).
+"""Seeded Monte Carlo for props, milestones and futures.
 
 Paths follow the same trend + noise model as the line engine: each path draws its
 own level and slope jointly from the fit's sampling distribution, the level drifts

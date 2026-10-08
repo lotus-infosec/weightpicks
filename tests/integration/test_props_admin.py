@@ -1,4 +1,4 @@
-"""Admin-created props (D-041) and early settlement through the real pipeline."""
+"""Admin-created props and early settlement through the real pipeline."""
 
 from datetime import timedelta
 

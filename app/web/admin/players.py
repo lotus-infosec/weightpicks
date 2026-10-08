@@ -1,4 +1,4 @@
-"""Dashboard, markets, players, the bank and registration codes (D-037)."""
+"""Dashboard, markets, players, the bank and registration codes."""
 
 from typing import Any
 

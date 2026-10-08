@@ -1,4 +1,4 @@
-"""Provider contract tests on synthetic files shaped like GarminDB's downloads (D-038).
+"""Provider contract tests on synthetic files shaped like GarminDB's downloads.
 No real data: every value here is made up."""
 
 import json

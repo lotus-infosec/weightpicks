@@ -1,4 +1,4 @@
-"""Install-time settings from the environment (BUILD_PLAN §1.7).
+"""Install-time settings from the environment.
 
 First-run and runtime settings live in the database and arrive in later stages.
 `WP_IMAGE`, `WP_VERSION` and `WP_BIND` are read by Compose only.
@@ -26,22 +26,22 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING"] = "INFO"
     log_format: Literal["json", "console"] = "json"
     ai_daily_neuron_cap: int = 5000
-    # Workers AI models (D-014): JSON Mode for proposals, the cheaper fp8-fast for hype.
+    # Workers AI models: JSON Mode for proposals, the cheaper fp8-fast for hype.
     ai_model_json: str = "@cf/meta/llama-3.1-8b-instruct"
     ai_model_text: str = "@cf/meta/llama-3.1-8b-instruct-fp8-fast"
     backup_retention: int = 7
     data_dir: Path = Path("/data")
     # Overrides the SQLite file under data_dir (tests point this at a temp file).
     database_url: str | None = None
-    # Instance time zone and weight unit; owned by /setup from STAGE08 (D-027).
+    # Instance time zone and weight unit; owned by /setup.
     wp_timezone: str = "America/New_York"
     wp_unit: Literal["lb", "kg"] = "lb"
     # Session cookies are Secure (HTTPS-only). Dev may turn this off for a plain-http
-    # LAN phone test; production refuses it (D-034).
+    # LAN phone test; production refuses it.
     wp_cookie_secure: bool = True
     # Where the Docker build puts the compiled stylesheet (outside the dev source mount).
     wp_static_build_dir: Path = Path("/app/static-build")
-    # GarminDB (D-038): its home (config, token, downloads, SQLite) and its own venv.
+    # GarminDB: its home (config, token, downloads, SQLite) and its own venv.
     garmin_home: Path = Path("/garmin")
     garmindb_python: Path = Path("/opt/garmindb/bin/python")
 
@@ -86,5 +86,5 @@ class Settings(BaseSettings):
     @property
     def sim_clock(self) -> bool:
         """Dev with simulated data runs on the persisted SimClock; real data always runs
-        on real time, even in dev (STAGE10)."""
+        on real time, even in dev."""
         return self.is_dev and self.data_provider == "simulated"

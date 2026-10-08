@@ -1,9 +1,9 @@
-"""Placing single bets (BUILD_PLAN §1.4.2, STAGE06).
+"""Placing single bets.
 
 Everything happens in one BEGIN IMMEDIATE transaction: validation, the bet and leg
 rows, the `bet_stake` ledger entry and the outbox rows. A bet pins the odds version
 it was placed at; the market must be open *and* before `lock_at` (the lock pass may
-lag a tick, D-030). `client_key` makes a retried submit return the same bet.
+lag a tick). `client_key` makes a retried submit return the same bet.
 """
 
 from dataclasses import dataclass
@@ -255,9 +255,9 @@ def place_parlay(
     stake_cents: int,
     client_key: str,
 ) -> PlacedParlay:
-    """A parlay of 2..max_parlay_legs singles at their pinned odds (BUILD_PLAN §1.4.2,
-    D-041). Refused if two legs share a market or their correlation keys intersect, or
-    if the potential payout would exceed 100x the stake."""
+    """A parlay of 2..max_parlay_legs singles at their pinned odds. Refused if two legs
+    share a market or their correlation keys intersect, or if the potential payout would
+    exceed 100x the stake."""
     if type(stake_cents) is not int:
         raise BetRejected("invalid_stake", "stake must be integer cents")
     if not client_key or len(client_key) > 64:

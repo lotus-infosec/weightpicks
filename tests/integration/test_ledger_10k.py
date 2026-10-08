@@ -1,4 +1,4 @@
-"""STAGE02 measure of success: `wp ledger verify` passes after 10,000 random operations.
+"""Measure of success: `wp ledger verify` passes after 10,000 random operations.
 
 Deterministic (seeded) mix of every primitive, including deliberate overdraw attempts
 and idempotent replays, each in its own BEGIN IMMEDIATE transaction like production.

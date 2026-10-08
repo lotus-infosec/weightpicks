@@ -74,7 +74,7 @@ def test_cli_writes_report(
     "preset", ["steady-loser", "chaotic", "rebound", "plateau", "goal-in-30-days"]
 )
 def test_full_calibration_passes_and_committed_report_is_current(preset: str) -> None:
-    """STAGE04: every graded decile within ±5 points; docs/calibration/ is up to date."""
+    """Every graded decile within ±5 points; docs/calibration/ is up to date."""
     report = calibration.run(preset, days=365, seeds=20, tz=NY, unit="lb")
     assert report.passed, calibration.render_markdown(report)
     committed = REPO / "docs" / "calibration" / f"{preset}.md"

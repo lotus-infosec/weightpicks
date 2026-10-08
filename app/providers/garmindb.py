@@ -1,4 +1,4 @@
-"""Real Garmin data via GarminDB (BUILD_PLAN §2.3, D-038). Read-only.
+"""Real Garmin data via GarminDB. Read-only.
 
 GarminDB downloads into `<home>/HealthData`; this provider reads the raw JSON it saved
 rather than its SQLite tables, because GarminDB's `weight` table keeps one row per day

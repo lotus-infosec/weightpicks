@@ -1,5 +1,5 @@
 """Admin AI pages: review queue, publishing mode, run-now, AI runs, notes, Workers AI
-settings; the AI blurb on the board (D-042)."""
+settings; the AI blurb on the board."""
 
 from collections.abc import Iterator
 from datetime import date, timedelta

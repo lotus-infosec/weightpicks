@@ -1,4 +1,4 @@
-"""Write outbox rows inside the caller's transaction (BUILD_PLAN §1.4.5).
+"""Write outbox rows inside the caller's transaction.
 
 `dedupe_key` is unique, so a retried business transaction can never queue the same
 notification twice. Payloads carry ids and display values only: never emails,

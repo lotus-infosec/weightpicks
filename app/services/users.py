@@ -1,4 +1,4 @@
-"""Minimal user records (full accounts and auth arrive in STAGE07)."""
+"""Minimal user records for dev seeding and tests (accounts and auth: services.auth)."""
 
 from sqlalchemy import Connection, insert, select
 

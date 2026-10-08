@@ -1,4 +1,4 @@
-"""Appearance (BUILD_PLAN §1.5): instance name, palette and logo (D-044).
+"""Appearance: instance name, palette and logo.
 
 A logo upload is PNG, JPEG or WebP, at most 512 KB. It is decoded by Pillow (with a
 pixel limit against decompression bombs) and re-encoded to fresh PNGs: the original

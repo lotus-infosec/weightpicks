@@ -1,4 +1,4 @@
-"""AI-packaged props end to end with a fake Workers AI (BUILD_PLAN §1.4.4; D-042)."""
+"""AI-packaged props end to end with a fake Workers AI."""
 
 from datetime import timedelta
 from typing import Any

@@ -1,4 +1,4 @@
-"""Outbox -> Discord (BUILD_PLAN §1.4.5, D-040).
+"""Outbox -> Discord.
 
 One pass reads due rows, decides each one (skip, wait, send), and makes the HTTP call
 with no database transaction open; each outcome is written in its own short write.
@@ -200,7 +200,7 @@ class Dispatcher:
             self._send(engine, row, url, body, result)
         return result
 
-    # ---- email (STAGE15): password resets and SMTP tests --------------------------------
+    # ---- email: password resets and SMTP tests --------------------------------
 
     def _email_pass(self, engine: Engine, result: PassResult, now: datetime) -> None:
         with engine.connect() as conn:

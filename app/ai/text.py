@@ -1,4 +1,4 @@
-"""Checks for AI-written text (BUILD_PLAN §1.4.4 step 4): a denylist, no links, mentions
+"""Checks for AI-written text: a denylist, no links, mentions
 or markup, and no bettor names. A failing text drops that proposal or rewrite only."""
 
 import re

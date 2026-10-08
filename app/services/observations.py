@@ -52,12 +52,12 @@ def _between(conn: Connection, metric: str, start: date, end: date, tz: ZoneInfo
 def canonical_weigh_ins(
     conn: Connection, start: date, end: date, tz: ZoneInfo | None = None
 ) -> list[CanonicalWeighIn]:
-    """The canonical weigh-in per local day in [start, end]: the earliest in-window one (D-009).
+    """The canonical weigh-in per local day in [start, end]: the earliest in-window one.
 
-    Derived on read from immutable rows (D-027), so a late-synced earlier weigh-in
+    Derived on read from immutable rows, so a late-synced earlier weigh-in
     correctly takes over until the day's data is complete. Days and the window are
     worked out from each reading's UTC time in `tz` (default: the instance's zone now),
-    never from the day stored at sync time, so a time zone change applies (D-050).
+    never from the day stored at sync time, so a time zone change applies.
     """
     zone = tz or current_zone(conn)
     canonical: dict[date, CanonicalWeighIn] = {}

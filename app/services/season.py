@@ -1,4 +1,4 @@
-"""Goal Reached, freeze and new seasons (BUILD_PLAN §1.4.2, D-011, D-043).
+"""Goal Reached, freeze and new seasons.
 
 Goal Reached runs once per season (job key `goal_reached` / `<season_id>`, shared by the
 automatic and the manual trigger): freeze first so no bet slips in, settle what the data
@@ -114,7 +114,7 @@ def goal_reached(
     hit: Hit | None = None,
     actor: audit.Actor | None = None,
 ) -> GoalResult | None:
-    """Run Goal Reached for the current season (D-011). None if it already ran."""
+    """Run Goal Reached for the current season. None if it already ran."""
     with immediate(engine) as conn:
         season = _season(conn)
         if season is None:
@@ -263,7 +263,7 @@ def set_frozen(engine: Engine, clock: Clock, actor: audit.Actor, frozen: bool) -
 def new_season(
     engine: Engine, clock: Clock, actor: audit.Actor, *, start_x10: int, goal_x10: int
 ) -> int:
-    """End the current season and start the next with balances carried over (D-043)."""
+    """End the current season and start the next with balances carried over."""
     if start_x10 <= 0 or goal_x10 <= 0 or start_x10 == goal_x10:
         raise SeasonError("weights", "Enter a starting weight and a different goal weight.")
     with immediate(engine) as conn:

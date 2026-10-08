@@ -1,4 +1,4 @@
-"""Outbox -> Discord against a local fake Discord (D-040)."""
+"""Outbox -> Discord against a local fake Discord."""
 
 from collections.abc import Iterator
 from datetime import timedelta

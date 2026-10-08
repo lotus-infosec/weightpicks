@@ -1,4 +1,4 @@
-"""Changing the instance time zone after /setup (issue #30, D-049).
+"""Changing the instance time zone after /setup (issue #30).
 
 Days, weigh-in windows, drops and locks all depend on the zone, so everything still
 open was priced on the old zone's days. A change therefore:
@@ -11,7 +11,7 @@ open was priced on the old zone's days. A change therefore:
    its lock hasn't. Weekly and monthly markets come back at their next scheduled drop:
    offering them mid-period would price a window whose first days are already known.
 
-Readings need no rewrite: their days are worked out in the current zone (D-050).
+Readings need no rewrite: their days are worked out in the current zone.
 The worker picks up the new zone on its next tick (`worker.main.reload_if_changed`).
 """
 

@@ -1,4 +1,4 @@
-"""The instance's public URL (issue #17, D-051): the base of every link sent out in
+"""The instance's public URL (issue #17): the base of every link sent out in
 Discord posts and emails. Always an explicit owner setting, never the request's Host."""
 
 import ipaddress
