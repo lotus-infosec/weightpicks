@@ -9,9 +9,12 @@ on:
 permissions:
   contents: read
 
+# One group per trigger: a release's own CI run (workflow_call, where github.workflow is
+# the caller's name) can't cancel a push run on the same ref. Only superseded PR runs are
+# cancelled; every commit on main keeps its result.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   lint:
