@@ -183,7 +183,7 @@ def clear_secrets(engine: Engine, clock: Clock, actor: Actor) -> int:
     return removed
 
 
-# ---- SMTP (STAGE15) -------------------------------------------------------------------------
+# ---- SMTP -------------------------------------------------------------------------
 
 
 def set_smtp(

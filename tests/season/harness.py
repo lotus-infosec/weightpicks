@@ -1,4 +1,4 @@
-"""Simulated season v1 (STAGE06): scripted bettors over N simulated days.
+"""Simulated season v1: scripted bettors over N simulated days.
 
 Time moves only through `sim.advance`, i.e. the real worker jobs on the persisted
 SimClock (sync -> drops -> lock -> settle). Bettors act twice a day, after the daily
@@ -187,7 +187,7 @@ def start_season(
                 conn, SimClock(start), account, GRANT, idempotency_key=f"season:grant:{user}"
             )
             users.append(user)
-        # Setup finished, so the daily allowance runs too (STAGE11). A $50 allowance lands
+        # Setup finished, so the daily allowance runs too. A $50 allowance lands
         # while an all-in bet is still open, so nobody would ever go bust; 25 cents keeps
         # allowances flowing daily while busts and bailouts stay testable.
         config = instance.ensure(conn, SimClock(start), settings)

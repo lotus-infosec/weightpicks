@@ -52,7 +52,7 @@ def admin_routes(app: FastAPI) -> set[tuple[str, str]]:
 def test_permission_matrix(clients: tuple[TestClient, TestClient, World]) -> None:
     admin_c, player_c, w = clients
     routes = admin_routes(admin_c.app)  # type: ignore[arg-type]
-    assert len(routes) == 56  # STAGE13 +9 (AI); STAGE14 +7; STAGE15 +12; #17/#30 +3 (instance)
+    assert len(routes) == 56  # grows on purpose: +3 for #17/#30 (instance settings)
     anon = web.client(create_app(w.settings, domain_clock=w.clock))
     with anon:
         for method, path in sorted(routes):

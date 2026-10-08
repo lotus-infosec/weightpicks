@@ -80,7 +80,7 @@ def test_fingerprint_is_order_independent_and_content_sensitive() -> None:
 
 
 def test_economy_defaults_match_concept() -> None:
-    # CONCEPT §6 defaults; configurable in /setup from STAGE08.
+    # The default economy; configurable in /setup.
     assert DEFAULT_ECONOMY.starting_bankroll_cents == 100_000
     assert DEFAULT_ECONOMY.daily_allowance_cents == 5_000
     assert DEFAULT_ECONOMY.bailout_cents == 50_000

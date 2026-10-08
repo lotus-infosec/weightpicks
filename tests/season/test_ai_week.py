@@ -1,4 +1,4 @@
-"""STAGE13 measure: a week of simulated drops produces 1-3 valid AI props a day, with
+"""A week of simulated drops produces 1-3 valid AI props a day, with
 neurons a day logged well under the cap. Time moves through `sim.advance`, so the real
 worker jobs run (sync -> drops -> AI props -> lock -> settle); only the Workers AI HTTP
 transport is fake (tests/fake_ai.py, which mixes in bad proposals every cycle)."""

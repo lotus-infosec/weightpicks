@@ -1,4 +1,4 @@
-"""password_resets; auth_attempts kind 'reset' (STAGE15)
+"""password_resets; auth_attempts kind 'reset'
 
 Revision ID: 0011
 Revises: 0010

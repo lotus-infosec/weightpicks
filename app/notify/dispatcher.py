@@ -200,7 +200,7 @@ class Dispatcher:
             self._send(engine, row, url, body, result)
         return result
 
-    # ---- email (STAGE15): password resets and SMTP tests --------------------------------
+    # ---- email: password resets and SMTP tests --------------------------------
 
     def _email_pass(self, engine: Engine, result: PassResult, now: datetime) -> None:
         with engine.connect() as conn:

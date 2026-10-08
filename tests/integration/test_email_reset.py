@@ -1,4 +1,4 @@
-"""SMTP settings, test email and password reset by email (STAGE15), against a local
+"""SMTP settings, test email and password reset by email, against a local
 fake SMTP server; and the hidden-when-off behaviour."""
 
 import re

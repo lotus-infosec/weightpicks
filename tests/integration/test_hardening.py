@@ -1,4 +1,4 @@
-"""STAGE16 security review: one regression test per finding (GitHub issues #18-#24)."""
+"""Security review: one regression test per finding (GitHub issues #18-#24)."""
 
 from collections.abc import Iterator
 from pathlib import Path

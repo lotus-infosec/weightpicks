@@ -422,7 +422,7 @@ def main(argv: list[str] | None = None) -> int:
     report_sub = report_cmd.add_subparsers(dest="report_command", required=True)
     rec = report_sub.add_parser("reconcile", help="engine inputs vs raw Garmin data, by day")
     rec.add_argument("--days", type=int, default=7)
-    ai_cmd = commands.add_parser("ai", help="Workers AI props (STAGE13)")
+    ai_cmd = commands.add_parser("ai", help="Workers AI props")
     ai_sub = ai_cmd.add_subparsers(dest="ai_command", required=True)
     ai_run = ai_sub.add_parser("run", help="run one AI prop cycle now")
     ai_run.add_argument("kind", choices=("daily", "weekly", "manual"))

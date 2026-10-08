@@ -1,5 +1,5 @@
 """`wp report reconcile --days N`: what the engine used next to everything Garmin sent,
-day by day, so the admin can check it by hand against the Garmin Connect app (STAGE10).
+day by day, so the admin can check it by hand against the Garmin Connect app.
 Read-only."""
 
 from dataclasses import dataclass, field

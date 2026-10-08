@@ -1,4 +1,4 @@
-"""STAGE12 measure: 60 simulated days with core markets, admin props and futures, and
+"""60 simulated days with core markets, admin props and futures, and
 parlays keep every invariant (season v2). The generic v1 invariants run here too, on this
 season (imported tests use this module's `season` fixture)."""
 

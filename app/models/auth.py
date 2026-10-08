@@ -64,7 +64,7 @@ class BannedEmail(Base):
 
 
 class PasswordReset(Base):
-    """A password-reset link sent by email (STAGE15): only the token's hash is stored;
+    """A password-reset link sent by email: only the token's hash is stored;
     single use, short-lived."""
 
     __tablename__ = "password_resets"

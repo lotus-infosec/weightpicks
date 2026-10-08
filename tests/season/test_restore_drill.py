@@ -1,4 +1,4 @@
-"""STAGE15 measure: a restore drill from a week-old backup reproduces the identical
+"""A restore drill from a week-old backup reproduces the identical
 leaderboard. Two simulated weeks of real worker jobs and bettors, a backup, one more
 week of play, then the backup is staged and applied through the same path as the
 container entrypoint (worker acknowledges, apply, migrate)."""

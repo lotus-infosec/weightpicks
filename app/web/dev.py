@@ -1,7 +1,7 @@
 """Dev-only routes (`APP_ENV=dev`): the simulation clock and simulator controls.
 
 Mounted only in dev and reachable only on the loopback port. Admin only; every POST
-carries the CSRF token like the rest of the app (STAGE07 closes the D-027 debt).
+carries the CSRF token like the rest of the app.
 """
 
 from datetime import datetime, timedelta

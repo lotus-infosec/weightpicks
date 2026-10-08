@@ -68,7 +68,7 @@ ENV PATH=/opt/venv/bin:$PATH \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DATA_DIR=/data
-# Debian security fixes newer than the pinned base image (Trivy, STAGE16): the runtime
+# Debian security fixes newer than the pinned base image (Trivy): the runtime
 # image ships with every published fix even before Dependabot bumps the digest.
 # The base image's own pip is never used (the app runs from the uv-built venv): remove it.
 RUN apt-get update \

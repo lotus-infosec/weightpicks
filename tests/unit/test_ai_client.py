@@ -134,7 +134,7 @@ def test_text_checks(text: str, reason: str | None) -> None:
 
 
 def test_live_envelope_shape_with_choices() -> None:
-    """Recorded from a live STAGE13 call (2026-10-04): Workers AI now also returns an
+    """Recorded from a live call (2026-10-04): Workers AI now also returns an
     OpenAI-style `choices` list next to `response`; `response` and `usage` are read."""
     content = '{"proposals": [{"template": "milestone_by", "params": {"threshold": 220.0}}]}'
     body = {

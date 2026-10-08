@@ -462,7 +462,7 @@ def request_sync(engine: Engine, clock: Clock, actor: Actor) -> int:
     return request_command(engine, clock, actor, "sync_now")
 
 
-# ---- Discord and flags (STAGE11, D-040) ----------------------------------------------
+# ---- Discord and flags (D-040) ----------------------------------------------
 
 ADMIN_FLAGS = (  # /admin/discord (Settings)
     "registration_open",

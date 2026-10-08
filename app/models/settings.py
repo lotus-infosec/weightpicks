@@ -26,7 +26,7 @@ class InstanceSettingsRow(Base):
     enabled_metrics: Mapped[list[str]] = mapped_column(JSON)
     instance_state: Mapped[str] = mapped_column(String(16))
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime())
-    # STAGE08: everything /setup collects (D-036). Server defaults keep older rows valid.
+    # Everything /setup collects (D-036). Server defaults keep older rows valid.
     app_name: Mapped[str] = mapped_column(String(40), server_default="WeightPicks")
     palette: Mapped[str] = mapped_column(String(16), server_default="ember")
     subject_name: Mapped[str | None] = mapped_column(String(40))

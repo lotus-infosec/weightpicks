@@ -139,7 +139,7 @@ def test_student_t_widens_the_tails() -> None:
 
 
 def test_even_market_prices_minus_110_both_sides() -> None:
-    """STAGE04 measure of success: p = 0.5 at the default hold -> -110/-110."""
+    """Measure of success: p = 0.5 at the default hold -> -110/-110."""
     pricing = price_over_under(mu=-0.5, sd=1.2, line=-0.5, hold=DEFAULT_HOLD)
     assert pricing.p_over == pytest.approx(0.5)
     assert (pricing.odds_over, pricing.odds_under) == (-110, -110)

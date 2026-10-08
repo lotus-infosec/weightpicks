@@ -128,7 +128,7 @@ class DyingJob(CountingJob):
 def test_a_period_interrupted_by_a_crash_runs_again_after_restart(
     migrated_engine: Engine, clock: SimClock
 ) -> None:
-    """STAGE16 chaos finding: a dead worker's claim stayed `running`, so that period
+    """Chaos finding: a dead worker's claim stayed `running`, so that period
     (a day's drop, allowance or standings) never ran. Start-up now releases it."""
     with pytest.raises(SystemExit):
         run_due([DyingJob()], migrated_engine, clock)

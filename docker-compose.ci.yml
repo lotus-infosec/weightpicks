@@ -1,4 +1,4 @@
-# Fake Discord receiver for end-to-end checks of the worker's real dispatcher (STAGE11).
+# Fake Discord receiver for end-to-end checks of the worker's real dispatcher.
 # It prints every post's title and text; nothing leaves the machine.
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.ci.yml up --build -d
 #   docker compose ... logs -f fake-discord

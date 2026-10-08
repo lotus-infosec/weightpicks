@@ -1,6 +1,6 @@
 # Threat model
 
-This covers one self-hosted WeightPicks instance: a Docker Compose stack (`web` and `worker`) on an Ubuntu host, reachable only through a Cloudflare Tunnel. It uses STRIDE (Spoofing, Tampering, Repudiation, Information disclosure, Denial of service, Elevation of privilege) per component. Reviewed in STAGE16; findings S1–S9 are GitHub issues #18–#26, each fixed with a regression test.
+This covers one self-hosted WeightPicks instance: a Docker Compose stack (`web` and `worker`) on an Ubuntu host, reachable only through a Cloudflare Tunnel. It uses STRIDE (Spoofing, Tampering, Repudiation, Information disclosure, Denial of service, Elevation of privilege) per component. Reviewed before the first release; findings S1–S9 are GitHub issues #18–#26, each fixed with a regression test.
 
 ## What we protect
 
@@ -105,8 +105,8 @@ This covers one self-hosted WeightPicks instance: a Docker Compose stack (`web` 
 | | Threat | Mitigation |
 | --- | --- | --- |
 | T | Compromised dependency or action | `uv.lock` hashes; base images pinned by digest; GitHub Actions pinned to commit SHAs with `permissions: contents: read`; Dependabot for uv, Docker and Actions. Front-end libraries are vendored with checksums (`app/web/static/vendor/VERSIONS.md`). |
-| I | Secrets committed | gitleaks in pre-commit and CI (full history scanned clean in STAGE16). `.env`, databases and backups are git-ignored. |
-| T | Known CVEs in the image | Runtime installs Debian security fixes; the unused system pip is removed. Trivy (fixable CRITICAL/HIGH) was clean in STAGE16, and `pip-audit` was clean for the app lock and the GarminDB pins. |
+| I | Secrets committed | gitleaks in pre-commit and CI (full history scanned clean before the first release). `.env`, databases and backups are git-ignored. |
+| T | Known CVEs in the image | Runtime installs Debian security fixes; the unused system pip is removed. Trivy (fixable CRITICAL/HIGH) was clean at the first release, and `pip-audit` was clean for the app lock and the GarminDB pins. |
 | R | Unsigned or misattributed commits | Every commit and tag is SSH-signed and uses the noreply address (pre-commit guard). |
 
 ### 10. The self-host install

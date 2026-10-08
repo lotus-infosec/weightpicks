@@ -1,4 +1,4 @@
-"""STAGE16 route review as a test: every route the app registers, checked for
+"""Route review as a test: every route the app registers, checked for
 authentication, roles and CSRF. A new route that forgets any of these fails here."""
 
 import re

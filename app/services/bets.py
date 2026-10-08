@@ -1,4 +1,4 @@
-"""Placing single bets (BUILD_PLAN §1.4.2, STAGE06).
+"""Placing single bets (BUILD_PLAN §1.4.2).
 
 Everything happens in one BEGIN IMMEDIATE transaction: validation, the bet and leg
 rows, the `bet_stake` ledger entry and the outbox rows. A bet pins the odds version

@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     data_dir: Path = Path("/data")
     # Overrides the SQLite file under data_dir (tests point this at a temp file).
     database_url: str | None = None
-    # Instance time zone and weight unit; owned by /setup from STAGE08 (D-027).
+    # Instance time zone and weight unit; owned by /setup (D-027).
     wp_timezone: str = "America/New_York"
     wp_unit: Literal["lb", "kg"] = "lb"
     # Session cookies are Secure (HTTPS-only). Dev may turn this off for a plain-http
@@ -86,5 +86,5 @@ class Settings(BaseSettings):
     @property
     def sim_clock(self) -> bool:
         """Dev with simulated data runs on the persisted SimClock; real data always runs
-        on real time, even in dev (STAGE10)."""
+        on real time, even in dev."""
         return self.is_dev and self.data_provider == "simulated"

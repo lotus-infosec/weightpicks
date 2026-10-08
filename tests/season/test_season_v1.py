@@ -1,4 +1,4 @@
-"""STAGE06 measure: 60 simulated days of scripted betting keep every invariant."""
+"""60 simulated days of scripted betting keep every invariant."""
 
 from collections import defaultdict
 from collections.abc import Iterator
@@ -154,7 +154,7 @@ def test_busts_and_bailouts_are_consistent(season: SeasonRun) -> None:
 
 
 def test_leaderboard_equals_ledger_pnl(season: SeasonRun) -> None:
-    """STAGE11: the leaderboard ranks by P&L recomputed from betting entries alone."""
+    """The leaderboard ranks by P&L recomputed from betting entries alone."""
     from app.services import leaderboard
     from app.services.ledger import active_season_id
 
@@ -181,7 +181,7 @@ def test_leaderboard_equals_ledger_pnl(season: SeasonRun) -> None:
 
 
 def test_daily_allowances_paid_and_kept_out_of_pnl(season: SeasonRun) -> None:
-    """STAGE11: one allowance per player per day from the day after joining."""
+    """One allowance per player per day from the day after joining."""
     from app.domain.ledger import EntryKind
 
     with season.engine.connect() as conn:

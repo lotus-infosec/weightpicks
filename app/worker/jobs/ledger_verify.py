@@ -6,7 +6,7 @@ from app.services import ledger
 from app.worker.registry import JobContext
 
 log = structlog.get_logger()
-RUN_HOUR_UTC = 3  # 03:00 until the instance time zone exists (STAGE08)
+RUN_HOUR_UTC = 3  # 03:00 until the instance time zone exists
 
 
 class LedgerMismatch(Exception):

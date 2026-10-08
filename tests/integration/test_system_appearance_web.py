@@ -1,5 +1,5 @@
 """Admin → System (health, backups, restore, reset) and Admin → Appearance (name, palette,
-logo upload re-encoded by Pillow) over HTTP (STAGE15, D-044)."""
+logo upload re-encoded by Pillow) over HTTP (D-044)."""
 
 import io
 from collections.abc import Iterator

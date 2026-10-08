@@ -79,7 +79,7 @@ class Timeframe(StrEnum):
     FUTURE = "future"
 
 
-# ---- schedule (D-009 defaults; edited in /setup from STAGE08) ----------------------
+# ---- schedule (D-009 defaults; edited in /setup) -----------------------------------
 
 
 @dataclass(frozen=True, slots=True)

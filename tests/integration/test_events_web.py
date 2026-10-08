@@ -100,7 +100,7 @@ def _rival(w: World) -> int:
 def test_full_page_pool_entry_keeps_the_parlay_leg_limit(
     player: tuple[TestClient, World, int],
 ) -> None:
-    """Regression (STAGE16): the full-page answer to entering a pool hardcoded 6 legs."""
+    """Regression: the full-page answer to entering a pool hardcoded 6 legs."""
     c, w, pool_id = player
     with immediate(w.engine) as conn:
         economy = conn.execute(select(InstanceSettingsRow.economy)).scalar_one() or {}

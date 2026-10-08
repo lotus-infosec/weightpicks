@@ -10,7 +10,7 @@ subdomain) are refused outright. The check is a global FastAPI dependency, so no
 can forget it.
 
 Body size: `BodyLimit` (ASGI middleware) counts bytes as they stream in, before any
-route, form parser or auth check reads them (STAGE16 S1).
+route, form parser or auth check reads them (security review S1, issue #18).
 """
 
 from typing import Annotated

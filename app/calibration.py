@@ -1,4 +1,4 @@
-"""Line-engine calibration harness (STAGE04, BUILD_PLAN §3 Sprint 4).
+"""Line-engine calibration harness (BUILD_PLAN §3 Sprint 4).
 
 Replays simulated weigh-ins and asks: when the engine says Over has probability p,
 does Over hit about p of the time? Samples come from several seeds and from the main

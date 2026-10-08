@@ -1,4 +1,4 @@
-"""ai_runs, ai_proposals, admin_notes; markets.blurb (STAGE13, D-042)
+"""ai_runs, ai_proposals, admin_notes; markets.blurb (D-042)
 
 Revision ID: 0009
 Revises: 0008

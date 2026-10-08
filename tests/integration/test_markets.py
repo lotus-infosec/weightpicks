@@ -334,7 +334,7 @@ def test_instance_settings_row(migrated_engine: Engine, settings: Settings) -> N
 def test_fourteen_simulated_days_drop_and_lock_on_schedule(
     migrated_engine: Engine, settings: Settings
 ) -> None:
-    """STAGE05 measure, across the Nov 1 DST change and the Oct 31 monthly drop."""
+    """Fourteen simulated days, across the Nov 1 DST change and the Oct 31 monthly drop."""
     dev = settings.model_copy(update={"data_provider": "simulated"})
     start = local(2026, 10, 26, 0, 30)
     with immediate(migrated_engine) as conn:
@@ -359,7 +359,7 @@ def test_fourteen_simulated_days_drop_and_lock_on_schedule(
         assert r.lock_at.astimezone(NY).time() == time(22, 0), r.title
         if r.lock_at > end:
             assert r.status == "open", r.title
-        else:  # locked on time; settled once its data was complete (STAGE06)
+        else:  # locked on time; settled once its data was complete
             assert r.status in ("locked", "settled"), r.title
             assert r.status == "locked" or r.settle_after <= end, r.title
     daily_weight = sorted(
