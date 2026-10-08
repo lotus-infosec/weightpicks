@@ -174,8 +174,12 @@ class SettlementData:
 SETTLE_GRACE = timedelta(hours=24)  # locked past settle_after + this -> admin alert
 
 
-def dedupe_key(template: str, params: Mapping[str, Any]) -> str:
-    return f"{template}:{json.dumps(params, sort_keys=True, separators=(',', ':'))}"
+def dedupe_key(template: str, params: Mapping[str, Any], zone: str) -> str:
+    """Same template, parameters and time zone = the same market. The zone is part of it
+    because its days and lock times are; after a zone change (D-049) today's markets can
+    be offered again next to the voided ones."""
+    body = json.dumps(params, sort_keys=True, separators=(",", ":"))
+    return f"{template}:{body}@{zone}"
 
 
 # ---- templates -----------------------------------------------------------------------
@@ -252,6 +256,7 @@ def _build(
     lock_at: datetime,
     settle_after: datetime,
     keys: list[str],
+    tz: ZoneInfo,
     sides: tuple[str, str] = ("over", "under"),
 ) -> MarketSpec:
     data = params.model_dump(mode="json")
@@ -267,7 +272,7 @@ def _build(
         settle_after=settle_after,
         settle_deadline=settle_after + SETTLE_GRACE,
         correlation_keys=tuple(keys),
-        dedupe_key=dedupe_key(template, data),
+        dedupe_key=dedupe_key(template, data, tz.key),
         sides=sides,
     )
 
@@ -285,6 +290,7 @@ class WeightChangeOU:
         return _build(
             self.name,
             p,
+            tz=tz,
             timeframe=timeframe,
             metric="weight",
             window=(p.d0, p.d1),
@@ -349,6 +355,7 @@ class MetricTotalOU:
         return _build(
             self.name,
             p,
+            tz=tz,
             timeframe=timeframe,
             metric=p.metric,
             window=(p.start, p.end),

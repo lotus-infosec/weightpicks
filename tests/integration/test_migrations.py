@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import Engine, inspect
 
 from app.core.migrations import current_revision, head_revision, is_at_head, upgrade_to_head
+from tests.integration.world import World
 
 
 def test_upgrade_creates_tables_and_is_idempotent(engine: Engine, tmp_path: Path) -> None:
@@ -59,3 +60,35 @@ def test_downgrade_and_upgrade_keep_guards(engine: Engine, tmp_path: Path) -> No
     with engine.begin() as conn:
         command.upgrade(_config(conn), "head")
     assert present() == guards
+
+
+def test_0013_puts_the_zone_in_existing_dedupe_keys(world: World) -> None:
+    """Markets created before 0013 get `@<instance zone>` so duplicate checks still match."""
+    from datetime import date
+
+    from alembic import command
+    from sqlalchemy import select
+
+    from app.core.migrations import _config
+    from app.models import Market
+    from tests.integration.test_bets_settlement import weight_market
+
+    market_id = weight_market(world, -5, day=date(2026, 10, 7))
+
+    def key() -> str:
+        with world.engine.connect() as conn:
+            return str(
+                conn.execute(select(Market.dedupe_key).where(Market.id == market_id)).scalar_one()
+            )
+
+    new_format = key()
+    assert new_format.endswith("@America/New_York")
+    with world.engine.begin() as conn:
+        command.downgrade(_config(conn), "0012")
+    assert key() == new_format.removesuffix("@America/New_York")
+    with world.engine.begin() as conn:
+        command.upgrade(_config(conn), "head")
+    assert key() == new_format
+    assert "ix_observations_metric_observed_at" in {
+        i["name"] for i in inspect(world.engine).get_indexes("observations")
+    }

@@ -241,7 +241,18 @@ def test_dedupe_keys_are_canonical_and_distinct() -> None:
     b = specs(Timeframe.DAILY, date(2026, 10, 5))
     assert [s.dedupe_key for s in a] == [s.dedupe_key for s in b]
     assert len({s.dedupe_key for s in a}) == len(a)
-    assert a[0].dedupe_key == 'weight_change_ou:{"d0":"2026-10-05","d1":"2026-10-06"}'
+    assert a[0].dedupe_key == (
+        'weight_change_ou:{"d0":"2026-10-05","d1":"2026-10-06"}@America/New_York'
+    )
+    other_zone = drop_specs(
+        Timeframe.DAILY,
+        date(2026, 10, 5),
+        schedule=DEFAULT_SCHEDULE,
+        tz=ZoneInfo("America/Chicago"),
+        unit="lb",
+        enabled_metrics=ALL,
+    )
+    assert not {s.dedupe_key for s in a} & {s.dedupe_key for s in other_zone}  # D-049
 
 
 def test_params_are_validated() -> None:

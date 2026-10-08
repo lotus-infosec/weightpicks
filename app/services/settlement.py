@@ -35,7 +35,11 @@ from app.models import (
 from app.providers.base import COUNT_METRICS, WORKOUT_MIN_MINUTES
 from app.services import busts, ledger
 from app.services.markets import set_status
-from app.services.observations import canonical_weigh_ins, latest_complete_through
+from app.services.observations import (
+    activity_counts,
+    canonical_weigh_ins,
+    latest_complete_through,
+)
 from app.services.outbox import Category, enqueue
 
 log = structlog.get_logger()
@@ -108,17 +112,7 @@ def settlement_data(
     ).all()
     recorded = {r.local_date for r in rows}  # any daily total = the watch synced that day
     if metric == "workouts":
-        counts = dict(
-            conn.execute(
-                select(Observation.local_date, func.count())
-                .where(
-                    Observation.metric == "activity",
-                    Observation.value >= WORKOUT_MIN_MINUTES,
-                    Observation.local_date.between(start, end),
-                )
-                .group_by(Observation.local_date)
-            ).all()
-        )
+        counts = activity_counts(conn, start, end, min_minutes=WORKOUT_MIN_MINUTES)
         totals: dict[date, int | None] = {
             d: counts.get(d, 0) if d in recorded else None for d in days
         }

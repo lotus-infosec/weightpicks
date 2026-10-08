@@ -24,6 +24,8 @@ MESSAGES = {
     "economy": "Economy settings saved.",
     "sync": "Sync requested. The worker picks it up within a minute.",
     "webhook": "Webhook saved.",
+    "public_url": "Public URL saved.",
+    "timezone": "Time zone changed. Open bets were refunded and players notified.",
     "test": "Test post queued. It should appear in Discord within a minute.",
     "flags": "Settings saved.",
     "prop": "Prop posted. Players can bet on it until tonight's lock.",

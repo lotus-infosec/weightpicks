@@ -154,6 +154,8 @@ def _bet_result(category: str, p: dict[str, Any], ctx: Context) -> dict[str, Any
 
 
 def _market_settled(category: str, p: dict[str, Any], ctx: Context) -> dict[str, Any]:
+    if p.get("kind") == "timezone_changed":
+        return _timezone_changed(category, p, ctx)
     title_text = safe(p.get("title") or ctx.market_title(p.get("market_id")))
     url = _market_link(ctx, p.get("market_id"))
     if p.get("result") == "void":
@@ -176,6 +178,17 @@ def _market_settled(category: str, p: dict[str, Any], ctx: Context) -> dict[str,
         f"(actual {number(p.get('value_x10'))} vs line {number(p.get('line_x10'))})"
     )
     return _embed(ctx, category, f"Market settled: {str(winner).upper()}", text, BLUE, url=url)
+
+
+def _timezone_changed(category: str, p: dict[str, Any], ctx: Context) -> dict[str, Any]:
+    text = (
+        f"The time zone is now **{safe(p.get('to'))}** (was {safe(p.get('from'))}). "
+        f"Every open bet was pushed and refunded: {int(p.get('markets') or 0)} market(s), "
+        f"{int(p.get('bets') or 0)} bet(s), {int(p.get('pools') or 0)} event(s). "
+        "Daily markets return at the next drop; weekly and monthly ones at theirs."
+    )
+    title = "Time zone changed: open bets refunded"
+    return _embed(ctx, category, title, text, GREY, url=ctx.base_url)
 
 
 def _bust(category: str, p: dict[str, Any], ctx: Context) -> dict[str, Any]:
@@ -258,6 +271,7 @@ POOL_REASONS = {
     "no_entries": "nobody entered",
     "goal_reached": "the goal was reached first",
     "admin_void": "the admin called it off",
+    "timezone_changed": "the time zone changed",
 }
 
 

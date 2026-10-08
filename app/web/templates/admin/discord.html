@@ -5,6 +5,59 @@
 <h1>Settings &amp; Discord</h1>
 {% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
 
+<section class="card" data-testid="instance-settings">
+  <h2>Public URL</h2>
+  <form method="post" action="/admin/discord/public-url" class="stack" data-testid="public-url-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <p class="muted">Links in Discord posts and password-reset emails start with this address. In use: <strong>{{ public_url }}</strong> <span class="badge" data-testid="public-url-source">{{ "set here" if public_url_source == "admin" else "from .env" }}</span></p>
+    {% if instance.public_url_warning %}<p class="alert" role="alert" data-testid="public-url-warning">That address only works on the server itself, so links people receive go nowhere. Enter the public https:// address (your tunnel hostname).</p>{% endif %}
+    {% if url_error %}<p class="alert" role="alert">{{ url_error }}</p>{% endif %}
+    <label>Public URL <input type="url" name="public_url" value="{{ url_value }}" placeholder="https://picks.example.com" inputmode="url" autocomplete="off"></label>
+    {% if public_url_source == "admin" %}<label class="check"><input type="checkbox" name="clear"> Use the .env value (WP_BASE_URL) instead</label>{% endif %}
+    {{ password() }}
+    <button type="submit" class="primary">Save public URL</button>
+  </form>
+</section>
+
+<section class="card" data-testid="timezone-settings">
+  <h2>Time zone</h2>
+  <p class="muted">Decides which day a weigh-in counts for, the 04:00–11:00 weigh-in window, and when markets drop and lock. Now: <strong data-testid="current-timezone">{{ timezone }}</strong></p>
+  {% if tz_error %}<p class="alert" role="alert">{{ tz_error }}</p>{% endif %}
+  {% if tz_preview %}
+  <div class="card danger" data-testid="timezone-warning">
+    <h3>Change to {{ tz_preview.zone }}?</h3>
+    {% if tz_preview.nothing_open %}
+    <p>Nothing is open, so no bets are affected.</p>
+    {% else %}
+    <p>Everything open was priced on {{ tz_preview.current }}'s days, so it's <strong>pushed and refunded</strong>:</p>
+    <ul class="plain stack">
+      <li>{{ tz_preview.markets }} market(s): {{ tz_preview.bets }} bet(s), {{ tz_preview.stake_cents | money }} back to players</li>
+      {% if tz_preview.parlays %}<li>{{ tz_preview.parlays }} parlay(s) lose those legs and are re-checked on the rest</li>{% endif %}
+      {% if tz_preview.pools %}<li>{{ tz_preview.pools }} event(s): {{ tz_preview.entries }} entr{{ "y" if tz_preview.entries == 1 else "ies" }}, {{ tz_preview.entry_cents | money }} back</li>{% endif %}
+    </ul>
+    <p class="muted small">Markets whose results are already in settle normally first. Players get a notice in Discord.</p>
+    {% endif %}
+    <p>{% if tz_preview.redrop_daily %}Today's daily markets are posted again in the new time zone right away.{% else %}Daily markets return at the next daily drop.{% endif %} Weekly and monthly markets return at their next scheduled drop.</p>
+    <form method="post" action="/admin/discord/timezone" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <input type="hidden" name="timezone" value="{{ tz_preview.zone }}">
+      <label class="check"><input type="checkbox" name="confirm" required> I understand{% if not tz_preview.nothing_open %}: refund every open bet{% endif %}</label>
+      {{ password() }}
+      <div class="row"><button type="submit" class="danger-button">Change time zone</button> <a href="/admin/discord">Cancel</a></div>
+    </form>
+  </div>
+  {% else %}
+  <form method="post" action="/admin/discord/timezone/preview" class="stack" data-testid="timezone-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>New time zone
+      <input type="text" name="timezone" list="zones" autocomplete="off" placeholder="America/Chicago" required>
+      <datalist id="zones">{% for z in zones %}<option value="{{ z }}">{% endfor %}</datalist>
+    </label>
+    <button type="submit" class="primary">Review change</button>
+  </form>
+  {% endif %}
+</section>
+
 <section class="card">
   <h2>Features</h2>
   <form method="post" action="/admin/discord/flags" class="stack">

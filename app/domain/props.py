@@ -149,6 +149,7 @@ class MilestoneBy:
         return _build(
             self.name,
             p,
+            tz=tz,
             timeframe=Timeframe.PROP,
             metric="weight",
             window=(p.start, p.deadline),
@@ -235,6 +236,7 @@ class StreakReaches:
         return _build(
             self.name,
             p,
+            tz=tz,
             timeframe=Timeframe.PROP,
             metric="weight",
             window=(p.start, p.deadline),
@@ -328,6 +330,7 @@ class BeatLastWeek:
         return _build(
             self.name,
             p,
+            tz=tz,
             timeframe=Timeframe.PROP,
             metric=p.metric,
             window=(days[0], end),
@@ -426,6 +429,7 @@ class FutureTotalChange:
         return _build(
             self.name,
             p,
+            tz=tz,
             timeframe=Timeframe.FUTURE,
             metric="weight",
             window=(p.day, p.day),

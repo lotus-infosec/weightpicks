@@ -2,6 +2,7 @@
 {% block title %}Admin · {{ instance.app_name }}{% endblock %}
 {% block content %}
 <h1>Dashboard</h1>
+{% if instance.public_url_warning %}<p class="alert" role="alert" data-testid="public-url-banner">Links in Discord posts and emails point to {{ instance.public_url[0] }}, which only works on the server itself. Set the <a href="/admin/discord">Public URL in Settings</a>.</p>{% endif %}
 <div class="grid-cards">
   <section class="card">
     <h2>Health</h2>

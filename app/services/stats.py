@@ -12,7 +12,7 @@ from app.domain.lines import SIGMA_WINDOW_DAYS, WINDOW_DAYS, change_distribution
 from app.domain.units import Unit
 from app.models import Observation, Season
 from app.services.ledger import active_season_id
-from app.services.observations import canonical_weigh_ins
+from app.services.observations import activity_counts, canonical_weigh_ins
 
 RANGES = (14, 30, 90)
 PROJECTION_DAYS = 7
@@ -121,15 +121,7 @@ def _metric_series(
             )
         }
         counts: dict[date, int] = dict.fromkeys(steps_days, 0)  # a day with data and no workout
-        for day, n in conn.execute(
-            select(Observation.local_date, func.count())
-            .where(
-                Observation.metric == "activity",
-                Observation.local_date.between(first - timedelta(days=6), last),
-            )
-            .group_by(Observation.local_date)
-        ):
-            counts[day] = int(n)
+        counts |= activity_counts(conn, first - timedelta(days=6), last)
         values["workouts"] = counts
     out = []
     for metric in wanted:

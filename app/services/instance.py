@@ -50,6 +50,7 @@ class InstanceConfig:
     ai_mode: str = "review"
     flags: dict[str, bool] = field(default_factory=lambda: dict(FLAG_DEFAULTS))
     setup_completed: bool = False
+    public_url: str | None = None  # Admin → Settings; overrides WP_BASE_URL (D-051)
 
     @property
     def tz(self) -> ZoneInfo:
@@ -96,6 +97,7 @@ def read(conn: Connection) -> InstanceConfig | None:
             t.ai_mode,
             t.flags,
             t.setup_completed_at,
+            t.public_url,
         ).where(t.id == 1)
     ).one_or_none()
     if row is None:
@@ -116,6 +118,7 @@ def read(conn: Connection) -> InstanceConfig | None:
         flags=FLAG_DEFAULTS
         | {k: bool(v) for k, v in (row.flags or {}).items() if k in FLAG_DEFAULTS},
         setup_completed=row.setup_completed_at is not None,
+        public_url=row.public_url,
     )
 
 
@@ -181,3 +184,11 @@ def set_instance_state(conn: Connection, clock: Clock, state: str) -> int:
     if result.rowcount != 1:
         raise LookupError("the settings row does not exist yet")
     return lock_open_markets(conn, now, everything=True) if state == FROZEN else 0
+
+
+def public_url(config: InstanceConfig | None, settings: Settings) -> tuple[str, str]:
+    """The base of every link sent out, and where it came from: the admin's setting
+    ("admin") or WP_BASE_URL (".env"). Never the request's Host header (D-051)."""
+    if config is not None and config.public_url:
+        return config.public_url, "admin"
+    return settings.wp_base_url.rstrip("/"), ".env"

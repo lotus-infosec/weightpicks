@@ -35,6 +35,8 @@ class InstanceSettingsRow(Base):
     flags: Mapped[dict[str, Any]] = mapped_column(JSON, server_default="{}")
     smtp: Mapped[dict[str, Any]] = mapped_column(JSON, server_default="{}")  # no password
     setup_completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    # Issue #17: overrides WP_BASE_URL for links in Discord posts and emails (D-051).
+    public_url: Mapped[str | None] = mapped_column(String(255))
 
 
 class Secret(Base):

@@ -110,10 +110,13 @@ def _void_bets(conn: Connection, clock: Clock, bet_rows: list[Any], reason: str)
 # ---- markets ----------------------------------------------------------------------------
 
 
-def void_open_market(conn: Connection, clock: Clock, market_id: int, reason: str) -> int:
+def void_open_market(
+    conn: Connection, clock: Clock, market_id: int, reason: str, *, announce: bool = True
+) -> int:
     """Void one open or locked market in the caller's transaction: refund its single bets,
-    void its parlay legs (each parlay is re-evaluated) and post the result. Returns bets
-    voided. Shared by the admin's void and Goal Reached (D-011)."""
+    void its parlay legs (each parlay is re-evaluated) and post the result (`announce`;
+    a time zone change posts one summary instead). Returns bets voided. Shared by the
+    admin's void, Goal Reached (D-011) and time zone changes (D-049)."""
     market = conn.execute(select(Market.status, Market.title).where(Market.id == market_id)).one()
     bets = conn.execute(
         select(Bet.id, Bet.account_id, Bet.user_id, Bet.stake_cents)
@@ -134,6 +137,8 @@ def void_open_market(conn: Connection, clock: Clock, market_id: int, reason: str
         reevaluate_parlay(conn, clock, bet_id, clock.now())
     voided += len(parlay_legs)
     set_status(conn, [market_id], MarketStatus(market.status), MarketStatus.VOIDED, clock.now())
+    if not announce:
+        return voided
     enqueue(
         conn,
         clock,
@@ -363,6 +368,32 @@ def update_economy(engine: Engine, clock: Clock, actor: Actor, economy: Economy)
             before=before.to_json(),
             after=economy.to_json(),
         )
+
+
+def set_public_url(engine: Engine, clock: Clock, actor: Actor | None, url: str | None) -> bool:
+    """Store the public URL (already parsed by domain.urls), or None to fall back to
+    WP_BASE_URL. Returns False when nothing changed. Audited (issue #17)."""
+    with immediate(engine) as conn:
+        before = conn.execute(
+            select(InstanceSettingsRow.public_url).where(InstanceSettingsRow.id == 1)
+        ).scalar_one()
+        if before == url:
+            return False
+        conn.execute(
+            update(InstanceSettingsRow)
+            .where(InstanceSettingsRow.id == 1)
+            .values(public_url=url, updated_at=clock.now())
+        )
+        audit.record(
+            conn,
+            clock,
+            actor,
+            action="settings.public_url",
+            target=("settings", 1),
+            before={"public_url": before},
+            after={"public_url": url},
+        )
+    return True
 
 
 def rotate_registration_code(engine: Engine, clock: Clock, actor: Actor) -> str:

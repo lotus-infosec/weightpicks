@@ -335,7 +335,18 @@ def test_pre_setup_databases_are_marked_set_up_by_migration_0012(
     with engine.begin() as conn:
         command.upgrade(_config(conn), "0011")
     with immediate(engine) as conn:
-        instance.ensure(conn, SystemClock(), keyed)
+        # The 0011 schema: today's instance.ensure() would read newer columns.
+        conn.execute(
+            insert(InstanceSettingsRow).values(
+                id=1,
+                timezone=keyed.wp_timezone,
+                unit="lb",
+                schedule={},
+                enabled_metrics=[],
+                instance_state="active",
+                updated_at=SystemClock().now(),
+            )
+        )
         conn.execute(
             insert(User).values(
                 email="a@example.invalid",

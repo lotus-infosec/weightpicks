@@ -332,6 +332,59 @@ def _maintenance(settings: Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def _settings(settings: Settings, args: argparse.Namespace) -> int:
+    """Instance settings normally changed in Admin → Settings (issues #17, #30)."""
+    from app.domain.urls import InvalidPublicUrl, parse_public_url
+    from app.services import admin, timezone
+
+    engine = make_engine(settings.db_url)
+    clock = SystemClock()
+    try:
+        if args.settings_command == "public-url":
+            url = None
+            if not args.clear:
+                if not args.url:
+                    print("give a URL, or --clear to use WP_BASE_URL from .env")
+                    return 1
+                try:
+                    url = parse_public_url(args.url, dev=settings.is_dev)
+                except InvalidPublicUrl as exc:
+                    print(f"refused: {exc}")
+                    return 1
+            admin.set_public_url(engine, clock, None, url)
+            with engine.connect() as conn:
+                used, source = instance.public_url(instance.read(conn), settings)
+            print(f"public URL: {used} (from {source})")
+            return 0
+        with engine.connect() as conn:
+            impact = timezone.preview(conn, args.zone, clock.now())
+        if impact.zone == impact.current:
+            print(f"time zone is already {impact.zone}")
+            return 0
+        if not impact.nothing_open:
+            print(
+                f"changing {impact.current} -> {impact.zone} pushes and refunds "
+                f"{impact.markets} market(s) ({impact.bets} bet(s), "
+                f"{Money(impact.stake_cents)}), {impact.parlays} parlay(s) lose those legs, "
+                f"{impact.pools} event(s) ({Money(impact.entry_cents)}) are refunded"
+            )
+            if not args.yes:
+                print("refused: run again with --yes to confirm")
+                return 1
+        result = timezone.change(engine, clock, None, impact.zone)
+    except timezone.TimezoneError as exc:
+        print(f"refused: {exc.message}")
+        return 1
+    finally:
+        engine.dispose()
+    if result is not None:
+        print(
+            f"time zone is now {result.zone}; {result.redropped} daily market(s) posted again. "
+            "No restart needed."
+        )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="wp", description="WeightPicks command line")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -393,6 +446,16 @@ def main(argv: list[str] | None = None) -> int:
     reset_cmd = m_sub.add_parser("reset", help="stage a factory reset")
     reset_cmd.add_argument("--confirm", required=True, help="the instance name, exactly")
     reset_cmd.add_argument("--wipe-garmin", action="store_true")
+    settings_cmd = commands.add_parser("settings", help="instance settings (also in Admin)")
+    settings_sub = settings_cmd.add_subparsers(dest="settings_command", required=True)
+    tz_cmd = settings_sub.add_parser(
+        "timezone", help="change the time zone; open bets are pushed and refunded"
+    )
+    tz_cmd.add_argument("zone", help="IANA name, e.g. America/Chicago")
+    tz_cmd.add_argument("--yes", action="store_true", help="confirm the refunds")
+    url_cmd = settings_sub.add_parser("public-url", help="the base of links in Discord and email")
+    url_cmd.add_argument("url", nargs="?", help="https://picks.example.com")
+    url_cmd.add_argument("--clear", action="store_true", help="use WP_BASE_URL from .env")
     args = parser.parse_args(argv)
 
     if args.command == "health" and args.web:
@@ -417,6 +480,8 @@ def main(argv: list[str] | None = None) -> int:
         return _reconcile(settings, args.days)
     if args.command == "ai":
         return _ai(settings, args)
+    if args.command == "settings":
+        return _settings(settings, args)
     if args.command == "backup":
         return _backup(settings, args)
     if args.command == "maintenance":

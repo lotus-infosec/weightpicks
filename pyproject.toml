@@ -1,6 +1,6 @@
 [project]
 name = "weightpicks"
-version = "1.0.0"
+version = "1.0.1"
 description = "Self-hosted fake-money pick'em on one person's weigh-ins"
 readme = "README.md"
 license = "MIT"
