@@ -14,7 +14,7 @@ from app.core.config import Settings
 from app.core.db import immediate
 from app.models import InstanceSettingsRow, OutboxMessage
 from app.notify.dispatcher import MAX_ATTEMPTS, Dispatcher, RateLimiter
-from app.services import instance, secrets
+from app.services import admin, instance, secrets
 from app.services.outbox import Category, enqueue
 from app.worker.jobs.outbox import OutboxDispatchJob
 from app.worker.registry import run_due
@@ -258,3 +258,21 @@ def test_admin_test_posts_go_even_while_public_posts_are_off(
     result = dispatcher(settings, clock).run_pass(engine)
     assert (result.sent, result.skipped) == (1, 1)
     assert discord.bodies[0]["embeds"][0]["title"] == "Webhook test"
+
+
+def test_links_use_the_admin_public_url(
+    env: tuple[Engine, Settings, SimClock], discord: FakeDiscord
+) -> None:
+    """Issue #17: a public URL set in Admin overrides WP_BASE_URL in every link."""
+    engine, settings, clock = env
+    hook(engine, clock, "market_settlements", discord.url())
+    public(engine, clock)
+    admin.set_public_url(engine, clock, None, "https://picks.example.org")
+    queue(engine, clock, "market_settlements", "m1", market_id=7, result="void", title="T")
+    assert dispatcher(settings, clock).run_pass(engine).sent == 1
+    (body,) = discord.bodies
+    assert body["embeds"][0]["url"] == "https://picks.example.org/markets/7"
+    admin.set_public_url(engine, clock, None, None)  # back to .env
+    queue(engine, clock, "market_settlements", "m2", market_id=8, result="void", title="T")
+    dispatcher(settings, clock).run_pass(engine)
+    assert discord.bodies[-1]["embeds"][0]["url"] == f"{settings.wp_base_url}/markets/8"

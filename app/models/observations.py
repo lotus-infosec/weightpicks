@@ -30,6 +30,7 @@ class Observation(Base):
     __tablename__ = "observations"
     __table_args__ = (
         Index("ix_observations_metric_local_date", "metric", "local_date"),
+        Index("ix_observations_metric_observed_at", "metric", "observed_at"),  # D-050
         Index("uq_observations_metric_source_ref", "metric", "source_ref", unique=True),
     )
 

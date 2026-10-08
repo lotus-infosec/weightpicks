@@ -36,7 +36,11 @@ from app.providers.base import COUNT_METRICS, WORKOUT_MIN_MINUTES
 from app.services import instance
 from app.services.instance import InstanceConfig
 from app.services.ledger import active_season_id
-from app.services.observations import canonical_weigh_ins, latest_complete_through
+from app.services.observations import (
+    activity_counts,
+    canonical_weigh_ins,
+    latest_complete_through,
+)
 from app.services.outbox import Category, enqueue
 
 log = structlog.get_logger()
@@ -80,16 +84,7 @@ def pricing_data(conn: Connection, day: date) -> PricingData:
         totals[metric][local_day] = value
     # A day with any daily total but no 10+ minute activity is a real zero-workout day.
     workouts = dict.fromkeys({d for per_day in totals.values() for d in per_day}, 0)
-    for local_day, count in conn.execute(
-        select(Observation.local_date, func.count())
-        .where(
-            Observation.metric == "activity",
-            Observation.value >= WORKOUT_MIN_MINUTES,
-            Observation.local_date.between(since, day),
-        )
-        .group_by(Observation.local_date)
-    ):
-        workouts[local_day] = count
+    workouts |= activity_counts(conn, since, day, min_minutes=WORKOUT_MIN_MINUTES)
     if workouts:
         totals["workouts"] = workouts
     return PricingData(

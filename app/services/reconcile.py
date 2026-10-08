@@ -3,13 +3,19 @@ day by day, so the admin can check it by hand against the Garmin Connect app (ST
 Read-only."""
 
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import Connection, select
 
+from app.domain.schedule import at_local, in_weigh_in_window, local_date, next_local_midnight
 from app.models import Market, Observation, Settlement
-from app.services.observations import canonical_weigh_ins, latest_complete_through
+from app.services.observations import (
+    activity_counts,
+    canonical_weigh_ins,
+    current_zone,
+    latest_complete_through,
+)
 
 
 @dataclass(slots=True)
@@ -25,26 +31,32 @@ class DayReport:
 def build(conn: Connection, today: date, days: int) -> list[DayReport]:
     first = today - timedelta(days=days - 1)
     reports = {first + timedelta(days=i): DayReport(first + timedelta(days=i)) for i in range(days)}
-    for metric, day, at, value, source, in_window in conn.execute(
-        select(
-            Observation.metric,
-            Observation.local_date,
-            Observation.observed_at,
-            Observation.value,
-            Observation.source,
-            Observation.in_window,
+    tz = current_zone(conn)
+    # Garmin's daily totals carry their own day; weigh-ins are placed in the zone now (D-050).
+    for metric, day, value in conn.execute(
+        select(Observation.metric, Observation.local_date, Observation.value)
+        .where(
+            Observation.metric.not_in(("weight", "activity")),
+            Observation.local_date.between(first, today),
         )
-        .where(Observation.local_date.between(first, today))
         .order_by(Observation.observed_at, Observation.id)
     ):
-        report = reports[day]
-        if metric == "weight":
-            report.weigh_ins.append((at, value, source, bool(in_window)))
-        elif metric == "activity":
-            report.workouts += 1
-        else:
-            report.totals[metric] = value
-    for c in canonical_weigh_ins(conn, first, today):
+        reports[day].totals[metric] = value
+    for at, value, source in conn.execute(
+        select(Observation.observed_at, Observation.value, Observation.source)
+        .where(
+            Observation.metric == "weight",
+            Observation.observed_at >= at_local(first, time(0), tz),
+            Observation.observed_at < next_local_midnight(today, tz),
+        )
+        .order_by(Observation.observed_at, Observation.id)
+    ):
+        reports[local_date(at, tz)].weigh_ins.append(
+            (at, value, source, in_weigh_in_window(at, tz))
+        )
+    for day, n in activity_counts(conn, first, today, tz).items():
+        reports[day].workouts = n
+    for c in canonical_weigh_ins(conn, first, today, tz):
         reports[c.local_date].canonical = c.value
     for title, window_end, outcome in conn.execute(
         select(Market.title, Market.window_end, Settlement.outcome)

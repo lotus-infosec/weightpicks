@@ -3,6 +3,7 @@
 {% block title %}System · Admin{% endblock %}
 {% block content %}
 <h1>System</h1>
+{% if instance.public_url_warning %}<p class="alert" role="alert" data-testid="public-url-banner">Links in Discord posts and emails point to {{ instance.public_url[0] }}, which only works on the server itself. Set the <a href="/admin/discord">Public URL in Settings</a>.</p>{% endif %}
 {% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
 {% if staged %}<p class="alert" data-testid="staged">A {{ staged.kind }} is staged and will be applied when the app restarts.</p>{% endif %}
 {% if key_status == "wrong" %}

@@ -251,3 +251,24 @@ def test_emails_are_paced_one_per_pass(
     assert first.sent == 1 and first.waiting >= 1 and first.more  # the fast loop comes back
     assert [dispatch(w, real).sent for _ in range(3)] == [1, 1, 0]
     assert len(smtp.inbox.messages) == 3
+
+
+def test_reset_link_uses_the_admin_public_url(
+    site: tuple[TestClient, World, SimClock], smtp: FakeSmtp
+) -> None:
+    """Issue #17: set in Admin → Settings, it replaces WP_BASE_URL in the email."""
+    c, w, real = site
+    configure(c, smtp.port)
+    player(w, real)
+    r = post(
+        c,
+        "/admin/discord",
+        "/admin/discord/public-url",
+        {"public_url": "https://picks.example.org/", "admin_password": web.PASSWORD},
+    )
+    assert r.status_code == 303
+    password_reset.request(w.engine, real, w.settings, address=PLAYER, ip="1.1.1.1")
+    dispatch(w, real)
+    (body,) = smtp.inbox.bodies()
+    assert re.search(r"https://picks\.example\.org/reset/\S+", body)
+    assert "wp.example" not in body

@@ -114,7 +114,7 @@ def test_operate_a_week_from_the_admin_ui(
     page.goto(f"{url}/admin/discord")
     expect(page.get_by_test_id("hook-busts")).to_have_text("off")
     page.get_by_label("Props and futures").check()
-    page.get_by_role("button", name="Save").first.click()
+    page.get_by_role("button", name="Save", exact=True).first.click()
     expect(page.get_by_role("status")).to_contain_text("Settings saved")
     check(page, "admin-discord", size, errors)
     page.get_by_role("link", name="Props").click()

@@ -46,13 +46,13 @@ Open `https://picks.example.com/setup` and enter the setup token (valid 24 hours
 
 > No tunnel yet? From your own computer: `ssh -L 8000:127.0.0.1:8000 you@your-server`, then open `http://localhost:8000/setup`.
 
-The wizard has 12 steps; everything can be changed later in Admin.
+The wizard has 12 steps; everything can be changed later in Admin (changing the time zone refunds open bets: see [operations.md](operations.md#time-zone)).
 
 | Step | What to enter |
 | --- | --- |
 | 1. Admin account | Your email, name and a password (10+ characters). The admin is the person being bet on and never bets. |
 | 2. Subject and goal | Name shown to players, unit (lb/kg), starting weight and goal weight. |
-| 3. Time zone and schedule | Your time zone; the weigh-in window and drop/lock times (defaults are fine). |
+| 3. Time zone and schedule | **Check the time zone** (pre-filled from the installer, which uses the server's; containers and cloud images are often on UTC). Then the drop and lock times (defaults are fine). |
 | 4. Economy | Starting bankroll, daily allowance, bailout, vig, maximum bet (defaults are fine). |
 | 5. Stats to bet on | Weight, plus any of steps, active minutes, intensity minutes, calories, workouts. |
 | 6. Garmin | Optional here; do it after setup with [garmin.md](garmin.md). |

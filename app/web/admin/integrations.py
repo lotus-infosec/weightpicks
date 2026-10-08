@@ -3,12 +3,15 @@
 from fastapi import APIRouter, Request, Response
 from fastapi.concurrency import run_in_threadpool
 
+from app.domain import setup as setup_steps
+from app.domain.urls import InvalidPublicUrl, parse_public_url
 from app.notify import email as email_settings
 from app.services import (
     admin,
     admin_ai,
     admin_views,
     instance,
+    timezone,
 )
 from app.services import secrets as secret_store
 from app.services.admin import AdminError
@@ -20,7 +23,16 @@ from app.web.setup import WEBHOOK_LABELS
 def register(router: APIRouter) -> None:
     # ---- discord and flags -----------------------------------------------------------------------
 
-    def discord_page(request: Request, error: str | None = None, status: int = 200) -> Response:
+    def discord_page(
+        request: Request,
+        error: str | None = None,
+        status: int = 200,
+        *,
+        tz_preview: timezone.Impact | None = None,
+        tz_error: str | None = None,
+        url_error: str | None = None,
+        url_value: str | None = None,
+    ) -> Response:
         state = request.app.state
         with state.engine.connect() as conn:
             configured = {
@@ -31,10 +43,19 @@ def register(router: APIRouter) -> None:
             ai_configured = admin_ai.workers_ai_configured(conn)
             smtp = email_settings.stored(conn)
             smtp_password = "smtp.password" in secret_store.names(conn)
+        public_url, public_url_source = instance.public_url(config, state.settings)
         return render(
             request,
             "admin/discord.html",
             {
+                "public_url": public_url,
+                "public_url_source": public_url_source,
+                "url_value": public_url if url_value is None else url_value,
+                "url_error": url_error,
+                "timezone": config.timezone if config else state.settings.wp_timezone,
+                "zones": setup_steps.COMMON_ZONES,
+                "tz_preview": tz_preview,
+                "tz_error": tz_error,
                 "categories": list(WEBHOOK_LABELS.items()),
                 "labels": WEBHOOK_LABELS,
                 "configured": configured,
@@ -53,6 +74,67 @@ def register(router: APIRouter) -> None:
     @router.get("/discord")
     def discord(request: Request, session: Admin) -> Response:
         return discord_page(request)
+
+    # ---- instance: public URL (#17) and time zone (#30) ---------------------------------------
+
+    @router.post("/discord/public-url")
+    async def discord_public_url(request: Request, session: Admin) -> Response:
+        form = await read_form(request)
+        state = request.app.state
+        text = form.get("public_url", "")
+        if not await reauth(request, session, form, "settings.public_url"):
+            return discord_page(
+                request, url_error=REAUTH_FAILED_MESSAGE, url_value=text, status=403
+            )
+        url: str | None = None
+        if form.get("clear") != "on":
+            try:
+                url = parse_public_url(text, dev=state.settings.is_dev)
+            except InvalidPublicUrl as exc:
+                return discord_page(request, url_error=str(exc), url_value=text, status=400)
+        await run_in_threadpool(
+            admin.set_public_url, state.engine, state.auth_clock, actor(request, session), url
+        )
+        return back("/admin/discord", "public_url")
+
+    @router.post("/discord/timezone/preview")
+    async def discord_timezone_preview(request: Request, session: Admin) -> Response:
+        form = await read_form(request)
+        state = request.app.state
+        try:
+            with state.engine.connect() as conn:
+                impact = timezone.preview(conn, form.get("timezone", ""), state.domain_clock.now())
+        except timezone.TimezoneError as exc:
+            return discord_page(request, tz_error=exc.message, status=400)
+        if impact.zone == impact.current:
+            return discord_page(request, tz_error=f"The time zone is already {impact.zone}.")
+        return discord_page(request, tz_preview=impact)
+
+    @router.post("/discord/timezone")
+    async def discord_timezone(request: Request, session: Admin) -> Response:
+        form = await read_form(request)
+        state = request.app.state
+        zone = form.get("timezone", "")
+
+        def again(message: str, status: int) -> Response:
+            try:
+                with state.engine.connect() as conn:
+                    impact = timezone.preview(conn, zone, state.domain_clock.now())
+            except timezone.TimezoneError as exc:
+                return discord_page(request, tz_error=exc.message, status=400)
+            return discord_page(request, tz_preview=impact, tz_error=message, status=status)
+
+        if not await reauth(request, session, form, "settings.timezone"):
+            return again(REAUTH_FAILED_MESSAGE, 403)
+        if form.get("confirm") != "on":
+            return again("Tick the box to confirm the refunds.", 400)
+        try:
+            await run_in_threadpool(
+                timezone.change, state.engine, state.domain_clock, actor(request, session), zone
+            )
+        except timezone.TimezoneError as exc:
+            return discord_page(request, tz_error=exc.message, status=400)
+        return back("/admin/discord", "timezone")
 
     @router.post("/discord/webhook")
     async def discord_webhook(request: Request, session: Admin) -> Response:

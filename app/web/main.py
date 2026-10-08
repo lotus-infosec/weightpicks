@@ -29,6 +29,7 @@ from app.core.config import Settings
 from app.core.db import make_engine
 from app.core.logging import configure_logging
 from app.core.migrations import is_at_head
+from app.domain.urls import is_loopback
 from app.services import instance, maintenance
 from app.services import setup as setup_service
 from app.services.instance import InstanceConfig
@@ -106,6 +107,15 @@ class LiveInstance:
     @property
     def frozen(self) -> bool:
         return bool(self.config and self.config.state == "frozen")
+
+    @property
+    def public_url(self) -> tuple[str, str]:
+        return instance.public_url(self.config, self.settings)
+
+    @property
+    def public_url_warning(self) -> bool:
+        """Production links in Discord and emails would point at this server only (#17)."""
+        return not self.settings.is_dev and is_loopback(self.public_url[0])
 
 
 def build_templates(live: LiveInstance) -> Jinja2Templates:

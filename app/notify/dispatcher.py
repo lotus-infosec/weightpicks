@@ -174,7 +174,7 @@ class Dispatcher:
                 conn,
                 list(rows),
                 config.app_name if config else "WeightPicks",
-                self.settings.wp_base_url,
+                instance.public_url(config, self.settings)[0],
                 now,
             )
         public = bool(config and config.flags.get("discord_public"))
@@ -230,6 +230,7 @@ class Dispatcher:
                 )
             }
         app_name = config.app_name if config else "WeightPicks"
+        base = instance.public_url(config, self.settings)[0]
         for row in rows:
             user = users.get(row.payload.get("user_id"))
             if cfg is None:
@@ -241,7 +242,7 @@ class Dispatcher:
                 result.skipped += 1
                 continue
             try:
-                msg = self._email_message(row.payload, cfg, app_name, user[0], user[1])
+                msg = self._email_message(row.payload, cfg, app_name, base, user[0], user[1])
             except ValueError as exc:
                 self._dead(engine, row, str(exc), result)
                 continue
@@ -264,10 +265,9 @@ class Dispatcher:
             log.info("email_sent", outbox_id=row.id, kind=row.payload.get("kind"))
 
     def _email_message(
-        self, payload: dict[str, Any], cfg: Any, app_name: str, to: str, name: str
+        self, payload: dict[str, Any], cfg: Any, app_name: str, base: str, to: str, name: str
     ) -> Any:
         kind = payload.get("kind")
-        base = self.settings.wp_base_url.rstrip("/")
         if kind == "password_reset":
             try:
                 token = (
