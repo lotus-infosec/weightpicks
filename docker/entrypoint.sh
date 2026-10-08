@@ -16,7 +16,7 @@ case "$role" in
       --host 0.0.0.0 --port 8000 --no-server-header --no-access-log "$@"
     ;;
   worker)
-    # Never open the database while a restore/reset is staged (BUILD_PLAN §1.5).
+    # Never open the database while a restore/reset is staged.
     wp maintenance wait
     if [ "${1:-}" = "--reload" ]; then
       exec watchfiles --filter python "python -m app.worker.main" /app/app
@@ -27,7 +27,7 @@ case "$role" in
     exec wp "$@"
     ;;
   garmin-login)
-    # GarminDB's own venv; -P keeps the script's folder off sys.path (D-038).
+    # GarminDB's own venv; -P keeps the script's folder off sys.path.
     exec /opt/garmindb/bin/python -P /app/app/providers/garmin_login.py
     ;;
   *)

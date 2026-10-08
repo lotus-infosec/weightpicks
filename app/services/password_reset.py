@@ -1,4 +1,4 @@
-"""Password reset by email (BUILD_PLAN §1.5 `/reset/*`).
+"""Password reset by email (`/reset/*`).
 
 Only while SMTP is configured (and APP_SECRET_KEY is set). Requesting a reset always
 looks the same, so it never reveals whether an address has an account. A link carries a

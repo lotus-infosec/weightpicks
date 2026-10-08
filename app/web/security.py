@@ -1,5 +1,5 @@
 """Request-level security: client IP, form parsing, session cookies, CSRF and roles
-(BUILD_PLAN §1.6, D-034).
+.
 
 CSRF: every non-GET/HEAD/OPTIONS request must carry a token in the `X-CSRF-Token`
 header or a `csrf_token` form field. With a session it must match the session's

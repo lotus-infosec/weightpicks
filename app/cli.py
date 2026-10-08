@@ -287,7 +287,7 @@ def _backup(settings: Settings, args: argparse.Namespace) -> int:
 
 
 def _maintenance(settings: Settings, args: argparse.Namespace) -> int:
-    """Entrypoint steps (apply/wait) and CLI staging/cancelling (BUILD_PLAN §1.5)."""
+    """Entrypoint steps (apply/wait) and CLI staging/cancelling."""
     from app.services import backups, maintenance
 
     cmd = args.maintenance_command
@@ -427,7 +427,7 @@ def main(argv: list[str] | None = None) -> int:
     ai_run = ai_sub.add_parser("run", help="run one AI prop cycle now")
     ai_run.add_argument("kind", choices=("daily", "weekly", "manual"))
     ai_sub.add_parser("quota", help="neurons used today vs the daily cap")
-    backup_cmd = commands.add_parser("backup", help="backups (BUILD_PLAN §1.6)")
+    backup_cmd = commands.add_parser("backup", help="backups")
     backup_sub = backup_cmd.add_subparsers(dest="backup_command", required=True)
     create_cmd = backup_sub.add_parser("create", help="snapshot the database and uploads now")
     create_cmd.add_argument("--label", default=None)

@@ -62,7 +62,7 @@ def _counts(engine: Engine) -> tuple[int, int]:
     return txns, entries
 
 
-# ---- the worked example from BUILD_PLAN §1.3 ---------------------------------
+# ---- a worked example: a winning bet end to end ------------------------------
 
 
 def test_win_at_minus_110_gives_pnl_plus_9090(world: World) -> None:

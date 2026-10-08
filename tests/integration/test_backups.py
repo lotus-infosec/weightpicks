@@ -1,4 +1,4 @@
-"""Backups (BUILD_PLAN §1.6): create, verify (and refuse tampered or hostile archives),
+"""Backups: create, verify (and refuse tampered or hostile archives),
 list, prune, extract, and the CLI."""
 
 import io

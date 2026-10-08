@@ -1,4 +1,4 @@
-"""Price Is Right pools, classic rules (D-010): closest without going over."""
+"""Price Is Right pools, classic rules: closest without going over."""
 
 import pytest
 from hypothesis import given

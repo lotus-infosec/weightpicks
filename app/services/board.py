@@ -1,7 +1,7 @@
 """Read models for the player pages: the board, a market, my bets, the public feed.
 
 Read-only queries; nothing here writes. The feed and market pages show display names
-only, never emails (bets are public by design, BUILD_PLAN §1.3).
+only, never emails (bets are public by design).
 """
 
 from dataclasses import dataclass
@@ -262,7 +262,7 @@ def wallet(conn: Connection, user_id: int) -> Wallet | None:
     return None if row is None else Wallet(row.balance_cents, row.pnl_cents)
 
 
-# ---- special events (pools, D-043) --------------------------------------------------------
+# ---- special events (pools) --------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -306,7 +306,7 @@ def pools(
         shown = (
             tuple(
                 (
-                    "Removed player" if e.status == "banned" else e.display_name,  # D-012
+                    "Removed player" if e.status == "banned" else e.display_name,  # anonymised
                     e.guess_x10,
                     e.payout_cents,
                 )

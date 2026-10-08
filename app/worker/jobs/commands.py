@@ -1,4 +1,4 @@
-"""Web -> worker requests (BUILD_PLAN §1.3 `commands`), e.g. the admin's "Sync now".
+"""Web -> worker requests (the `commands` table), e.g. the admin's "Sync now".
 
 Runs with the infrastructure jobs on every tick (real time), so it doesn't slow the
 simulation fast-forward. A command is claimed by flipping pending -> running in one

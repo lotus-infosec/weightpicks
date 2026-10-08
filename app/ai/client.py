@@ -1,4 +1,4 @@
-"""Workers AI REST client (BUILD_PLAN §2.4, D-014).
+"""Workers AI REST client.
 
 One POST per call, 20 s timeout, one retry on a 5xx or network error. The documented
 "JSON Mode couldn't be met" error is a normal skip, not a failure. The token and the

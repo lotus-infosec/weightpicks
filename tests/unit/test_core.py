@@ -43,7 +43,7 @@ def test_no_direct_time_calls_outside_clock() -> None:
         f"{path.relative_to(APP_DIR.parent)}:{n}"
         for path in APP_DIR.rglob("*.py")
         if path.name != "clock.py" or path.parent.name != "core"
-        # Interactive one-off under GarminDB's venv; it cannot import the app (D-038).
+        # Interactive one-off under GarminDB's venv; it cannot import the app.
         if path.name != "garmin_login.py"
         for n, line in enumerate(path.read_text().splitlines(), 1)
         if forbidden.search(line)

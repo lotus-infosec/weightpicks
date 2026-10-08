@@ -1,4 +1,4 @@
-"""Daily neuron budget (BUILD_PLAN §2.4, D-014).
+"""Daily neuron budget.
 
 Each call is pre-estimated (characters ÷ 4 for input, `max_tokens` for output) and refused
 if it would cross `AI_DAILY_NEURON_CAP`. Usage is the sum of `ai_runs.neurons_est` since

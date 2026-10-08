@@ -1,4 +1,4 @@
-# Real Garmin data on this machine, before any go-live (D-035, D-038).
+# Real Garmin data on this machine, before any go-live.
 # Use its own project name so its volumes never mix with the simulated dev stack, and stop
 # the dev stack first (both bind 127.0.0.1:8000):
 #   R="docker compose -p weightpicks-real -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.real.yml"

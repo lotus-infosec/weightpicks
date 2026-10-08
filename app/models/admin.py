@@ -1,4 +1,4 @@
-"""Admin bookkeeping (BUILD_PLAN §1.3): the append-only audit log, busts (badge and
+"""Admin bookkeeping: the append-only audit log, busts (badge and
 bailout cooldown) and web-to-worker commands."""
 
 from datetime import datetime

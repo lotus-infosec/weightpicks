@@ -1,4 +1,4 @@
-"""Backup archive rules (BUILD_PLAN §1.6). Pure: no I/O.
+"""Backup archive rules. Pure: no I/O.
 
 A backup is a gzip tar with exactly `manifest.json`, `app.db` and `uploads/<file>`
 members. The manifest records the app version, the Alembic revision and a SHA-256 and

@@ -1,5 +1,5 @@
-"""settings.public_url (issue #17), an observations (metric, observed_at) index (D-050),
-and the time zone in market dedupe keys (D-049)
+"""settings.public_url (issue #17), an observations (metric, observed_at) index,
+and the time zone in market dedupe keys
 
 Weigh-in and workout days are worked out from `observed_at` in the instance's current
 time zone, so reads range over `observed_at`. Plain ADD COLUMN and CREATE INDEX: no

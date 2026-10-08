@@ -1,4 +1,4 @@
-"""Nightly automatic backup (BUILD_PLAN §1.4.6): 03:30 local, keep the newest N
+"""Nightly automatic backup: 03:30 local, keep the newest N
 (`BACKUP_RETENTION`, default 7). Runs on real time with the infrastructure jobs, so a
 fast-forwarded SimClock never floods the disk. Catch-up after downtime: run once now."""
 

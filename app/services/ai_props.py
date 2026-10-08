@@ -1,4 +1,4 @@
-"""AI-packaged props (BUILD_PLAN §1.4.4; D-042).
+"""AI-packaged props.
 
 Code builds the digest and menu, Workers AI proposes `{template, params, title, blurb}`,
 and code validates each proposal on its own: on the menu, settleable and priced by the

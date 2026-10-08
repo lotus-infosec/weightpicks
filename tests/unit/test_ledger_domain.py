@@ -26,7 +26,7 @@ def test_betting_kinds_are_exactly_the_six_from_the_plan() -> None:
         "allowance",
         "bailout",
         "admin_adjust",
-        "season_carry",  # D-043: carried balances never count as profit
+        "season_carry",  # carried balances never count as profit
     }
 
 

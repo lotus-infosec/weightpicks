@@ -1,4 +1,4 @@
-"""The settings row is the source of truth (D-036): economy and schedule changes take effect."""
+"""The settings row is the source of truth: economy and schedule changes take effect."""
 
 from datetime import date
 from fractions import Fraction

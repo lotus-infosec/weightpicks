@@ -1,4 +1,4 @@
-"""D-050 (issue #30): weigh-in and workout days come from the reading's UTC time in the
+"""Issue #30: weigh-in and workout days come from the reading's UTC time in the
 instance's current zone, not the day stored at sync time. Garmin's daily totals keep
 their own day."""
 

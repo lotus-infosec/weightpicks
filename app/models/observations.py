@@ -1,7 +1,7 @@
-"""Immutable snapshots of provider data (BUILD_PLAN §1.3). Settlement reads only these.
+"""Immutable snapshots of provider data. Settlement reads only these.
 
 `observations` rejects UPDATE and DELETE (triggers in migration 0003). The canonical
-weigh-in of a day is derived (earliest in-window weigh-in), never stored (D-027).
+weigh-in of a day is derived (earliest in-window weigh-in), never stored.
 """
 
 from datetime import date, datetime
@@ -30,7 +30,7 @@ class Observation(Base):
     __tablename__ = "observations"
     __table_args__ = (
         Index("ix_observations_metric_local_date", "metric", "local_date"),
-        Index("ix_observations_metric_observed_at", "metric", "observed_at"),  # D-050
+        Index("ix_observations_metric_observed_at", "metric", "observed_at"),  # read-time days
         Index("uq_observations_metric_source_ref", "metric", "source_ref", unique=True),
     )
 

@@ -1,4 +1,4 @@
-"""The singleton `settings` row (BUILD_PLAN §1.3), plus encrypted `secrets` and the
+"""The singleton `settings` row, plus encrypted `secrets` and the
 first-run `/setup` state (token hashes and the wizard draft)."""
 
 from datetime import datetime
@@ -26,7 +26,7 @@ class InstanceSettingsRow(Base):
     enabled_metrics: Mapped[list[str]] = mapped_column(JSON)
     instance_state: Mapped[str] = mapped_column(String(16))
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime())
-    # Everything /setup collects (D-036). Server defaults keep older rows valid.
+    # Everything /setup collects. Server defaults keep older rows valid.
     app_name: Mapped[str] = mapped_column(String(40), server_default="WeightPicks")
     palette: Mapped[str] = mapped_column(String(16), server_default="ember")
     subject_name: Mapped[str | None] = mapped_column(String(40))
@@ -35,7 +35,7 @@ class InstanceSettingsRow(Base):
     flags: Mapped[dict[str, Any]] = mapped_column(JSON, server_default="{}")
     smtp: Mapped[dict[str, Any]] = mapped_column(JSON, server_default="{}")  # no password
     setup_completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
-    # Issue #17: overrides WP_BASE_URL for links in Discord posts and emails (D-051).
+    # Issue #17: overrides WP_BASE_URL for links in Discord posts and emails.
     public_url: Mapped[str | None] = mapped_column(String(255))
 
 
@@ -51,7 +51,7 @@ class Secret(Base):
 
 
 class SetupToken(Base):
-    """One-time setup tokens; only the SHA-256 is stored (BUILD_PLAN §1.5)."""
+    """One-time setup tokens; only the SHA-256 is stored."""
 
     __tablename__ = "setup_tokens"
 

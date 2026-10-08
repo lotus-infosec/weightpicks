@@ -1,12 +1,12 @@
-"""Line-engine calibration harness (BUILD_PLAN §3 Sprint 4).
+"""Line-engine calibration harness.
 
 Replays simulated weigh-ins and asks: when the engine says Over has probability p,
 does Over hit about p of the time? Samples come from several seeds and from the main
 line plus nearby lines, so every probability decile gets enough data to judge (a
 single 365-day run leaves ~30 samples per decile, whose noise alone is ±8 points).
 Outcomes are settled on integer tenths exactly like real settlement; exact ties push
-and are excluded (D-013). Provisional (< 7 weigh-in) fits are excluded and counted.
-The model priced is exactly `app.domain.lines` (D-029: 12-week sigma, level term).
+and are excluded. Provisional (< 7 weigh-in) fits are excluded and counted.
+The model priced is exactly `app.domain.lines` (12-week sigma, level term).
 """
 
 from collections.abc import Sequence

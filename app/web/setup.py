@@ -1,4 +1,4 @@
-"""The /setup wizard (BUILD_PLAN §1.5, D-036). Mounted always; the gate middleware in
+"""The /setup wizard. Mounted always; the gate middleware in
 app.web.main sends everything here until setup completes and 404s it afterwards."""
 
 from typing import Any

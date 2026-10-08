@@ -1,4 +1,4 @@
-"""Admin panel (BUILD_PLAN §1.5, CONCEPT §8, D-037). Every route requires the admin;
+"""Admin panel. Every route requires the admin;
 destructive and money actions re-prompt for the admin's password. One module per area."""
 
 from fastapi import APIRouter, Depends

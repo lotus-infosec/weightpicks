@@ -1,4 +1,4 @@
-"""Backups (BUILD_PLAN §1.6): create, verify, list, prune, safely extract.
+"""Backups: create, verify, list, prune, safely extract.
 
 A consistent online snapshot of the database (`VACUUM INTO`) plus uploaded files and a
 manifest, as `/data/backups/wp-<UTC time>-<kind>[-label].tar.gz`. Garmin data and

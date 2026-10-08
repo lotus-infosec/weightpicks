@@ -1,4 +1,4 @@
-"""Local-time rules (D-009). Pure functions of an aware timestamp and a time zone;
+"""Local-time rules. Pure functions of an aware timestamp and a time zone;
 all wall-clock math goes through zoneinfo so DST days behave."""
 
 from datetime import UTC, date, datetime, time, timedelta

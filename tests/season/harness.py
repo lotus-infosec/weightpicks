@@ -105,7 +105,7 @@ def _pick_parlay(
 def _create_props(
     engine: Engine, clock: SimClock, actor: Actor, day: int, run: "SeasonRun"
 ) -> None:
-    """The admin's prop routine (D-041): milestones, streaks, week vs week, futures."""
+    """The admin's prop routine: milestones, streaks, week vs week, futures."""
     today = clock.now().astimezone(NY).date()
     with engine.connect() as conn:
         canon = canonical_weigh_ins(conn, today - timedelta(days=5), today)
@@ -296,7 +296,7 @@ def run_season(
             if day > days // 2 and options and k == 0:
                 sel, ver, _ = options[0]
                 attempt(users[-1], sel, ver, 500, f"frozen{day}", "user_inactive")
-        # The admin bails out anyone whose cooldown has passed (D-037).
+        # The admin bails out anyone whose cooldown has passed.
         for user in users:
             try:
                 admin.bailout(engine, SimClock(now), admin_actor, user)

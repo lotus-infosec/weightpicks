@@ -1,4 +1,4 @@
-"""Email over SMTP (BUILD_PLAN §1.4.5): optional, stdlib only.
+"""Email over SMTP: optional, stdlib only.
 
 Settings live in the settings row (`smtp`: host, port, tls, username, from_address);
 the password is an encrypted secret (`smtp.password`). With SMTP not configured, no

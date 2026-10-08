@@ -25,7 +25,7 @@ from app.worker.jobs.outbox import OutboxDispatchJob
 from app.worker.registry import Job, recover_interrupted, run_due
 
 TICK_SECONDS = 60
-FAST_SECONDS = 2  # outbox fast loop while rows are waiting (BUILD_PLAN §1.4.5)
+FAST_SECONDS = 2  # outbox fast loop while rows are waiting
 SCHEMA_POLL_SECONDS = 2
 
 log = structlog.get_logger()

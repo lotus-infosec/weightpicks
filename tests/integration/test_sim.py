@@ -186,7 +186,7 @@ def test_sim_advance_90_days_under_10_seconds(
     assert main(["sim", "advance", "--days", "90"]) == 0
     elapsed = time.perf_counter() - started
     out = capsys.readouterr().out
-    # 10 s on the dev machine; CI sets PERF_BUDGET_SCALE=2 for slower shared runners (D-028).
+    # 10 s on the dev machine; CI sets PERF_BUDGET_SCALE=2 for slower shared runners.
     budget = 10 * float(os.environ.get("PERF_BUDGET_SCALE", "1"))
     assert elapsed < budget, out
 

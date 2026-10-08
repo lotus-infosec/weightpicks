@@ -1,4 +1,4 @@
-"""One AI call with its `ai_runs` bookkeeping (BUILD_PLAN §1.4.4 step 6, §2.4).
+"""One AI call with its `ai_runs` bookkeeping.
 
 The estimated neurons are reserved (status `running`) in a short transaction before the
 request, so the cap holds even if the worker dies mid-call. The HTTP call itself runs

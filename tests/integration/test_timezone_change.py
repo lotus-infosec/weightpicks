@@ -1,4 +1,4 @@
-"""Issue #30 / D-049: changing the time zone pushes and refunds everything open, switches
+"""Issue #30: changing the time zone pushes and refunds everything open, switches
 the zone (no restart), re-drops today's daily markets in the new zone, and posts once."""
 
 from datetime import date

@@ -1,4 +1,4 @@
-"""pools, pool_entries; seasons.goal_reached_at / goal_observation_id (D-043)
+"""pools, pool_entries; seasons.goal_reached_at / goal_observation_id
 
 Revision ID: 0010
 Revises: 0009

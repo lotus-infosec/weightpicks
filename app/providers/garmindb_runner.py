@@ -1,4 +1,4 @@
-"""Runs GarminDB, then the recent-weigh-ins fetch, as separate programs (BUILD_PLAN §2.3, D-038).
+"""Runs GarminDB, then the recent-weigh-ins fetch, as separate programs.
 
 GarminDB prints profile data (weight, gender, account email) and exits 0 even when its
 login fails, so its output is scanned for failure markers but never stored: errors

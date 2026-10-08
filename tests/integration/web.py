@@ -38,7 +38,7 @@ def api_routes(app: FastAPI) -> list[APIRoute]:
 
 
 def open_registration(engine: Engine) -> None:
-    """Registration is closed by default (flag `registration_open`, BUILD_PLAN §4.2)."""
+    """Registration is closed by default (flag `registration_open`)."""
     with immediate(engine) as conn:
         flags = conn.execute(select(InstanceSettingsRow.flags)).scalar_one_or_none()
         if flags is not None:

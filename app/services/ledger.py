@@ -1,4 +1,4 @@
-"""Posting money: the only write path to the ledger (BUILD_PLAN §1.3, D-007, D-026).
+"""Posting money: the only write path to the ledger.
 
 Every function takes a `Connection` that is already inside `immediate()` so callers
 can combine a business change (a bet, a pool entry) and its ledger transaction in
@@ -397,7 +397,7 @@ def carry_over(
     conn: Connection, clock: Clock, account_id: int, amount_cents: int, *, idempotency_key: str
 ) -> PostResult:
     """Last season's ending balance, minted into the player's new-season account. Not a
-    betting kind, so the new season's P&L starts at 0 (D-043)."""
+    betting kind, so the new season's P&L starts at 0."""
     _require_positive(amount_cents)
     return _transfer(
         conn,

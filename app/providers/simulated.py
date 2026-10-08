@@ -1,4 +1,4 @@
-"""Seeded, Garmin-shaped synthetic data (BUILD_PLAN §2.7). Dev and tests only.
+"""Seeded, Garmin-shaped synthetic data. Dev and tests only.
 
 Every local day draws from its own generator seeded by (seed, day, stream), so any
 slice of time reproduces exactly no matter how it is fetched. All values are

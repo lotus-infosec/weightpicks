@@ -1,4 +1,4 @@
-"""Ledger vocabulary and invariants (BUILD_PLAN §1.3, D-007). Pure: no I/O.
+"""Ledger vocabulary and invariants. Pure: no I/O.
 
 Every money movement is one transaction whose entries sum to zero. P&L counts
 only `BETTING_KINDS`; grants, allowances, bailouts and admin adjustments move
@@ -30,7 +30,7 @@ class EntryKind(StrEnum):
     POOL_BUYIN = "pool_buyin"
     POOL_PAYOUT = "pool_payout"
     POOL_REFUND = "pool_refund"
-    SEASON_CARRY = "season_carry"  # last season's balance, minted into the new season (D-043)
+    SEASON_CARRY = "season_carry"  # last season's balance, minted into the new season
 
 
 # The single definition of what counts toward P&L.

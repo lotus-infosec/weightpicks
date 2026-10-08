@@ -1,4 +1,4 @@
-"""The JSON Mode schema for prop proposals and its Pydantic mirror (BUILD_PLAN §1.4.4).
+"""The JSON Mode schema for prop proposals and its Pydantic mirror.
 
 `params` is one flat object (the model copes better than with per-template unions);
 `Menu.form` checks which keys a template needs and whether each value is allowed.

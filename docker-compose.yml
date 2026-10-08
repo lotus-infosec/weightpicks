@@ -1,4 +1,4 @@
-# Production stack (BUILD_PLAN §1.7). Configure via .env (see .env.example).
+# Production stack. Configure via .env (see .env.example).
 # The web port binds to loopback only; cloudflared on the host is the only ingress.
 name: weightpicks
 

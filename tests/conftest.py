@@ -41,7 +41,7 @@ def migrated_engine(engine: Engine, tmp_path: Path) -> Engine:
 
 @pytest.fixture
 def instance_config() -> "InstanceConfig":
-    """D-009 defaults, America/New_York, lb, every count metric enabled."""
+    """Default schedule, America/New_York, lb, every count metric enabled."""
     from app.domain.markets import COUNT_MARKET_METRICS, Schedule
     from app.services.instance import InstanceConfig
 

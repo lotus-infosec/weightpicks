@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Upgrade a running WeightPicks to another release (BUILD_PLAN §4.5):
+# Upgrade a running WeightPicks to another release:
 #
 #   sudo ./scripts/upgrade.sh 1.1.0          # a published release
 #   sudo ./scripts/upgrade.sh --build        # rebuild from this clone (for --build installs)

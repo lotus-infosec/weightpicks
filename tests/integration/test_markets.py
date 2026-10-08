@@ -102,7 +102,7 @@ def test_weekly_and_monthly_drops(world: World) -> None:
     assert {(r.window_start, r.window_end) for r in rows[1:]} == {
         (date(2026, 11, 1), date(2026, 11, 30))
     }
-    assert rows[0].lock_at == local(2026, 10, 31, 22)  # drop night (D-031)
+    assert rows[0].lock_at == local(2026, 10, 31, 22)  # drop night
     assert rows[0].settle_after == local(2026, 11, 30, 11)  # EST after the DST change
 
 
@@ -143,7 +143,7 @@ def test_counts_without_history_are_skipped(migrated_engine: Engine, settings: S
 def test_provisional_weight_lines_drop_daily_only(
     migrated_engine: Engine, settings: Settings
 ) -> None:
-    """D-039: with fewer than 7 weigh-ins the weekly and monthly weight lines are skipped."""
+    """With fewer than 7 weigh-ins the weekly and monthly weight lines are skipped."""
     clock = SimClock(local(2026, 10, 4, 19))  # Sunday: weekly drop day
     provider = ScriptedProvider()
     provider.weigh_ins = [WeighIn("w1", local(2026, 10, 4, 7), 90_000, "scale")]
@@ -346,7 +346,7 @@ def test_fourteen_simulated_days_drop_and_lock_on_schedule(
     assert by_kind[("daily", "weight")] == 14
     assert by_kind[("weekly", "weight")] == 2
     # The sim starts on Oct 26: fewer than 7 weigh-ins by the Oct 31 monthly drop, so the
-    # provisional monthly weight line is skipped (D-039); weekly ones have enough by Nov 1.
+    # provisional monthly weight line is skipped; weekly ones have enough by Nov 1.
     assert by_kind[("monthly", "weight")] == 0
     # Day 1 has no completed count history yet; every later day prices 4 daily counts.
     for metric in ("steps", "active_minutes", "intensity_minutes", "kcal"):

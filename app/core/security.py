@@ -1,4 +1,4 @@
-"""Password hashing, tokens and registration codes (BUILD_PLAN §1.6).
+"""Password hashing, tokens and registration codes.
 
 argon2id with argon2-cffi's defaults (rehash on login when they change). Session
 tokens are 256 random bits; only their SHA-256 is stored, so a database leak gives

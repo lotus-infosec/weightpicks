@@ -1,4 +1,4 @@
-"""Price Is Right pools end to end (D-010, D-043): create, enter, lock, settle, refund."""
+"""Price Is Right pools end to end: create, enter, lock, settle, refund."""
 
 from datetime import date, timedelta
 

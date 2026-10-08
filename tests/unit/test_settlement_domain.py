@@ -22,7 +22,7 @@ D0, D1 = date(2026, 10, 5), date(2026, 10, 6)
     [
         (2000, 1990, -5, "under", "under", -10),  # -1.0 vs -0.5
         (2000, 1997, -5, "over", "over", -3),  # -0.3 vs -0.5
-        (2000, 1995, -5, None, "tie", -5),  # exactly the line: push (D-013)
+        (2000, 1995, -5, None, "tie", -5),  # exactly the line: push
         (2000, 2015, 15, None, "tie", 15),
         (2000, 2000, -5, "over", "over", 0),
         (2000, 2000, 5, "under", "under", 0),

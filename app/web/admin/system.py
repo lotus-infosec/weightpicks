@@ -1,4 +1,4 @@
-"""System health, backups, restore and reset; Appearance (BUILD_PLAN §2.9, D-044)."""
+"""System health, backups, restore and reset; Appearance."""
 
 from pathlib import Path
 
@@ -23,7 +23,7 @@ from app.web.security import Admin, read_form
 
 
 def register(router: APIRouter) -> None:
-    # ---- system: health, backups, restore, reset (BUILD_PLAN §1.5, §2.9) --------------------
+    # ---- system: health, backups, restore, reset --------------------
 
     def system_page(request: Request, error: str | None = None, status: int = 200) -> Response:
         state = request.app.state
@@ -165,7 +165,7 @@ def register(router: APIRouter) -> None:
         )
         return back("/admin/system", "secrets_cleared")
 
-    # ---- appearance (D-044) ---------------------------------------------------------------
+    # ---- appearance ---------------------------------------------------------------
 
     def appearance_page(
         request: Request,

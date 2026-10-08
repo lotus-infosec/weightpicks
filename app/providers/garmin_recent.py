@@ -1,4 +1,4 @@
-"""Fetch weigh-ins with the saved Garmin token: one request for the last 120 days (D-038).
+"""Fetch weigh-ins with the saved Garmin token: one request for the last 120 days.
 
 GarminDB is not used for weight: its download range stops at yesterday (a weigh-in
 made this morning would arrive tomorrow), and it decides where to resume from its own

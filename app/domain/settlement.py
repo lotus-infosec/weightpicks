@@ -1,7 +1,7 @@
-"""Pure settlement rules (BUILD_PLAN §1.4.2; D-013 ties push; D-032 strict push).
+"""Pure settlement rules (exact ties push; missing data pushes).
 
 Every result is computed on integers: weight in tenths of the unit, counts as ints,
-lines as `line_x10`. A `.5` line can still tie a tenths-precision value (C1/D-013).
+lines as `line_x10`. A `.5` line can still tie a tenths-precision value (and then pushes).
 """
 
 from collections.abc import Mapping

@@ -1,7 +1,7 @@
-"""Daily allowance (BUILD_PLAN §1.4.6, D-040): every non-banned player (active, frozen or
+"""Daily allowance: every non-banned player (active, frozen or
 bust) gets `economy.daily_allowance_cents` once per local day, from the day after they
 joined the season. Missed days are caught up (up to 31). Allowances move balance only,
-never P&L (D-007), and can lift a bust back over $1."""
+never P&L, and can lift a bust back over $1."""
 
 from datetime import date, timedelta
 from zoneinfo import ZoneInfo

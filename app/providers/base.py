@@ -1,4 +1,4 @@
-"""What every data provider returns (BUILD_PLAN §1.1, §2.3).
+"""What every data provider returns.
 
 Providers are read-only sources. Records carry a stable `ref` so ingest can be
 replayed safely: (metric, ref) is unique in `observations`.

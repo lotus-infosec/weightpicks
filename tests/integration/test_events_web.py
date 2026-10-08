@@ -1,4 +1,4 @@
-"""Player side of special events (D-043): the Events tab, entering and changing a guess,
+"""Player side of special events: the Events tab, entering and changing a guess,
 guesses hidden until the lock; the My bets season switcher; pool and goal embeds."""
 
 from collections.abc import Iterator

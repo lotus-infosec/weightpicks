@@ -1,4 +1,4 @@
-"""Special events: Price Is Right pools (BUILD_PLAN §1.4.2, D-010, D-043).
+"""Special events: Price Is Right pools.
 
 Players buy in once and guess the canonical weigh-in on the target date; the guess can be
 changed for free until the lock (the night before, at the bet lock). Settlement waits for
@@ -66,7 +66,7 @@ class Draft:
 
 
 def latest_lock(config: InstanceConfig, target: date) -> datetime:
-    """Pools lock the night before the target date at the bet lock (D-031, D-043)."""
+    """Pools lock the night before the target date at the bet lock."""
     return at_local(target - timedelta(days=1), config.schedule.bet_lock, config.tz)
 
 

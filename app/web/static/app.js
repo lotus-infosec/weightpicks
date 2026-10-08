@@ -29,7 +29,7 @@
   }
 
   const SIDE_LABELS = { over: "Over", under: "Under", yes: "Yes", no: "No" };
-  const CAP_MULTIPLE = 100; // parlay payouts are capped at 100x the stake (D-041)
+  const CAP_MULTIPLE = 100; // parlay payouts are capped at 100x the stake
 
   function decimal(american) {
     return american < 0 ? 1 + 100 / -american : 1 + american / 100;

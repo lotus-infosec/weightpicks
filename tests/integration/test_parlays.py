@@ -1,4 +1,4 @@
-"""Parlays end to end: placement rules and settlement through real markets (D-041)."""
+"""Parlays end to end: placement rules and settlement through real markets."""
 
 from datetime import date
 
@@ -136,7 +136,7 @@ def test_settlement_truths_through_real_markets(world: World) -> None:
             )
         ).all()
     parlay_posts = {p.payload["bet_id"]: p.category for p in posts if p.payload.get("kind")}
-    # Hits and busted parlays go to their own Discord category (CONCEPT §9).
+    # Hits and busted parlays go to their own Discord category.
     assert set(parlay_posts.values()) == {"parlay_results"}
     assert set(parlay_posts) == {b.bet_id for b in (both_win, early_loss, one_push, all_push)}
 

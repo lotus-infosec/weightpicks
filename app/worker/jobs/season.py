@@ -1,4 +1,4 @@
-"""Goal watch (D-011): after each new successful sync, check whether a complete day's
+"""Goal watch: after each new successful sync, check whether a complete day's
 canonical weigh-in reached the season goal; if so run Goal Reached once (its job key
 `goal_reached` / `<season_id>` makes reruns and the manual trigger no-ops)."""
 

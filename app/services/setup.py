@@ -1,5 +1,5 @@
 """First-run setup: the one-time token, the setup session, the wizard draft and the
-finish transaction (BUILD_PLAN §1.5, D-036).
+finish transaction.
 
 - Setup is complete once `settings.setup_completed_at` is set (migration 0012 set it
   for databases bootstrapped before /setup existed).

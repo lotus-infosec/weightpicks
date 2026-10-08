@@ -1,4 +1,4 @@
-"""Price Is Right pools, classic rules (D-010). Pure: no I/O.
+"""Price Is Right pools, classic rules. Pure: no I/O.
 
 Eligible guesses are at or under the actual weigh-in; the winner is the closest of
 those. Ties split the pot evenly, leftover cents to the earliest entry. Nobody eligible,

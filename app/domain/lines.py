@@ -1,9 +1,9 @@
-"""The line engine (BUILD_PLAN §1.4.1, D-008 as amended by D-029). Pure and deterministic.
+"""The line engine: trend + noise + Monte Carlo. Pure and deterministic.
 
 Weight = trend level + scale noise. The trend is fitted by weighted least squares
 over the last 14 days of canonical weigh-ins (half-life 7 days). Scale noise sigma
 is a stable property of the person and scale, so it is estimated from day-to-day
-changes over the last 12 weeks (D-029); early in a season it falls back to the
+changes over the last 12 weeks; early in a season it falls back to the
 14-day fit with a Student-t predictive. Lines snap to x.5; fair probabilities become
 vigged American odds through `app.domain.odds`. Floats are used for probabilities
 and model math only; lines leave as integer tenths.
@@ -25,12 +25,12 @@ from app.domain.units import Unit
 WINDOW_DAYS = 14
 HALF_LIFE_DAYS = 7.0
 MIN_WEIGH_INS = 7
-SIGMA_WINDOW_DAYS = 84  # D-029: noise from day-to-day changes over 12 weeks
+SIGMA_WINDOW_DAYS = 84  # noise from day-to-day changes over 12 weeks
 MIN_SIGMA_PAIRS = 14
 COUNT_WINDOW_DAYS = 28
 COUNT_HALF_LIFE_DAYS = 10.0
 COUNT_SD_FLOOR = 0.10  # of the mean
-# Line granularity per count metric (D-028): the plan's "nearest 100" suits steps;
+# Line granularity per count metric: the plan's "nearest 100" suits steps;
 # minutes and kcal are an order of magnitude smaller, so they get finer steps.
 COUNT_LINE_STEP: dict[str, int] = {
     "steps": 100,
@@ -83,7 +83,7 @@ class Pricing:
 
 
 def long_window_sigma(points: Sequence[tuple[int, float]]) -> tuple[float, int] | None:
-    """Scale noise from consecutive-day changes over the last 12 weeks (D-029).
+    """Scale noise from consecutive-day changes over the last 12 weeks.
 
     Var(w_t - w_(t-1)) = 2·sigma² (+ tiny drift); subtracting the mean change removes
     the trend, so plateaus and rebounds don't inflate it. None if < 14 pairs.
@@ -162,9 +162,9 @@ def change_distribution(
 ) -> tuple[float, float]:
     """Mean and SD of w(start + h) - w(start).
 
-    Start known (the start weigh-in is in hand at lock): mu = a + b·h - w_s and
-    v = sigma² + Var(a + b·h) + h·q, where Var(a + b·h) includes level uncertainty
-    (D-029). Start unknown: mu = b·h, v = 2·sigma² + h²·Var(b) + h·q.
+        Start known (the start weigh-in is in hand at lock): mu = a + b·h - w_s and
+        v = sigma² + Var(a + b·h) + h·q, where Var(a + b·h) includes level uncertainty
+    . Start unknown: mu = b·h, v = 2·sigma² + h²·Var(b) + h·q.
     """
     if horizon_days < 1:
         raise ValueError("horizon must be at least one day")
@@ -178,7 +178,7 @@ def change_distribution(
 
 
 def snap_half(mu: float) -> float:
-    """Nearest x.5 line: floor(mu) + 0.5 (the plan's round(mu - 0.5) + 0.5, D-028)."""
+    """Nearest x.5 line: floor(mu) + 0.5 (the plan's round(mu - 0.5) + 0.5)."""
     return math.floor(mu) + 0.5
 
 

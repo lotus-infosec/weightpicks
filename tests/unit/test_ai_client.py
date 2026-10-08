@@ -1,4 +1,4 @@
-"""Workers AI client against recorded responses (BUILD_PLAN §2.4)."""
+"""Workers AI client against recorded responses."""
 
 import json
 import logging
@@ -105,7 +105,7 @@ def test_non_json_envelope() -> None:
 
 
 def test_neuron_estimates_match_the_plan_budget() -> None:
-    # BUILD_PLAN §2.4: a daily prop run (2,500 in / 400 out) on the 8B model.
+    # a daily prop run (2,500 in / 400 out) on the 8B model.
     assert quota.neurons(MODEL, 2500, 400) == 95
     assert quota.neurons("@cf/meta/llama-3.1-8b-instruct-fp8-fast", 800, 150) == 9
     assert quota.neurons("unknown/model", 2500, 400) == 95  # priced like the dearer model

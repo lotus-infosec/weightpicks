@@ -1,5 +1,5 @@
 """The singleton instance settings row: the source of truth for zone, unit, schedule,
-enabled metrics, economy, appearance, flags and instance state (D-030, D-036).
+enabled metrics, economy, appearance, flags and instance state.
 
 `/setup` writes it. Tests create it from the environment defaults (`ensure`).
 """
@@ -22,7 +22,7 @@ from app.models import InstanceSettingsRow
 ACTIVE, FROZEN = "active", "frozen"
 
 
-FLAG_DEFAULTS: dict[str, bool] = {  # BUILD_PLAN §4.2: everything off until its stage
+FLAG_DEFAULTS: dict[str, bool] = {  # optional features start off
     "real_garmin": False,
     "registration_open": False,
     "discord_public": False,
@@ -50,7 +50,7 @@ class InstanceConfig:
     ai_mode: str = "review"
     flags: dict[str, bool] = field(default_factory=lambda: dict(FLAG_DEFAULTS))
     setup_completed: bool = False
-    public_url: str | None = None  # Admin → Settings; overrides WP_BASE_URL (D-051)
+    public_url: str | None = None  # Admin → Settings; overrides WP_BASE_URL
 
     @property
     def tz(self) -> ZoneInfo:
@@ -64,7 +64,7 @@ def schedule_to_json(schedule: Schedule) -> dict[str, Any]:
 
 
 def schedule_from_json(data: dict[str, Any]) -> Schedule:
-    """Missing keys fall back to the D-009 defaults; Schedule validates the result."""
+    """Missing keys fall back to the defaults; Schedule validates the result."""
     d = Schedule()
 
     def wall(key: str, default: time) -> time:
@@ -188,7 +188,7 @@ def set_instance_state(conn: Connection, clock: Clock, state: str) -> int:
 
 def public_url(config: InstanceConfig | None, settings: Settings) -> tuple[str, str]:
     """The base of every link sent out, and where it came from: the admin's setting
-    ("admin") or WP_BASE_URL (".env"). Never the request's Host header (D-051)."""
+    ("admin") or WP_BASE_URL (".env"). Never the request's Host header."""
     if config is not None and config.public_url:
         return config.public_url, "admin"
     return settings.wp_base_url.rstrip("/"), ".env"

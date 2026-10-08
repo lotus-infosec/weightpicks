@@ -1,4 +1,4 @@
-"""Special-event builder (BUILD_PLAN §1.4.4, D-043): the admin's plain text -> a Workers AI
+"""Special-event builder: the admin's plain text -> a Workers AI
 draft `{title, question, target_date, buy_in}` -> the same strict validation as the manual
 form (`pools.validate`) -> preview -> publish. AI never picks winners; code settles."""
 

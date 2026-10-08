@@ -73,7 +73,7 @@ class LazyAppClock:
 
 
 class LiveInstance:
-    """The settings row as templates see it, refreshed once per request (D-036)."""
+    """The settings row as templates see it, refreshed once per request."""
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -265,7 +265,7 @@ def create_app(
             return await call_next(request)
         if maintenance.pending_action(settings) is not None:
             # A restore or reset is staged: nothing touches the database until it's applied
-            # at the next start (BUILD_PLAN §1.5).
+            # at the next start.
             return HTMLResponse(MAINTENANCE_PAGE, status_code=503, headers={"Retry-After": "30"})
         done = await run_in_threadpool(refresh)
         if done is None:
@@ -275,7 +275,7 @@ def create_app(
         if not _is_setup_path(path) and not done:
             return RedirectResponse("/setup", status_code=303)
         if live.frozen and request.method != "GET" and path.startswith(FROZEN_BLOCKED):
-            # Freeze middleware (D-043): money-moving player routes stop here; the
+            # Freeze middleware: money-moving player routes stop here; the
             # services refuse too, as the backstop. History stays viewable.
             return JSONResponse(
                 {"ok": False, "reason": "instance_frozen", "message": "Betting is paused."},

@@ -215,7 +215,7 @@ def test_bet_rejections(world: World) -> None:
     )
     assert rejected(stale) == "stale_odds"
 
-    # Before the lock pass runs, lock_at itself refuses the bet (D-030).
+    # Before the lock pass runs, lock_at itself refuses the bet.
     world.clock.set(local(2026, 10, 5, 22, 0))
     assert rejected(lambda: over(stake=500)) == "locked"
     markets.lock_due(world.engine, world.clock.now())

@@ -1,4 +1,4 @@
-"""The code-built digest and menu (BUILD_PLAN §1.4.4 step 2)."""
+"""The code-built digest and menu."""
 
 import json
 from datetime import date, timedelta

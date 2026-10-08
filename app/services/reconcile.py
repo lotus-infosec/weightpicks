@@ -32,7 +32,7 @@ def build(conn: Connection, today: date, days: int) -> list[DayReport]:
     first = today - timedelta(days=days - 1)
     reports = {first + timedelta(days=i): DayReport(first + timedelta(days=i)) for i in range(days)}
     tz = current_zone(conn)
-    # Garmin's daily totals carry their own day; weigh-ins are placed in the zone now (D-050).
+    # Garmin's daily totals carry their own day; weigh-ins are placed in the zone now.
     for metric, day, value in conn.execute(
         select(Observation.metric, Observation.local_date, Observation.value)
         .where(

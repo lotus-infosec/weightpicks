@@ -1,4 +1,4 @@
-"""Workers AI bookkeeping (BUILD_PLAN §1.3, §1.4.4; D-042): every AI call or skip, the
+"""Workers AI bookkeeping: every AI call or skip, the
 review queue of AI proposals, and admin notes that feed the digest."""
 
 from datetime import date, datetime

@@ -297,7 +297,7 @@ def test_board_tabs(app_and_code: tuple[TestClient, World, str]) -> None:
     assert 'x-data="slip"' in daily.text and 'data-testid="slip"' in daily.text
     weekly = c.get("/?tab=weekly", headers={"HX-Request": "true"})
     assert "<html" not in weekly.text  # partial
-    assert "No open weekly markets" in weekly.text  # weekly locked Sunday night (D-031)
+    assert "No open weekly markets" in weekly.text  # weekly locked Sunday night
     assert "No open monthly markets" in c.get("/?tab=monthly").text
     c.__exit__(None, None, None)
 

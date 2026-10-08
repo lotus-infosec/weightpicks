@@ -1,4 +1,4 @@
-"""First-run wizard steps: pure validation of submitted form values (BUILD_PLAN §1.5).
+"""First-run wizard steps: pure validation of submitted form values.
 
 Each validator takes the raw form strings and returns (clean values, field errors).
 Clean values are JSON-safe; they are stored in the setup draft and applied by the
@@ -176,7 +176,7 @@ def economy(form: Mapping[str, str]) -> Result:
     vig = form.get("vig", "")
     if vig not in VIG_PRESETS:
         errors["vig"] = "Choose a vig."
-    # Optional (the /setup wizard doesn't ask): blank means the default, clamped (D-043).
+    # Optional (the /setup wizard doesn't ask): blank means the default, clamped.
     pool_raw = form.get("pool_buyin", "").strip()
     pool_buyin = parse_cents(pool_raw) if pool_raw else None
     if pool_raw and (pool_buyin is None or pool_buyin < 100):

@@ -1,4 +1,4 @@
-"""Every-tick pool pass (D-043): lock pools at their lock time, settle them once the
+"""Every-tick pool pass: lock pools at their lock time, settle them once the
 target day's weigh-in is complete. Cheap between due times thanks to the DueCache."""
 
 from datetime import datetime, timedelta

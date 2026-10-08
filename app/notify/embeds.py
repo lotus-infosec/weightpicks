@@ -1,4 +1,4 @@
-"""Discord webhook bodies for outbox rows (BUILD_PLAN §2.5). Pure: no I/O.
+"""Discord webhook bodies for outbox rows. Pure: no I/O.
 
 Every body carries `allowed_mentions: {"parse": []}`, so a player named `@everyone` can
 never ping a server; names are also escaped and their `@` neutralised in case a body is
