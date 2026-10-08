@@ -22,7 +22,7 @@
   <dl class="facts">
     <dt>Version</dt><dd>{{ version }} · schema {{ revision }}{% if revision != head %} <span class="badge status-error">expected {{ head }}</span>{% endif %}</dd>
     <dt>Workers</dt><dd>{% for name, beat, ok in h.heartbeats %}{{ name }} <span class="badge status-{{ 'ok' if ok else 'error' }}">{{ beat | local_time }}</span>{{ " " }}{% else %}<span class="badge status-error">no heartbeat</span>{% endfor %}</dd>
-    <dt>Last good sync</dt><dd>{{ h.last_ok_sync | local_time if h.last_ok_sync else "never" }}{% if h.last_failed_sync %} <span class="muted small">(last failure {{ h.last_failed_sync.finished_at | local_time }})</span>{% endif %}</dd>
+    <dt>Last good sync</dt><dd>{{ h.last_ok_sync | local_time if h.last_ok_sync else "never" }}{% if h.last_failed_sync %} <span class="muted small">(last failure {{ h.last_failed_sync.finished_at | local_time }})</span>{% endif %}{% if h.sync_running %} <span class="muted small">(sync running since {{ h.sync_running | local_time }})</span>{% endif %}</dd>
     <dt>Data complete through</dt><dd class="small">{% for metric, day in h.complete_through.items() %}{{ metric.replace("_", " ") }} {{ day.strftime("%b %-d") }}{{ " · " if not loop.last }}{% else %}no data yet{% endfor %}</dd>
     <dt>Last drop / settlement</dt><dd>{{ h.last_drop | local_time if h.last_drop else "none" }} / {{ h.last_settlement | local_time if h.last_settlement else "none" }}</dd>
     <dt>Locked markets</dt><dd>{{ h.locked }}{% if h.overdue %} <span class="badge status-error">{{ h.overdue }} overdue</span>{% endif %}</dd>
