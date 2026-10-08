@@ -10,10 +10,10 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 from pydantic import SecretStr
-from sqlalchemy import select, update
+from sqlalchemy import insert, select, update
 
 from app.core.db import immediate
-from app.models import AuditEntry, InstanceSettingsRow
+from app.models import AuditEntry, InstanceSettingsRow, SyncRun
 from app.services import backups, maintenance, secrets
 from app.web.main import create_app
 from tests.integration import web
@@ -76,6 +76,21 @@ def test_system_health_page(admin: tuple[TestClient, World, list[str]]) -> None:
     assert 'data-testid="health"' in page and "Ledger check" in page
     assert 'data-testid="backups"' not in page  # backup_ui off: CLI only
     assert 'data-testid="reset-form"' in page
+
+
+def test_system_page_while_a_sync_is_running(admin: tuple[TestClient, World, list[str]]) -> None:
+    """Issue #31: a sync still running (or cut off by a crash) has no finished_at and
+    must not be shown as the last failure."""
+    c, w, _ = admin
+    with immediate(w.engine) as conn:
+        conn.execute(
+            insert(SyncRun).values(
+                provider="garmin", started_at=w.clock.now(), status="running", rows_new=0
+            )
+        )
+    r = c.get("/admin/system")
+    assert r.status_code == 200 and "last failure" not in r.text
+    assert "sync running since" in r.text
 
 
 def test_backup_download_and_restore_from_list(admin: tuple[TestClient, World, list[str]]) -> None:
