@@ -5,11 +5,17 @@ from sqlalchemy import func, select, update
 from app.core.db import immediate
 from app.domain.ledger import EntryKind
 from app.models import Bust, InstanceSettingsRow, LedgerEntry, OutboxMessage, User
-from app.services import allowance, busts, instance, standings
+from app.services import allowance, busts, instance, settlement, standings
 from app.services.ledger import active_season_id
 from app.worker.jobs.economy import DailyAllowanceJob, WeeklyStandingsJob
 from app.worker.registry import run_due
-from tests.integration.test_bets_settlement import account, bet, player, weight_market
+from tests.integration.test_bets_settlement import (
+    account,
+    bet,
+    player,
+    to_settle_time,
+    weight_market,
+)
 from tests.integration.world import NY, World, local, mark_setup_done
 
 ALLOWANCE = 5_000  # default $50
@@ -86,6 +92,8 @@ def test_weekly_standings_post_once_with_last_weeks_pnl(world: World) -> None:
     a, b = player(w, 1), player(w, 2)
     market = weight_market(w, -5)
     bet(w, a, market, "over", 1_000)
+    to_settle_time(w)  # it settles inside the week, so it counts (open bets don't)
+    assert settlement.settle_market(w.engine, w.clock, market).settled
     config = instance.read(w.engine.connect())
     job = WeeklyStandingsJob(config)  # type: ignore[arg-type]
     w.clock.set(local(2026, 10, 12, 9, 30))  # Monday after
@@ -97,7 +105,9 @@ def test_weekly_standings_post_once_with_last_weeks_pnl(world: World) -> None:
         ).scalars()
     assert payload["week"] == "2026-W41"
     assert {r["user_id"] for r in payload["rows"]} == {a, b}
-    assert next(r for r in payload["rows"] if r["user_id"] == a)["week_pnl_cents"] == -1_000
+    row_a = next(r for r in payload["rows"] if r["user_id"] == a)
+    assert row_a["week_pnl_cents"] == row_a["pnl_cents"] != 0  # all of it finished that week
+    assert "balance_cents" not in row_a and "wins" in row_a
 
 
 def test_standings_skip_when_days_late(world: World) -> None:

@@ -8,19 +8,18 @@
   {% for s in season_options %}<a href="/leaderboard?season={{ s.season_id }}" class="tab{{ ' active' if s.season_id == season_id }}">Season {{ s.number }}{% if s.current %} (now){% endif %}</a>{% endfor %}
 </nav>
 {% endif %}
-<p class="muted small">Ranked by profit and loss from bets. Allowances, bailouts and adjustments change balances but not P&amp;L.</p>
+<p class="muted small">Ranked by profit and loss from finished bets and events, then wins. Open bets count once they settle; allowances and bailouts never count.</p>
 {% if not rows %}<p class="muted">No players yet.</p>{% else %}
 <table class="table" data-testid="leaderboard">
-  <thead><tr><th class="num">#</th><th>Player</th><th class="num">P&amp;L</th><th class="num">Balance</th><th class="num">Open</th><th class="num">Busts</th></tr></thead>
+  <thead><tr><th class="num">#</th><th>Player</th><th class="num">P&amp;L</th><th class="num">Wins</th><th class="num">Open</th></tr></thead>
   <tbody>
   {% for r in rows %}
   <tr class="{{ 'me' if r.user_id == session.user_id }}">
     <td class="num" data-label="Rank">{{ r.rank }}</td>
     <td>{{ r.display_name }}{% if r.user_id == session.user_id %} <span class="badge">you</span>{% endif %}</td>
     <td class="num {{ 'good' if r.pnl_cents > 0 else ('bad' if r.pnl_cents < 0) }}" data-label="P&amp;L">{{ r.pnl_cents | signed_money }}</td>
-    <td class="num" data-label="Balance">{{ r.balance_cents | money }}</td>
+    <td class="num" data-label="Wins">{{ r.wins }}</td>
     <td class="num" data-label="Open bets">{{ r.open_bets }}</td>
-    <td class="num" data-label="Busts">{% if r.busts %}<span class="badge bust" title="Times bust this season">{{ r.busts }}</span>{% else %}0{% endif %}</td>
   </tr>
   {% endfor %}
   </tbody>
