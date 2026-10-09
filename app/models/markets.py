@@ -51,6 +51,10 @@ class Market(Base):
     settle_after: Mapped[datetime] = mapped_column(UTCDateTime())
     settle_deadline: Mapped[datetime | None] = mapped_column(UTCDateTime())
     correlation_keys: Mapped[list[str]] = mapped_column(JSON)
+    # Issue #44: why it was voided (admin | goal_reached | timezone_changed) and the
+    # admin's note, shown to players.
+    void_reason: Mapped[str | None] = mapped_column(String(32))
+    void_note: Mapped[str | None] = mapped_column(String(200))
     dedupe_key: Mapped[str] = mapped_column(String(300), unique=True)
     ai_run_id: Mapped[int | None]  # the ai_runs row that proposed it (origin 'ai')
     blurb: Mapped[str | None] = mapped_column(String(160))  # AI flavour text, never terms

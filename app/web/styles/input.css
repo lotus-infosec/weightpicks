@@ -84,6 +84,8 @@
   .bet.status-lost { border-left-color: var(--color-bad); }
   .bet.status-push { border-left-color: var(--color-muted); }
   .bet-detail { color: var(--color-muted); }
+  .bet-reason { @apply text-xs mt-1; color: var(--color-muted); }
+  .bet.status-void { border-left-color: var(--color-muted); }
   .result { @apply mt-2 font-semibold; }
 }
 
