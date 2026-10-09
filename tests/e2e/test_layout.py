@@ -58,8 +58,10 @@ def test_pages_fit_and_render(browser: Browser, rich_server: RichServer, size: s
     page.get_by_role("button", name="Log in").click()
     expect(page).to_have_url(f"{url}/")
 
-    check(page, "board-daily", size, errors)
-    page.locator('article[data-metric="weight"] button.side-over').click()
+    expect(page.get_by_test_id("group-daily")).to_be_visible()  # every timeframe by default
+    expect(page.get_by_test_id("group-weekly")).to_be_visible()
+    check(page, "board-all", size, errors)
+    page.locator('article[data-metric="weight"] button.side-over').first.click()
     page.get_by_test_id("stake").fill("25")
     expect(page.get_by_test_id("slip")).to_be_in_viewport()
     check(page, "board-slip", size, errors)
