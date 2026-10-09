@@ -77,6 +77,22 @@
           const d = this.$el.dataset;
           this.parlayAllowed = d.parlays === "on";
           this.maxLegs = Number(d.maxLegs) || 6;
+          const sync = this.syncPicked.bind(this);
+          this.$watch("legs", sync);
+          this.$watch("selectionId", sync);
+          this.$watch("open", sync);
+          this.$watch("parlay", sync);
+          document.addEventListener("htmx:afterSwap", sync); // a new tab's buttons
+        },
+
+        // Mark the picked side buttons (aria-pressed) so a switch is visible.
+        syncPicked() {
+          const picked = this.parlay
+            ? this.legs.map(function (l) { return l.selectionId; })
+            : this.open && this.selectionId ? [this.selectionId] : [];
+          document.querySelectorAll("button.side[data-selection]").forEach(function (b) {
+            b.setAttribute("aria-pressed", picked.indexOf(Number(b.dataset.selection)) >= 0 ? "true" : "false");
+          });
         },
 
         get stakeCents() {
@@ -140,8 +156,12 @@
           };
         },
         addLeg(leg) {
-          if (this.legs.some(function (l) { return l.marketId === leg.marketId; })) {
-            this.message = "That market is already in the parlay.";
+          // The same market again: the other side switches that leg, the same side removes it.
+          const at = this.legs.findIndex(function (l) { return l.marketId === leg.marketId; });
+          if (at >= 0) {
+            if (this.legs[at].selectionId === leg.selectionId) this.legs.splice(at, 1);
+            else this.legs.splice(at, 1, leg);
+            this.message = "";
             return;
           }
           const clash = this.legs.some(function (l) {

@@ -48,6 +48,22 @@ def test_build_and_place_a_parlay(browser: Browser, rich_server: RichServer, siz
     expect(page.get_by_test_id("slip-message")).to_contain_text("same weigh-in or day")
     expect(page.get_by_test_id("slip-legs").locator("li")).to_have_count(3)
 
+    # Issue #37: the other side of a leg's market switches that leg instead of refusing.
+    steps = page.locator('article[data-metric="steps"]').first
+    legs = page.get_by_test_id("slip-legs").locator("li")
+    expect(steps.locator("button.side-over")).to_have_attribute("aria-pressed", "true")
+    steps.locator("button.side-under").click()
+    expect(legs).to_have_count(3)
+    expect(legs.nth(1)).to_contain_text("Under")
+    expect(page.get_by_test_id("slip-message")).to_be_hidden()
+    expect(steps.locator("button.side-under")).to_have_attribute("aria-pressed", "true")
+    expect(steps.locator("button.side-over")).to_have_attribute("aria-pressed", "false")
+    # Tapping the picked side again takes the leg out; tapping it once more puts it back.
+    steps.locator("button.side-under").click()
+    expect(legs).to_have_count(2)
+    steps.locator("button.side-under").click()
+    expect(legs).to_have_count(3)
+
     page.get_by_test_id("stake").fill("10")
     expect(page.get_by_test_id("parlay-odds")).to_contain_text(
         re.compile(r"3 legs · combined \+\d+")
