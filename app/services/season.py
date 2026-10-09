@@ -28,7 +28,6 @@ from app.services.outbox import Category, enqueue
 log = structlog.get_logger()
 
 GOAL_JOB = "goal_reached"
-VOID_REASON = "Goal reached"
 
 
 class SeasonError(Exception):
@@ -180,7 +179,7 @@ def goal_reached(
             .all()
         )
         for market_id in left:
-            admin.void_open_market(conn, clock, market_id, VOID_REASON)
+            admin.void_open_market(conn, clock, market_id, "goal_reached")
     # 5. Pools: settle the ones whose target day is complete, refund the rest.
     with engine.connect() as conn:
         open_pools = (
