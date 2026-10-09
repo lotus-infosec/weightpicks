@@ -1,15 +1,15 @@
 {% extends "base.html" %}
-{% from "_macros.html" import side_buttons, slip, bet_rows %}
+{% from "_macros.html" import market_data, slip, bet_rows %}
 {% block title %}{{ card.title }} · {{ instance.app_name }}{% endblock %}
 {% block content %}
-<div x-data="slip">
+<div x-data="slip" data-max-bet="{{ max_bet }}" data-balance="{{ wallet.balance_cents if wallet else 0 }}">
   <section class="card">
     <h1>{{ card.title }}</h1>
     {% if card.blurb %}<p class="muted blurb">{{ card.blurb }}</p>{% endif %}
     <p class="market-line">{% if card.line_x10 is not none %}O/U <strong>{{ card.line_x10 | line(card.metric) }}</strong>{% else %}Yes or no{% endif %} · {{ card.status }}</p>
     {% if open %}
-      {{ side_buttons(card) }}
       <p class="muted small">Locks {{ card.lock_at | local_time }}</p>
+      <button type="button" class="primary wide" x-on:click="openMarket" {{ market_data(card) }} data-testid="open-{{ card.market_id }}">Bet on this market</button>
     {% else %}
       <p class="muted small">Locked {{ card.lock_at | local_time }}</p>
     {% endif %}

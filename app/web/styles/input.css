@@ -20,6 +20,17 @@
 }
 
 @layer base {
+  /* Derived from each palette, so every palette keeps working: text opacity steps,
+     a 5-16% accent wash, and shadows tinted to the surface instead of pure black. */
+  :root {
+    --text-2: color-mix(in srgb, var(--color-text) 80%, transparent);
+    --text-3: color-mix(in srgb, var(--color-text) 64%, transparent);
+    --accent-soft: color-mix(in srgb, var(--color-accent) 10%, transparent);
+    --accent-line: color-mix(in srgb, var(--color-accent) 22%, var(--color-line));
+    --accent-glow: color-mix(in srgb, var(--color-accent) 28%, transparent);
+    --shadow-tint: color-mix(in srgb, var(--color-bg) 70%, black);
+    --shadow-soft: 0 2px 8px color-mix(in srgb, var(--color-bg) 60%, transparent);
+  }
   html { background: var(--color-bg); color: var(--color-text); font-family: var(--font-sans); }
   a { color: var(--color-accent); }
   h1 { @apply text-xl font-semibold mb-3; }
@@ -30,7 +41,7 @@
 }
 
 @layer components {
-  .app { @apply min-h-screen pb-56; }
+  .app { @apply min-h-screen; --nav-h: 0px; }
   .topbar { @apply flex items-center gap-3 px-4 py-3; background: var(--color-surface); border-bottom: 1px solid var(--color-line); }
   .brand { @apply font-bold text-lg no-underline mr-auto inline-flex items-center gap-2; color: var(--color-accent); }
   .brand-mark { @apply rounded-md; width: 28px; height: 28px; }
@@ -60,30 +71,92 @@
   .cards { @apply flex flex-col gap-3; }
   .market-group + .market-group { @apply mt-8; }
   .group-title { @apply text-xs font-semibold uppercase tracking-wide mb-2; color: var(--color-muted); }
-  .market { @apply rounded-2xl p-4; background: var(--color-surface); border: 1px solid var(--color-line); }
+  /* ---- mobile-first board and bet sheet (issue #43): 8-pt spacing, 12/14/16/24 type,
+     values over labels, accent for the action and the picked side only ---- */
+  .num { font-variant-numeric: tabular-nums; }
+  .market { @apply rounded-2xl; background: var(--color-surface); border: 1px solid var(--color-line); box-shadow: var(--shadow-soft); }
   .market header { @apply flex items-start justify-between gap-2; }
   .market-title { @apply font-semibold no-underline; color: var(--color-text); }
   .market-line { @apply my-2 text-sm; color: var(--color-muted); }
   .market-line strong { @apply text-lg; color: var(--color-text); }
+  .mrow { @apply w-full flex items-center gap-4 p-4 text-left rounded-2xl bg-transparent; min-height: 72px; color: var(--color-text); transition: background-color 120ms ease, transform 120ms ease; }
+  .mrow:active { transform: scale(0.99); background: var(--color-raised); }
+  .mrow:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  .mrow-main { @apply flex flex-col gap-1 min-w-0 flex-1; }
+  .mrow-meta { @apply flex gap-2; }
+  .mrow-title { @apply text-sm font-medium leading-snug; color: var(--text-2); }
+  .mrow-lock { @apply text-xs; color: var(--text-3); }
+  .mrow-line { @apply flex flex-col items-end shrink-0; }
+  .mrow-label { @apply text-xs; color: var(--text-3); }
+  .mrow-value { @apply text-2xl font-semibold leading-tight; font-variant-numeric: tabular-nums; color: var(--color-text); }
+  .chip { @apply text-xs rounded-full px-2 py-0.5; background: var(--accent-soft); color: var(--color-accent); border: 1px solid var(--accent-line); }
   .badge { @apply text-xs rounded-full px-2 py-0.5; background: var(--color-raised); color: var(--color-muted); }
-  .sides { @apply grid grid-cols-2 gap-3 my-3; }
-  .side { @apply flex flex-col items-center justify-center rounded-xl py-4 min-h-16 font-semibold; background: var(--color-raised); border: 2px solid var(--color-line); color: var(--color-text); }
-  .side-over, .side-yes { border-color: var(--color-over); }
-  .side-under, .side-no { border-color: var(--color-under); }
-  .side:disabled { @apply opacity-40; }
-  .side[aria-pressed="true"] { background: color-mix(in srgb, var(--color-accent) 16%, var(--color-raised)); border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent), 0 4px 16px color-mix(in srgb, var(--color-accent) 25%, transparent); }
-  .side-odds { @apply text-lg tabular-nums; }
   .empty { @apply text-center py-8; }
-  .slip { @apply fixed inset-x-0 bottom-0 p-4 flex flex-col gap-3 rounded-t-2xl max-w-xl mx-auto overflow-y-auto; max-height: 70vh; padding-bottom: max(1rem, env(safe-area-inset-bottom)); background: var(--color-surface); border-top: 2px solid var(--color-accent); box-shadow: 0 -8px 24px rgb(0 0 0 / 0.4); }
-  .slip-head { @apply flex items-center justify-between gap-3; }
-  .slip-title { @apply flex flex-col min-w-0 mr-auto; }
-  .slip-head .link { min-height: 44px; }
-  .slip-body { @apply flex flex-col gap-3; }
-  /* Room below the content for the open slip, so nothing is stuck under it (issue #36). */
-  body { --slip-h: 0px; }
-  main.page { padding-bottom: calc(var(--slip-h) + 1rem); }
+  .empty-state { @apply flex flex-col items-center text-center gap-2 py-12 px-4 rounded-2xl; background: var(--color-surface); border: 1px dashed var(--color-line); }
+  .empty-actions { @apply flex gap-3 mt-2; }
+  .secondary { @apply inline-flex items-center justify-center rounded-xl px-4 font-semibold text-base no-underline; min-height: 48px; background: var(--accent-soft); color: var(--color-accent); border: 1px solid var(--accent-line); }
+  .primary { min-height: 48px; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25), 0 4px 16px var(--accent-glow); }
+  .primary:disabled { box-shadow: none; }
+
+  /* Bottom sheet */
+  .sheet-backdrop { @apply fixed inset-0 z-30; background: rgb(0 0 0 / 0.5); }
+  .sheet { @apply fixed inset-x-0 bottom-0 z-40 flex flex-col gap-4 px-4 pt-2 rounded-t-3xl max-w-xl mx-auto overflow-y-auto; max-height: 88vh; padding-bottom: max(16px, env(safe-area-inset-bottom)); background: var(--color-surface); border-top: 1px solid var(--accent-line); box-shadow: 0 -16px 48px var(--shadow-tint); animation: sheet-up 180ms ease-out; }
+  .sheet-grab { @apply mx-auto rounded-full; width: 40px; height: 4px; background: var(--color-line); }
+  .sheet-body { @apply flex flex-col gap-4; }
+  .sheet-head { @apply flex items-start gap-3; }
+  .sheet-heading { @apply flex flex-col gap-1 min-w-0 flex-1; }
+  .sheet-title { @apply text-base font-semibold leading-snug; }
+  .sheet-meta { @apply text-sm; color: var(--text-3); }
+  .sheet-meta strong { color: var(--color-text); }
+  .sheet-link { @apply self-center py-2; color: var(--text-3); }
+  .icon-btn { @apply inline-flex items-center justify-center rounded-full bg-transparent shrink-0; width: 44px; height: 44px; color: var(--text-3); }
+  .icon-btn:hover { background: var(--color-raised); }
+  .toggles { @apply grid grid-cols-2 gap-3; }
+  .toggle { @apply flex flex-col items-center justify-center gap-1 rounded-2xl font-semibold; min-height: 72px; background: var(--color-raised); border: 2px solid var(--color-line); color: var(--color-text); transition: border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease; }
+  .toggle-over, .toggle-yes { border-color: color-mix(in srgb, var(--color-over) 55%, var(--color-line)); }
+  .toggle-under, .toggle-no { border-color: color-mix(in srgb, var(--color-under) 55%, var(--color-line)); }
+  .toggle[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent), 0 8px 24px var(--accent-glow); }
+  .toggle:disabled { @apply opacity-40; }
+  .toggle-name { @apply text-sm; color: var(--text-2); }
+  .toggle-odds { @apply text-2xl; }
+  .stake-block { @apply flex flex-col gap-2; }
+  .stake-label { @apply text-xs; color: var(--text-3); }
+  .stake-row { @apply flex items-center gap-2 rounded-xl px-3; background: var(--color-raised); border: 1px solid var(--color-line); }
+  .stake-row:focus-within { border-color: var(--color-accent); }
+  .stake-prefix { @apply text-2xl; color: var(--text-3); }
+  .stake-row input { @apply border-0 bg-transparent px-0 text-2xl font-semibold; font-variant-numeric: tabular-nums; min-height: 56px; }
+  .stake-row input:focus { outline: none; }
+  .chips { @apply grid grid-cols-4 gap-2; }
+  .chip-btn { @apply rounded-full text-sm font-semibold; min-height: 44px; background: var(--color-raised); color: var(--text-2); border: 1px solid var(--color-line); }
+  .chip-btn:active { border-color: var(--color-accent); color: var(--color-accent); }
+  .returns { @apply text-sm; color: var(--text-3); }
+  .returns strong { @apply text-base; color: var(--color-text); }
+  .sheet-actions { @apply flex flex-col gap-2; }
+  .leg-list { @apply flex flex-col gap-2; }
+  .leg-list li { @apply flex items-center gap-2 rounded-xl pl-3; background: var(--color-raised); }
+  .leg-text { @apply flex flex-col py-2 min-w-0 flex-1 text-sm; }
+  .leg-title { @apply text-xs; color: var(--text-3); }
+  .sheet-done { @apply flex flex-col items-center gap-2 py-8 text-center; }
+  .done-mark { @apply inline-flex items-center justify-center rounded-full; width: 72px; height: 72px; color: #0f1216; background: var(--color-over); box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-over) 20%, transparent), 0 12px 32px color-mix(in srgb, var(--color-over) 35%, transparent); animation: pop 320ms cubic-bezier(.2,1.4,.4,1); }
+  .done-mark path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: draw 360ms 120ms ease-out forwards; }
+  .done-title { @apply text-2xl font-semibold; }
   .slip-message.good { color: var(--color-over); }
   .slip-message.bad { color: var(--color-bad); }
+  .wallet.pulse { animation: pulse 700ms ease-out; }
+
+  /* Parlay bar and bottom navigation: fixed in the thumb zone; the page pads for them. */
+  .parlay-bar { @apply fixed z-20 inset-x-0 mx-auto flex items-center gap-3 px-4 rounded-2xl text-left; max-width: calc(36rem - 32px); width: calc(100% - 32px); min-height: 56px; bottom: calc(var(--nav-h) + 8px); background: var(--color-raised); border: 1px solid var(--accent-line); color: var(--color-text); box-shadow: 0 8px 24px var(--shadow-tint); }
+  .parlay-count { @apply inline-flex items-center justify-center rounded-full text-sm font-semibold; width: 28px; height: 28px; background: var(--color-accent); color: #1a1205; }
+  .parlay-text { @apply flex-1 text-sm; }
+  .parlay-cta { @apply text-sm font-semibold; color: var(--color-accent); }
+  .dock-nav { @apply fixed z-20 inset-x-0 bottom-0 grid grid-cols-5; height: var(--nav-h); padding-bottom: env(safe-area-inset-bottom); background: color-mix(in srgb, var(--color-surface) 92%, transparent); backdrop-filter: blur(12px); border-top: 1px solid var(--color-line); }
+  .dock-nav a { @apply flex flex-col items-center justify-center gap-1 text-xs no-underline; color: var(--text-3); }
+  .dock-nav a.active { color: var(--color-accent); }
+  body.has-dock { --nav-h: calc(64px + env(safe-area-inset-bottom)); }
+  @media (min-width: 640px) {
+    .dock-nav { @apply mx-auto rounded-t-2xl; max-width: 36rem; border-inline: 1px solid var(--color-line); }
+  }
+  body.has-dock main.page { padding-bottom: calc(var(--nav-h) + var(--bar-h, 0px) + 24px); }
   .bets { @apply flex flex-col gap-2; }
   .bet { @apply rounded-xl px-3 py-2 text-sm; background: var(--color-surface); border-left: 4px solid var(--color-line); }
   .bet.status-won { border-left-color: var(--color-over); }
@@ -104,7 +177,6 @@
 @layer components {
   .notice { @apply rounded-lg px-3 py-2 mb-3; background: color-mix(in srgb, var(--color-over) 18%, transparent); }
   .field-error { @apply block text-sm mt-1; color: var(--color-bad); }
-  .secondary { @apply rounded-xl px-4 py-3 font-semibold text-base; background: var(--color-raised); color: var(--color-text); border: 1px solid var(--color-line); }
   .setup h1 { @apply mt-2; }
   .steps { @apply flex flex-wrap gap-1 mb-4 text-xs; }
   .steps li a { @apply inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-full no-underline; background: var(--color-raised); color: var(--color-muted); }
@@ -185,4 +257,13 @@
   .table td { @apply block border-0 py-0.5 px-0; }
   .table .num { @apply text-left; }
   .table td[data-label]::before { content: attr(data-label) ": "; color: var(--color-muted); }
+}
+
+@keyframes sheet-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes pop { from { transform: scale(0.6); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes pulse { 0% { color: var(--color-over); transform: scale(1.12); } 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .sheet, .done-mark, .done-mark path, .wallet.pulse { animation: none !important; }
+  .done-mark path { stroke-dashoffset: 0; }
 }

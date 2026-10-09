@@ -1,4 +1,4 @@
-<!doctype html>
+{% from "_macros.html" import icon %}<!doctype html>
 <html lang="en" class="palette-{{ instance.palette }}">
 <head>
   <meta charset="utf-8">
@@ -17,7 +17,7 @@
   <script src="/static/vendor/alpine-csp-3.17.4.min.js" defer></script>
   {% block head %}{% endblock %}
 </head>
-<body class="app" hx-headers='{{ {"X-CSRF-Token": csrf} | tojson }}'>
+<body class="app{{ ' has-dock' if session and session.role == 'player' }}" hx-headers='{{ {"X-CSRF-Token": csrf} | tojson }}'>
   {% if session %}
   <header class="topbar">
     <a class="brand" href="/"><img src="/brand/mark.png?v={{ instance.brand_version }}" alt="" width="28" height="28" class="brand-mark">{{ instance.app_name }}</a>
@@ -36,12 +36,11 @@
   </nav>
   {% endif %}
   {% if session.role == "player" %}
-  <nav class="nav">
-    <a href="/" class="{{ 'active' if active == 'board' }}">Board</a>
-    <a href="/bets/mine" class="{{ 'active' if active == 'mine' }}">My bets</a>
-    <a href="/bets/feed" class="{{ 'active' if active == 'feed' }}">Feed</a>
-    <a href="/leaderboard" class="{{ 'active' if active == 'leaderboard' }}">Leaders</a>
-    <a href="/stats" class="{{ 'active' if active == 'stats' }}">Stats</a>
+  {# Bottom navigation, in the thumb zone (issue #43). #}
+  <nav class="dock-nav" aria-label="Main" data-testid="dock-nav">
+    {% for key, label, href, glyph in (("board", "Board", "/", "board"), ("mine", "My bets", "/bets/mine", "ticket"), ("feed", "Feed", "/bets/feed", "feed"), ("leaderboard", "Leaders", "/leaderboard", "trophy"), ("stats", "Stats", "/stats", "chart")) %}
+    <a href="{{ href }}" class="{{ 'active' if active == key }}"{% if active == key %} aria-current="page"{% endif %}>{{ icon(glyph) }}<span>{{ label }}</span></a>
+    {% endfor %}
   </nav>
   {% endif %}
   {% else %}
