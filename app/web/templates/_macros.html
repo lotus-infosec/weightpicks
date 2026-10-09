@@ -18,9 +18,12 @@
 {% macro slip() -%}
 <aside class="slip" x-show="open" x-cloak data-testid="slip">
   <div class="slip-head">
-    <strong x-text="headline"></strong>
+    <div class="slip-title"><strong x-text="headline"></strong>
+      <span class="muted small" x-show="minimized" x-text="summary" data-testid="slip-summary"></span></div>
+    <button type="button" class="link" x-on:click="toggleMinimized" x-text="minimizeLabel" x-bind:aria-expanded="expandedText" data-testid="slip-minimise">Minimise</button>
     <button type="button" class="link" x-on:click="close" aria-label="Close slip">Close</button>
   </div>
+  <div class="slip-body" x-show="expanded">
   <template x-if="parlayAllowed">
     <label class="check small slip-toggle"><input type="checkbox" x-model="parlay" x-on:change="toggleParlay" data-testid="parlay-toggle"> Parlay (combine picks)</label>
   </template>
@@ -37,6 +40,7 @@
   </label>
   <p class="muted">Returns <span x-text="payoutText" data-testid="payout"></span> if it wins</p>
   <button type="button" class="primary wide" x-on:click="place" x-bind:disabled="cannotPlace" data-testid="place" x-text="placeLabel">Place bet</button>
+  </div>
   <p class="slip-message" x-show="message" x-text="message" x-bind:class="messageClass" role="status" data-testid="slip-message"></p>
 </aside>
 {%- endmacro %}

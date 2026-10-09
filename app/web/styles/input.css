@@ -74,8 +74,14 @@
   .side[aria-pressed="true"] { background: color-mix(in srgb, var(--color-accent) 16%, var(--color-raised)); border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent), 0 4px 16px color-mix(in srgb, var(--color-accent) 25%, transparent); }
   .side-odds { @apply text-lg tabular-nums; }
   .empty { @apply text-center py-8; }
-  .slip { @apply fixed inset-x-0 bottom-0 p-4 flex flex-col gap-3 rounded-t-2xl max-w-xl mx-auto; background: var(--color-surface); border-top: 2px solid var(--color-accent); box-shadow: 0 -8px 24px rgb(0 0 0 / 0.4); }
-  .slip-head { @apply flex items-center justify-between gap-2; }
+  .slip { @apply fixed inset-x-0 bottom-0 p-4 flex flex-col gap-3 rounded-t-2xl max-w-xl mx-auto overflow-y-auto; max-height: 70vh; padding-bottom: max(1rem, env(safe-area-inset-bottom)); background: var(--color-surface); border-top: 2px solid var(--color-accent); box-shadow: 0 -8px 24px rgb(0 0 0 / 0.4); }
+  .slip-head { @apply flex items-center justify-between gap-3; }
+  .slip-title { @apply flex flex-col min-w-0 mr-auto; }
+  .slip-head .link { min-height: 44px; }
+  .slip-body { @apply flex flex-col gap-3; }
+  /* Room below the content for the open slip, so nothing is stuck under it (issue #36). */
+  body { --slip-h: 0px; }
+  main.page { padding-bottom: calc(var(--slip-h) + 1rem); }
   .slip-message.good { color: var(--color-over); }
   .slip-message.bad { color: var(--color-bad); }
   .bets { @apply flex flex-col gap-2; }

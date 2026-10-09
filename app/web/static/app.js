@@ -72,6 +72,7 @@
         parlay: false,
         legs: [],
         current: null, // the last single pick, so turning on Parlay keeps it as leg 1
+        minimized: false,
 
         init() {
           const d = this.$el.dataset;
@@ -83,6 +84,13 @@
           this.$watch("open", sync);
           this.$watch("parlay", sync);
           document.addEventListener("htmx:afterSwap", sync); // a new tab's buttons
+          // Keep the page scrollable past the slip: pad the bottom by its height (issue #36).
+          const slipEl = this.$el.querySelector(".slip");
+          if (slipEl && window.ResizeObserver) {
+            new window.ResizeObserver(function () {
+              document.body.style.setProperty("--slip-h", slipEl.offsetHeight + "px");
+            }).observe(slipEl);
+          }
         },
 
         // Mark the picked side buttons (aria-pressed) so a switch is visible.
@@ -138,6 +146,22 @@
         },
         get combinedText() {
           return this.legs.length ? americanText(this.combinedDecimal) : "-";
+        },
+        get expanded() {
+          return !this.minimized;
+        },
+        get expandedText() {
+          return this.minimized ? "false" : "true";
+        },
+        get minimizeLabel() {
+          return this.minimized ? "Expand" : "Minimise";
+        },
+        get summary() {
+          if (this.parlay) return this.legCountText + " · " + this.combinedText;
+          return this.sideLabel + " " + this.line + " at " + this.oddsText;
+        },
+        toggleMinimized() {
+          this.minimized = !this.minimized;
         },
         get placeLabel() {
           if (this.overCap) return "Over the 100x payout cap";
@@ -213,6 +237,7 @@
         },
         close() {
           this.open = false;
+          this.minimized = false;
           this.message = "";
         },
         async place() {
