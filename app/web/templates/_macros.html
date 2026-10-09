@@ -126,15 +126,25 @@ data-sides='{{ card | sides_data | tojson }}'
 </svg>
 {%- endmacro %}
 
+{# One card per bet: who and what on top, the pick and the money below; the result chip is
+   the peak moment for a win (issue #43). Hidden bets (another player's open bet) carry no
+   side or stake at all (issue #42). #}
 {% macro bet_rows(bets, show_name=False) -%}
 {% set sides = {"over": "Over", "under": "Under", "yes": "Yes", "no": "No"} %}
-{% if not bets %}<p class="muted">No bets yet.</p>{% endif %}
+{% if not bets %}
+<div class="empty-state" data-testid="no-bets"><strong>No bets yet</strong><p class="muted">Pick a side on the board and it shows up here.</p><div class="empty-actions"><a class="secondary" href="/">Go to the board</a></div></div>
+{% endif %}
 <ul class="bets">
   {% for b in bets %}
   <li class="bet status-{{ b.status }}" data-testid="bet-{{ b.bet_id }}">
-    <div class="bet-main">
-      {% if show_name %}<strong>{{ b.display_name }}</strong> · {% endif %}
-      {% if b.kind == "parlay" %}<strong>{{ b.title }}</strong>{% else %}<a href="/markets/{{ b.market_id }}">{{ b.title }}</a>{% endif %}
+    <div class="bet-top">
+      {% if show_name %}<span class="avatar" aria-hidden="true">{{ b.display_name[:1] | upper }}</span>{% endif %}
+      <div class="bet-head">
+        {% if show_name %}<span class="bet-who">{{ b.display_name }}</span>{% endif %}
+        {% if b.kind == "parlay" %}<strong class="bet-title">{{ b.title }}</strong>{% else %}<a class="bet-title" href="/markets/{{ b.market_id }}">{{ b.title }}</a>{% endif %}
+      </div>
+      {% if b.status == "won" %}<span class="result-chip result-won num">Won {{ (b.payout_cents - b.stake_cents) | signed_money }}</span>
+      {% else %}<span class="result-chip result-{{ b.status }}">{{ b.status | capitalize }}</span>{% endif %}
     </div>
     {% if b.hidden %}
     <div class="bet-detail" data-testid="bet-hidden">{{ "Placed a parlay" if b.kind == "parlay" else "Placed a bet" }} · side and stake shown once it settles</div>
@@ -143,16 +153,18 @@ data-sides='{{ card | sides_data | tojson }}'
     {% endif %}
     {% else %}
     <div class="bet-detail">
-      {% if b.kind == "parlay" %}Combined {{ b.american | odds }}{% else %}{{ sides[b.side] }} {{ b.line_x10 | line(b.metric) }} at {{ b.american | odds }}{% endif %}
-      · {{ b.stake_cents | money }}
-      · {% if b.status == "open" %}to return {{ b.potential_payout_cents | money }}
-        {% elif b.status == "lost" %}lost{% else %}{{ b.status }}, returned {{ b.payout_cents | money }}{% endif %}
+      <span class="bet-pick">{% if b.kind == "parlay" %}Combined {{ b.american | odds }}{% else %}{{ sides[b.side] }} {{ b.line_x10 | line(b.metric) }} at {{ b.american | odds }}{% endif %}</span>
+      <span class="bet-money num">{{ b.stake_cents | money }}
+        {% if b.status == "open" %} to return <strong>{{ b.potential_payout_cents | money }}</strong>
+        {% elif b.status == "lost" %} lost
+        {% elif b.status != "won" %} · returned {{ b.payout_cents | money }}
+        {% else %} · returned <strong>{{ b.payout_cents | money }}</strong>{% endif %}</span>
     </div>
     {% if b.reason %}<p class="bet-reason" data-testid="bet-reason">{{ b.reason }}</p>{% endif %}
     {% if b.kind == "parlay" %}
     <ol class="legs">
       {% for leg in b.legs %}
-      <li><a href="/markets/{{ leg.market_id }}">{{ leg.title }}</a>: {{ sides[leg.side] }} {{ leg.line_x10 | line(leg.metric) }} at {{ leg.american | odds }} <span class="badge status-{{ leg.status }}">{{ leg.status }}</span>{% if leg.reason %} <span class="bet-reason">{{ leg.reason }}</span>{% endif %}</li>
+      <li><span class="leg-main"><a href="/markets/{{ leg.market_id }}">{{ leg.title }}</a><span class="muted">{{ sides[leg.side] }} {{ leg.line_x10 | line(leg.metric) }} at {{ leg.american | odds }}</span>{% if leg.reason %}<span class="bet-reason">{{ leg.reason }}</span>{% endif %}</span> <span class="badge status-{{ leg.status }}">{{ leg.status }}</span></li>
       {% endfor %}
     </ol>
     {% endif %}
