@@ -45,6 +45,12 @@
     return text ? text.split(",").filter(Boolean) : [];
   }
 
+  // After a tab swap, keep the active tab in view in the sideways-scrolling tab row.
+  document.addEventListener("htmx:afterSwap", function () {
+    const active = document.querySelector(".tabs .tab.active");
+    if (active) active.scrollIntoView({ block: "nearest", inline: "nearest" });
+  });
+
   document.addEventListener("alpine:init", function () {
     window.Alpine.data("slip", function () {
       return {

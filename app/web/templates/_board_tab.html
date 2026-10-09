@@ -36,7 +36,12 @@
   {% endfor %}
 </div>
 {% else %}
-{% if not cards %}<p class="muted empty">No open {{ tab }} markets right now. New lines drop at 11:00.</p>{% endif %}
+{% set labels = {"daily": "Daily", "weekly": "Weekly", "monthly": "Monthly", "prop": "Props", "future": "Futures"} %}
+{% if not groups %}<p class="muted empty">No open markets right now. New lines drop at 11:00.</p>{% endif %}
+{% for timeframe, cards in groups %}
+<section class="market-group" data-testid="group-{{ timeframe }}">
+{% if tab == "all" %}<h2 class="group-title">{{ labels[timeframe] }}</h2>{% endif %}
+{% if not cards %}<p class="muted empty">No open {{ timeframe }} markets right now. New lines drop at 11:00.</p>{% endif %}
 <div class="cards">
   {% for c in cards %}
   <article class="market" data-testid="market-{{ c.market_id }}" data-metric="{{ c.metric }}">
@@ -51,4 +56,6 @@
   </article>
   {% endfor %}
 </div>
+</section>
+{% endfor %}
 {% endif %}

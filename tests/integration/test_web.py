@@ -99,7 +99,7 @@ def test_register_login_logout(app_and_code: tuple[TestClient, World, str]) -> N
         cookie = c.cookies.get("wp_session")
         assert cookie
         board = c.get("/")
-        assert board.status_code == 200 and "No open daily markets" in board.text
+        assert board.status_code == 200 and "No open markets right now" in board.text
         assert "$1,000.00" in board.text  # starting grant
         set_cookie = c.post(
             "/api/auth/logout",
@@ -300,6 +300,27 @@ def test_board_tabs(app_and_code: tuple[TestClient, World, str]) -> None:
     assert "No open weekly markets" in weekly.text  # weekly locked Sunday night
     assert "No open monthly markets" in c.get("/?tab=monthly").text
     c.__exit__(None, None, None)
+
+
+def test_board_shows_every_open_market_by_default(
+    app_and_code: tuple[TestClient, World, str],
+) -> None:
+    """Issue #45: `/` lists every timeframe, grouped; the tabs still filter."""
+    c, w, code = app_and_code
+    w.clock.set(local(2026, 10, 4, 12))
+    markets.drop(w.engine, w.clock, w.config, Timeframe.DAILY, date(2026, 10, 4))
+    w.clock.set(local(2026, 10, 4, 18, 30))
+    markets.drop(w.engine, w.clock, w.config, Timeframe.WEEKLY, date(2026, 10, 4))
+    with c:
+        web.register(c, code)
+        page = c.get("/").text
+        daily = c.get("/?tab=daily").text.count('class="market"')
+        weekly = c.get("/?tab=weekly").text.count('class="market"')
+        assert daily and weekly
+        assert page.count('class="market"') == daily + weekly
+        assert 'data-testid="group-daily"' in page and 'data-testid="group-weekly"' in page
+        assert 'aria-selected="true">All<' in page
+        assert 'aria-selected="true">All<' in c.get("/?tab=nonsense").text
 
 
 def test_place_bet_through_the_api(app_and_code: tuple[TestClient, World, str]) -> None:

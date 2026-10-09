@@ -27,7 +27,7 @@ from app.web.security import (
     set_session_cookie,
 )
 
-TABS = ("daily", "weekly", "monthly")
+TABS = ("all", "daily", "weekly", "monthly")  # "all" first: the default (issue #45)
 PROP_TABS = ("prop", "future")  # shown while the props_futures flag is on
 EVENT_TABS = ("events",)  # shown while the special_events flag is on
 BET_MESSAGES = {
@@ -278,13 +278,18 @@ def build_router() -> APIRouter:
             + (PROP_TABS if flags.get("props_futures") else ())
             + (EVENT_TABS if flags.get("special_events") else ())
         )
-        tab = tab if tab in tabs else "daily"
+        tab = tab if tab in tabs else "all"
         now = state.domain_clock.now()
+        timeframes = [t for t in tabs if t not in ("all", "events")]
         with state.engine.connect() as conn:
+            groups = [
+                (t, board.open_markets(conn, t, now))
+                for t in (timeframes if tab == "all" else [tab] if tab != "events" else [])
+            ]
             return {
                 "tab": tab,
                 "tabs": tabs,
-                "cards": board.open_markets(conn, tab, now) if tab != "events" else [],
+                "groups": [(t, cards) for t, cards in groups if cards or tab != "all"],
                 "pools": board.pools(conn, user_id, now) if tab == "events" else [],
                 "wallet": board.wallet(conn, user_id),
                 "parlays": bool(flags.get("parlays")),
@@ -292,7 +297,7 @@ def build_router() -> APIRouter:
             }
 
     @router.get("/")
-    def board_page(request: Request, tab: str = "daily") -> Response:
+    def board_page(request: Request, tab: str = "all") -> Response:
         session = current_session(request)
         if session is None:
             return RedirectResponse("/login", status_code=303)
