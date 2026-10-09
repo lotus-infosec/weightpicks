@@ -17,6 +17,7 @@ from app.domain import setup as setup_steps
 from app.domain.economy import Economy
 from app.domain.ledger import AccountKind, InsufficientFunds
 from app.domain.markets import MarketStatus
+from app.domain.results import result_reason
 from app.models import (
     Account,
     BannedEmail,
@@ -111,13 +112,25 @@ def _void_bets(conn: Connection, clock: Clock, bet_rows: list[Any], reason: str)
 
 
 def void_open_market(
-    conn: Connection, clock: Clock, market_id: int, reason: str, *, announce: bool = True
+    conn: Connection,
+    clock: Clock,
+    market_id: int,
+    code: str,
+    note: str | None = None,
+    *,
+    announce: bool = True,
 ) -> int:
     """Void one open or locked market in the caller's transaction: refund its single bets,
     void its parlay legs (each parlay is re-evaluated) and post the result (`announce`;
     a time zone change posts one summary instead). Returns bets voided. Shared by the
-    admin's void, Goal Reached and time zone changes."""
+    admin's void (`code` "admin" with the typed `note`), Goal Reached and time zone
+    changes. The reason is stored on the market and shown to players (issue #44)."""
     market = conn.execute(select(Market.status, Market.title).where(Market.id == market_id)).one()
+    note = (note or "").strip()[:200] or None
+    reason = result_reason("void", code, note, None) or "Voided"
+    conn.execute(
+        update(Market).where(Market.id == market_id).values(void_reason=code, void_note=note)
+    )
     bets = conn.execute(
         select(Bet.id, Bet.account_id, Bet.user_id, Bet.stake_cents)
         .join(BetLeg, BetLeg.bet_id == Bet.id)
@@ -170,7 +183,7 @@ def void_market(engine: Engine, clock: Clock, actor: Actor, market_id: int, reas
             return 0
         if market.status not in (MarketStatus.OPEN.value, MarketStatus.LOCKED.value):
             raise AdminError("not_voidable", f"A {market.status} market can't be voided.")
-        voided = void_open_market(conn, clock, market_id, "market voided")
+        voided = void_open_market(conn, clock, market_id, "admin", reason)
         audit.record(
             conn,
             clock,

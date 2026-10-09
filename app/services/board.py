@@ -13,6 +13,7 @@ from sqlalchemy import Connection, case, select
 from app.domain import parlay
 from app.domain.ledger import AccountKind
 from app.domain.markets import MarketStatus
+from app.domain.results import result_reason
 from app.models import (
     Account,
     Bet,
@@ -62,6 +63,7 @@ class LegRow:
     american: int
     line_x10: int | None
     status: str
+    reason: str | None = None  # why it was voided or pushed (issue #44)
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +83,7 @@ class BetRow:
     placed_at: datetime
     kind: str = "single"
     legs: tuple[LegRow, ...] = ()
+    reason: str | None = None  # a single's void or push reason; parlays carry it per leg
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,9 +195,13 @@ def _bets(conn: Connection, *conditions: Any, limit: int = 50) -> list[BetRow]:
             Bet.payout_cents,
             Bet.placed_at,
             Bet.kind,
+            Market.void_reason,
+            Market.void_note,
+            Settlement.outcome,
         )
         .join(BetLeg, BetLeg.bet_id == Bet.id)
         .join(Market, Market.id == BetLeg.market_id)
+        .outerjoin(Settlement, Settlement.market_id == Market.id)
         .join(Selection, Selection.id == BetLeg.selection_id)
         .join(User, User.id == Bet.user_id)
         .where(Bet.id.in_(wanted))
@@ -207,7 +214,21 @@ def _bets(conn: Connection, *conditions: Any, limit: int = 50) -> list[BetRow]:
     for legs in grouped.values():
         first = legs[0]
         leg_rows = tuple(
-            LegRow(r.market_id, r.title, r.metric, r.side, r.american, r.line_x10, r.leg_status)
+            LegRow(
+                r.market_id,
+                r.title,
+                r.metric,
+                r.side,
+                r.american,
+                r.line_x10,
+                r.leg_status,
+                result_reason(
+                    r.leg_status,
+                    r.void_reason,
+                    r.void_note,
+                    (r.outcome or {}).get("reason"),
+                ),
+            )
             for r in legs
         )
         is_parlay = first.kind == "parlay"
@@ -230,6 +251,7 @@ def _bets(conn: Connection, *conditions: Any, limit: int = 50) -> list[BetRow]:
                 placed_at=first.placed_at,
                 kind=first.kind,
                 legs=leg_rows,
+                reason=None if is_parlay else leg_rows[0].reason,
             )
         )
     return out

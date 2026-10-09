@@ -61,10 +61,11 @@
       · {% if b.status == "open" %}to return {{ b.potential_payout_cents | money }}
         {% elif b.status == "lost" %}lost{% else %}{{ b.status }}, returned {{ b.payout_cents | money }}{% endif %}
     </div>
+    {% if b.reason %}<p class="bet-reason" data-testid="bet-reason">{{ b.reason }}</p>{% endif %}
     {% if b.kind == "parlay" %}
     <ol class="legs">
       {% for leg in b.legs %}
-      <li><a href="/markets/{{ leg.market_id }}">{{ leg.title }}</a>: {{ sides[leg.side] }} {{ leg.line_x10 | line(leg.metric) }} at {{ leg.american | odds }} <span class="badge status-{{ leg.status }}">{{ leg.status }}</span></li>
+      <li><a href="/markets/{{ leg.market_id }}">{{ leg.title }}</a>: {{ sides[leg.side] }} {{ leg.line_x10 | line(leg.metric) }} at {{ leg.american | odds }} <span class="badge status-{{ leg.status }}">{{ leg.status }}</span>{% if leg.reason %} <span class="bet-reason">{{ leg.reason }}</span>{% endif %}</li>
       {% endfor %}
     </ol>
     {% endif %}
