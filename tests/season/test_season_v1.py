@@ -16,6 +16,8 @@ from app.models import (
     LedgerEntry,
     Market,
     OutboxMessage,
+    Pool,
+    PoolEntry,
     Settlement,
 )
 from tests.season.harness import START as SEASON_START
@@ -154,7 +156,7 @@ def test_busts_and_bailouts_are_consistent(season: SeasonRun) -> None:
 
 
 def test_leaderboard_equals_ledger_pnl(season: SeasonRun) -> None:
-    """The leaderboard ranks by P&L recomputed from betting entries alone."""
+    """The leaderboard ranks by settled P&L: betting entries plus open stakes and buy-ins."""
     from app.services import leaderboard
     from app.services.ledger import active_season_id
 
@@ -173,8 +175,26 @@ def test_leaderboard_equals_ledger_pnl(season: SeasonRun) -> None:
                 .group_by(Account.user_id)
             ).all()
         )
+        # Settled P&L = the ledger's betting P&L plus what is still riding (issue #42).
+        open_stakes = dict(
+            conn.execute(
+                select(Bet.user_id, func.sum(Bet.stake_cents))
+                .where(Bet.season_id == season_id, Bet.status == "open")
+                .group_by(Bet.user_id)
+            ).all()
+        )
+        open_buyins = dict(
+            conn.execute(
+                select(PoolEntry.user_id, func.sum(Pool.buy_in_cents))
+                .join(Pool, Pool.id == PoolEntry.pool_id)
+                .where(Pool.season_id == season_id, Pool.status.in_(("open", "locked")))
+                .group_by(PoolEntry.user_id)
+            ).all()
+        )
     assert len(rows) == len(season.players)
-    assert {r.user_id: r.pnl_cents for r in rows} == {u: derived[u] for u in season.players}
+    assert {r.user_id: r.pnl_cents for r in rows} == {
+        u: derived[u] + open_stakes.get(u, 0) + open_buyins.get(u, 0) for u in season.players
+    }
     assert [r.pnl_cents for r in rows] == sorted((r.pnl_cents for r in rows), reverse=True)
     assert [r.rank for r in rows] == list(range(1, len(rows) + 1))
     assert any(r.pnl_cents != 0 for r in rows)

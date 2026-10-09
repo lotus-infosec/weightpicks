@@ -51,6 +51,12 @@
       {% if show_name %}<strong>{{ b.display_name }}</strong> · {% endif %}
       {% if b.kind == "parlay" %}<strong>{{ b.title }}</strong>{% else %}<a href="/markets/{{ b.market_id }}">{{ b.title }}</a>{% endif %}
     </div>
+    {% if b.hidden %}
+    <div class="bet-detail" data-testid="bet-hidden">{{ "Placed a parlay" if b.kind == "parlay" else "Placed a bet" }} · side and stake shown once it settles</div>
+    {% if b.kind == "parlay" %}
+    <ol class="legs">{% for leg in b.legs %}<li><a href="/markets/{{ leg.market_id }}">{{ leg.title }}</a></li>{% endfor %}</ol>
+    {% endif %}
+    {% else %}
     <div class="bet-detail">
       {% if b.kind == "parlay" %}Combined {{ b.american | odds }}{% else %}{{ sides[b.side] }} {{ b.line_x10 | line(b.metric) }} at {{ b.american | odds }}{% endif %}
       · {{ b.stake_cents | money }}
@@ -64,6 +70,7 @@
       <li><a href="/markets/{{ leg.market_id }}">{{ leg.title }}</a>: {{ sides[leg.side] }} {{ leg.line_x10 | line(leg.metric) }} at {{ leg.american | odds }} <span class="badge status-{{ leg.status }}">{{ leg.status }}</span>{% if leg.reason %} <span class="bet-reason">{{ leg.reason }}</span>{% endif %}</li>
       {% endfor %}
     </ol>
+    {% endif %}
     {% endif %}
   </li>
   {% endfor %}

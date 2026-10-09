@@ -30,7 +30,7 @@ This project is **entirely vibe-coded with [Claude Code](https://claude.com/clau
 
 - **Markets:** daily, weekly and monthly over/unders on weigh-ins and activity (steps, active and intensity minutes, calories, workouts), priced by a line engine (trend, noise, Monte Carlo) with vig. Props, futures and parlays; special-event pools.
 - **Settlement:** automatic from Garmin data (GarminDB), never on stale data; a missed weigh-in pushes. Goal Reached settles or refunds everything and freezes the season; a new season carries balances over.
-- **Players:** invite code, bankroll, daily allowance, busts and bailouts, leaderboard, stats.
+- **Players:** invite code, bankroll, daily allowance, busts and bailouts, a leaderboard ranked by profit and loss from finished bets (with wins), stats. Other players' open bets show who and which market, never the side or stake, until they settle.
 - **Admin:** dashboard, markets, players, bank and economy, props and the AI review queue, special events, seasons, System (health, backups, restore, factory reset), Appearance, Integrations, audit log.
 - **Integrations, all optional:** Discord webhooks, Cloudflare Workers AI (only packages props and writes copy; never sets odds or settles), SMTP for password reset.
 

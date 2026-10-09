@@ -313,7 +313,7 @@ def build_router() -> APIRouter:
         state = request.app.state
         with state.engine.connect() as conn:
             found = board.market(conn, market_id)
-            bets = board.market_bets(conn, market_id) if found else []
+            bets = board.market_bets(conn, market_id, session.user_id) if found else []
             wallet = board.wallet(conn, session.user_id)
         if found is None:
             return render(request, "error.html", {"message": "No such market."}, 404)
@@ -349,7 +349,7 @@ def build_router() -> APIRouter:
     @router.get("/bets/feed")
     def feed(request: Request, session: Player) -> Response:
         with request.app.state.engine.connect() as conn:
-            bets = board.feed(conn)
+            bets = board.feed(conn, session.user_id)
             wallet = board.wallet(conn, session.user_id)
         name = "_feed.html" if "HX-Request" in request.headers else "feed.html"
         return render(request, name, {"bets": bets, "wallet": wallet})
