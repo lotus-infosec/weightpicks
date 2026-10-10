@@ -21,3 +21,9 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "build"
+    ignore:
+      # The app and the GarminDB venv are pinned to Python 3.12; moving to a newer
+      # Python is a deliberate, tested change, not a weekly bump. Patch and digest
+      # updates (security fixes) still come through.
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
