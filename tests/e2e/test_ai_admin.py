@@ -63,8 +63,10 @@ def test_ai_admin_pages_and_blurb(browser: Browser, rich_server: RichServer, siz
     page.on("console", on_console)
     log_in(page, url, rich_server.email, rich_server.password)
     page.goto(f"{url}/?tab=prop")
-    card = page.locator("article.market", has=page.get_by_text(BLURB))
-    expect(card.get_by_test_id("blurb")).to_have_text(BLURB)
-    expect(card.locator("button.side-yes")).to_contain_text("Yes")
+    card = page.locator(f'article.market:has(button.mrow[data-blurb="{BLURB}"])')
+    card.locator("button.mrow").click()
+    sheet = page.get_by_test_id("slip")
+    expect(sheet).to_contain_text(BLURB)  # the blurb shows in the bet sheet
+    expect(sheet.locator("button.toggle-yes")).to_contain_text("Yes")
     check(page, "board-ai-prop", size, errors)
     context.close()

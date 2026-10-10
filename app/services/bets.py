@@ -209,15 +209,8 @@ def place_bet(
             )
         except InsufficientFunds as exc:
             raise BetRejected("insufficient_funds") from exc
-        payload = {
-            "bet_id": bet_id,
-            "user_id": user_id,
-            "market_id": leg.id,
-            "side": leg.side,
-            "american": american,
-            "line_x10": leg.line_x10,
-            "stake_cents": stake_cents,
-        }
+        # Who and which market only: side and stake stay private until it settles (#42).
+        payload = {"bet_id": bet_id, "user_id": user_id, "market_id": leg.id}
         enqueue(
             conn,
             clock,
@@ -351,13 +344,12 @@ def place_parlay(
         except InsufficientFunds as exc:
             raise BetRejected("insufficient_funds") from exc
         price = parlay.combined_american(odds)
+        # Who and how many legs only: picks and stake stay private until it settles (#42).
         payload = {
             "bet_id": bet_id,
             "user_id": user_id,
             "kind": "parlay",
             "legs": len(picked),
-            "american": price,
-            "stake_cents": stake_cents,
             "market_ids": [leg.id for leg in picked],
         }
         enqueue(

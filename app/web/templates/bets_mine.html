@@ -8,6 +8,12 @@
   {% for s in season_options %}<a href="/bets/mine?season={{ s.season_id }}" class="tab{{ ' active' if s.season_id == season_id }}">Season {{ s.number }}{% if s.current %} (now){% endif %}</a>{% endfor %}
 </nav>
 {% endif %}
-{% if wallet %}<p class="muted">Balance {{ wallet.balance_cents | money }} · P&amp;L {{ wallet.pnl_cents | signed_money }}</p>{% endif %}
+{% if wallet %}
+<section class="tiles" data-testid="my-summary">
+  <div class="tile"><span class="tile-label">Balance</span><strong class="tile-value num">{{ wallet.balance_cents | money }}</strong></div>
+  <div class="tile"><span class="tile-label">P&amp;L</span><strong class="tile-value num {{ 'good' if wallet.pnl_cents > 0 else ('bad' if wallet.pnl_cents < 0) }}">{{ wallet.pnl_cents | signed_money }}</strong></div>
+  <div class="tile"><span class="tile-label">Open</span><strong class="tile-value num">{{ bets | selectattr("status", "equalto", "open") | list | length }}</strong></div>
+</section>
+{% endif %}
 <div id="my-bets" hx-get="/bets/mine{{ '?season=' ~ season_id if season_id else '' }}" hx-trigger="bet-placed from:body, every 60s">{% include "_my_bets.html" %}</div>
 {% endblock %}

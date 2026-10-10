@@ -27,13 +27,16 @@ def test_register_bet_and_see_it_in_the_feed(page: Page, live_server: LiveServer
     weight = page.locator('article[data-metric="weight"]')
     expect(weight).to_have_count(1)
 
-    weight.locator("button.side-over").click()
+    weight.locator("button.mrow").click()
     slip = page.get_by_test_id("slip")
     expect(slip).to_be_visible()
+    slip.locator("button.toggle").first.click()
     page.get_by_test_id("stake").fill("25")
     expect(page.get_by_test_id("payout")).to_have_text(re.compile(r"^\$\d+\.\d\d$"))
     page.get_by_test_id("place").click()
-    expect(page.get_by_test_id("slip-message")).to_contain_text("Bet placed: $25.00")
+    expect(page.get_by_test_id("bet-done")).to_contain_text("Bet placed")
+    expect(page.get_by_test_id("bet-done")).to_contain_text("$25.00 to return")
+    expect(page.get_by_test_id("balance")).to_have_text("$975.00")  # updates without a reload
 
     page.get_by_role("link", name="Feed").click()
     expect(page).to_have_url(f"{live_server.url}/bets/feed")
@@ -43,5 +46,5 @@ def test_register_bet_and_see_it_in_the_feed(page: Page, live_server: LiveServer
     expect(feed).not_to_contain_text("e2e@example.invalid")
 
     page.get_by_role("link", name="My bets").click()
-    expect(page.locator("body")).to_contain_text("Balance $975.00")
+    expect(page.get_by_test_id("my-summary")).to_contain_text("$975.00")
     assert errors == [], errors  # includes any CSP violation

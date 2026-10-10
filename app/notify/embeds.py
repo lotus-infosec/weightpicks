@@ -113,23 +113,18 @@ def _embed(
 
 
 def _bet_placed(category: str, p: dict[str, Any], ctx: Context) -> dict[str, Any]:
+    """Who and which market only: the side and stake stay private until it settles."""
     who = safe(ctx.user_name(p.get("user_id")))
+    big = category == "high_roller"
+    colour = GOLD if big else BLURPLE
     if p.get("kind") == "parlay":
-        title = "High roller parlay!" if category == "high_roller" else "New parlay"
-        text = (
-            f"**{who}** bet {money(p.get('stake_cents'))} on a **{p.get('legs')}-leg parlay** "
-            f"at {american(p.get('american'))}"
-        )
-        return _embed(ctx, category, title, text, GOLD if category == "high_roller" else BLURPLE)
+        title = "High roller parlay!" if big else "New parlay"
+        size = "a big" if big else "a"
+        text = f"**{who}** placed {size} **{p.get('legs')}-leg parlay**"
+        return _embed(ctx, category, title, text, colour)
     market = safe(ctx.market_title(p.get("market_id")))
-    side = str(p.get("side", "")).upper()
-    line = f" {number(p['line_x10'])}" if p.get("line_x10") is not None else ""
-    title = "High roller!" if category == "high_roller" else "New bet"
-    text = (
-        f"**{who}** bet {money(p.get('stake_cents'))} on **{side}{line}** "
-        f"at {american(p.get('american'))}\n{market}"
-    )
-    colour = GOLD if category == "high_roller" else BLURPLE
+    title = "High roller!" if big else "New bet"
+    text = f"**{who}** placed {'a big bet' if big else 'a bet'} on\n{market}"
     return _embed(ctx, category, title, text, colour, url=_market_link(ctx, p.get("market_id")))
 
 
@@ -221,7 +216,8 @@ def _new_markets(category: str, p: dict[str, Any], ctx: Context) -> dict[str, An
 def _standings(category: str, p: dict[str, Any], ctx: Context) -> dict[str, Any]:
     lines = []
     for i, row in enumerate(p.get("rows", []), 1):
-        badge = f" · busts {row['busts']}" if row.get("busts") else ""
+        wins = row.get("wins")
+        badge = f" · {wins} win{'s' if wins != 1 else ''}" if wins else ""
         week = row.get("week_pnl_cents")
         week_text = f" (week {signed_money(week)})" if week is not None else ""
         lines.append(

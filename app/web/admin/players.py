@@ -56,7 +56,7 @@ def register(router: APIRouter) -> None:
     ) -> Response:
         with request.app.state.engine.connect() as conn:
             found = board.market(conn, market_id)
-            bets = board.market_bets(conn, market_id) if found else []
+            bets = board.market_bets(conn, market_id, None) if found else []  # admin: all
         if found is None:
             return render(request, "error.html", {"message": "No such market."}, 404)
         card, outcome = found
