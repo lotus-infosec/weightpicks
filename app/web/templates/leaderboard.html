@@ -9,20 +9,19 @@
 </nav>
 {% endif %}
 <p class="muted small">Ranked by profit and loss from finished bets and events, then wins. Open bets count once they settle; allowances and bailouts never count.</p>
-{% if not rows %}<p class="muted">No players yet.</p>{% else %}
-<table class="table" data-testid="leaderboard">
-  <thead><tr><th class="num">#</th><th>Player</th><th class="num">P&amp;L</th><th class="num">Wins</th><th class="num">Open</th></tr></thead>
-  <tbody>
+{% if not rows %}<div class="empty-state"><strong>No players yet</strong><p class="muted">Share the registration code to get people in.</p></div>{% else %}
+<ol class="ranks" data-testid="leaderboard">
   {% for r in rows %}
-  <tr class="{{ 'me' if r.user_id == session.user_id }}">
-    <td class="num" data-label="Rank">{{ r.rank }}</td>
-    <td>{{ r.display_name }}{% if r.user_id == session.user_id %} <span class="badge">you</span>{% endif %}</td>
-    <td class="num {{ 'good' if r.pnl_cents > 0 else ('bad' if r.pnl_cents < 0) }}" data-label="P&amp;L">{{ r.pnl_cents | signed_money }}</td>
-    <td class="num" data-label="Wins">{{ r.wins }}</td>
-    <td class="num" data-label="Open bets">{{ r.open_bets }}</td>
-  </tr>
+  <li class="rank-row{{ ' me' if r.user_id == session.user_id }}{{ ' top' if r.rank == 1 }}">
+    <span class="rank-num num">{{ r.rank }}</span>
+    <span class="avatar" aria-hidden="true">{{ r.display_name[:1] | upper }}</span>
+    <span class="rank-main">
+      <span class="rank-name">{{ r.display_name }}{% if r.user_id == session.user_id %} <span class="badge">you</span>{% endif %}</span>
+      <span class="rank-meta">{{ r.wins }} win{{ "" if r.wins == 1 else "s" }} · {{ r.open_bets }} open</span>
+    </span>
+    <strong class="rank-pnl num {{ 'good' if r.pnl_cents > 0 else ('bad' if r.pnl_cents < 0) }}" data-label="P&amp;L">{{ r.pnl_cents | signed_money }}</strong>
+  </li>
   {% endfor %}
-  </tbody>
-</table>
+</ol>
 {% endif %}
 {% endblock %}

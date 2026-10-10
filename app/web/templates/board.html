@@ -1,9 +1,10 @@
 {% extends "base.html" %}
-{% from "_macros.html" import slip %}
+{% from "_macros.html" import slip, parlay_bar %}
 {% set active = "board" %}
 {% block content %}
-<div x-data="slip" data-parlays="{{ 'on' if parlays else 'off' }}" data-max-legs="{{ max_legs }}">
+<div x-data="slip" data-parlays="{{ 'on' if parlays else 'off' }}" data-max-legs="{{ max_legs }}" data-max-bet="{{ max_bet }}" data-balance="{{ wallet.balance_cents if wallet else 0 }}">
   <div id="board">{% include "_board_tab.html" %}</div>
+  {{ parlay_bar() }}
   {{ slip() }}
 </div>
 {% endblock %}

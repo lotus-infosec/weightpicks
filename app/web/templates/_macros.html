@@ -1,59 +1,150 @@
-{% macro side_buttons(card) -%}
-<div class="sides">
-  {% for s in card.sides %}
-  <button type="button" class="side side-{{ s.side }}" x-on:click="pick"
-          data-testid="pick-{{ card.market_id }}-{{ s.side }}"
-          data-title="{{ card.title }}" data-side="{{ s.side }}"
-          data-line="{{ card.line_x10 | line(card.metric) }}" data-odds-text="{{ s.odds | odds }}"
-          data-american="{{ s.odds or 0 }}" data-selection="{{ s.selection_id }}"
-          data-version="{{ card.odds_version_id }}" data-market="{{ card.market_id }}"
-          data-keys="{{ card.correlation_keys | join(',') }}"{% if s.odds is none %} disabled{% endif %}>
-    <span class="side-name">{{ {"over": "Over", "under": "Under", "yes": "Yes", "no": "No"}[s.side] }}</span>
-    <span class="side-odds">{{ s.odds | odds }}</span>
-  </button>
-  {% endfor %}
-</div>
+{# Everything the bet sheet needs about a market, as data attributes (Alpine CSP build:
+   no inline expressions). Sides are JSON: [{side, label, selection, odds, oddsText}]. #}
+{% macro market_data(card) -%}
+data-market="{{ card.market_id }}" data-title="{{ card.title }}" data-metric="{{ card.metric }}"
+data-line="{{ card.line_x10 | line(card.metric) if card.line_x10 is not none else '' }}"
+data-version="{{ card.odds_version_id }}" data-keys="{{ card.correlation_keys | join(',') }}"
+data-lock="{{ card.lock_at | local_time }}" data-blurb="{{ card.blurb or '' }}"
+data-sides='{{ card | sides_data | tojson }}'
 {%- endmacro %}
 
+{% macro market_row(card) -%}
+<article class="market" data-testid="market-{{ card.market_id }}" data-metric="{{ card.metric }}">
+  <button type="button" class="mrow" x-on:click="openMarket" {{ market_data(card) }} data-testid="open-{{ card.market_id }}">
+    <span class="mrow-main">
+      {% if card.provisional %}<span class="mrow-meta"><span class="chip">provisional</span></span>{% endif %}
+      <span class="mrow-title">{{ card.title }}</span>
+      <span class="mrow-lock">Locks {{ card.lock_at | local_time }}</span>
+    </span>
+    <span class="mrow-line">{% if card.line_x10 is not none %}<span class="mrow-label">O/U</span><span class="mrow-value">{{ card.line_x10 | line(card.metric) }}</span>{% else %}<span class="mrow-value">Yes/No</span>{% endif %}</span>
+  </button>
+</article>
+{%- endmacro %}
+
+{# The bet sheet (bottom sheet), the parlay bar and the bottom dock (issue #43). #}
 {% macro slip() -%}
-<aside class="slip" x-show="open" x-cloak data-testid="slip">
-  <div class="slip-head">
-    <div class="slip-title"><strong x-text="headline"></strong>
-      <span class="muted small" x-show="minimized" x-text="summary" data-testid="slip-summary"></span></div>
-    <button type="button" class="link" x-on:click="toggleMinimized" x-text="minimizeLabel" x-bind:aria-expanded="expandedText" data-testid="slip-minimise">Minimise</button>
-    <button type="button" class="link" x-on:click="close" aria-label="Close slip">Close</button>
+<div class="sheet-backdrop" x-show="open" x-cloak x-on:click="close" data-testid="sheet-backdrop"></div>
+<aside class="sheet" x-show="open" x-cloak data-testid="slip" role="dialog" aria-modal="true" aria-label="Bet slip">
+  <div class="sheet-grab" aria-hidden="true"></div>
+
+  <div class="sheet-done" x-show="done" data-testid="bet-done" role="status">
+    <span class="done-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="40" height="40"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <strong class="done-title" x-text="doneTitle"></strong>
+    <span class="muted" x-text="doneText"></span>
   </div>
-  <div class="slip-body" x-show="expanded">
-  <template x-if="parlayAllowed">
-    <label class="check small slip-toggle"><input type="checkbox" x-model="parlay" x-on:change="toggleParlay" data-testid="parlay-toggle"> Parlay (combine picks)</label>
-  </template>
-  <p class="slip-pick" x-show="single"><span x-text="sideLabel"></span> <span x-text="line"></span> at <span x-text="oddsText"></span></p>
-  <ol class="slip-legs" x-show="parlay" data-testid="slip-legs">
-    <template x-for="leg in legs" x-bind:key="leg.selectionId">
-      <li><span class="leg-title" x-text="leg.title"></span> <strong x-text="leg.pick"></strong>
-        <button type="button" class="link small" x-on:click="removeLeg" x-bind:data-selection="leg.selectionId" aria-label="Remove leg">Remove</button></li>
-    </template>
-  </ol>
-  <p class="muted small" x-show="parlay" data-testid="parlay-odds"><span x-text="legCountText"></span> · combined <strong x-text="combinedText"></strong></p>
-  <label class="stake">Stake ($)
-    <input type="text" inputmode="decimal" name="stake" x-model="stake" placeholder="25" autocomplete="off" data-testid="stake">
-  </label>
-  <p class="muted">Returns <span x-text="payoutText" data-testid="payout"></span> if it wins</p>
-  <button type="button" class="primary wide" x-on:click="place" x-bind:disabled="cannotPlace" data-testid="place" x-text="placeLabel">Place bet</button>
+
+  <div class="sheet-body" x-show="viewPick">
+    <header class="sheet-head">
+      <div class="sheet-heading">
+        <strong class="sheet-title" x-text="title"></strong>
+        <span class="sheet-meta"><span x-show="hasLine">O/U <strong class="num" x-text="line"></strong> · </span><span x-text="lockText"></span></span>
+      </div>
+      <button type="button" class="icon-btn" x-on:click="close" aria-label="Close">{{ icon("close") }}</button>
+    </header>
+    <p class="muted small" x-show="blurb" x-text="blurb"></p>
+    <div class="toggles" role="group" aria-label="Pick a side">
+      <template x-for="(s, i) in sides" x-bind:key="s.selection">
+        <button type="button" class="toggle" x-on:click="chooseSide" x-bind:data-index="i" x-bind:aria-pressed="s.pressed" x-bind:class="s.kind" x-bind:disabled="s.disabled" x-bind:data-testid="s.testid">
+          <span class="toggle-name" x-text="s.label"></span>
+          <span class="toggle-odds num" x-text="s.oddsText"></span>
+        </button>
+      </template>
+    </div>
+    <div class="stake-block" x-show="hasSide">
+      <label class="stake-label" for="stake">Stake</label>
+      <div class="stake-row">
+        <span class="stake-prefix">$</span>
+        <input id="stake" type="text" inputmode="decimal" name="stake" x-model="stake" placeholder="0" autocomplete="off" data-testid="stake">
+      </div>
+      <div class="chips" role="group" aria-label="Quick stakes">
+        <template x-for="c in chips" x-bind:key="c.label">
+          <button type="button" class="chip-btn" x-on:click="setStake" x-bind:data-cents="c.cents" x-text="c.label"></button>
+        </template>
+      </div>
+      <p class="returns">Returns <strong class="num" x-text="payoutText" data-testid="payout"></strong> if it wins</p>
+    </div>
+    <div class="sheet-actions" x-show="hasSide">
+      <button type="button" class="primary wide" x-on:click="place" x-bind:disabled="cannotPlace" data-testid="place" x-text="placeLabel">Place bet</button>
+      <button type="button" class="secondary wide" x-show="parlayAllowed" x-on:click="toggleLeg" x-text="legLabel" data-testid="add-leg">Add to parlay</button>
+    </div>
+    <a class="sheet-link small" x-bind:href="marketHref">Market details and all bets</a>
   </div>
-  <p class="slip-message" x-show="message" x-text="message" x-bind:class="messageClass" role="status" data-testid="slip-message"></p>
+
+  <div class="sheet-body" x-show="viewParlay" data-testid="parlay-sheet">
+    <header class="sheet-head">
+      <div class="sheet-heading">
+        <strong class="sheet-title">Parlay</strong>
+        <span class="sheet-meta"><span x-text="legCountText"></span> · combined <strong class="num" x-text="combinedText" data-testid="parlay-odds"></strong></span>
+      </div>
+      <button type="button" class="icon-btn" x-on:click="close" aria-label="Close">{{ icon("close") }}</button>
+    </header>
+    <ol class="leg-list" data-testid="slip-legs">
+      <template x-for="leg in legs" x-bind:key="leg.selectionId">
+        <li><span class="leg-text"><span class="leg-title" x-text="leg.title"></span><strong x-text="leg.pick"></strong></span>
+          <button type="button" class="icon-btn" x-on:click="removeLeg" x-bind:data-selection="leg.selectionId" aria-label="Remove leg">{{ icon("close") }}</button></li>
+      </template>
+    </ol>
+    <div class="stake-block">
+      <label class="stake-label" for="parlay-stake">Stake</label>
+      <div class="stake-row"><span class="stake-prefix">$</span>
+        <input id="parlay-stake" type="text" inputmode="decimal" x-model="stake" placeholder="0" autocomplete="off" data-testid="parlay-stake"></div>
+      <div class="chips" role="group" aria-label="Quick stakes">
+        <template x-for="c in chips" x-bind:key="c.label">
+          <button type="button" class="chip-btn" x-on:click="setStake" x-bind:data-cents="c.cents" x-text="c.label"></button>
+        </template>
+      </div>
+      <p class="returns">Returns <strong class="num" x-text="payoutText" data-testid="parlay-payout"></strong> if every leg wins</p>
+    </div>
+    <div class="sheet-actions">
+      <button type="button" class="primary wide" x-on:click="place" x-bind:disabled="cannotPlace" data-testid="place-parlay" x-text="placeLabel">Place parlay</button>
+      <button type="button" class="secondary wide" x-on:click="close">Add more legs</button>
+    </div>
+  </div>
+
+  <p class="slip-message" x-show="message" x-text="message" x-bind:class="messageClass" role="alert" data-testid="slip-message"></p>
 </aside>
 {%- endmacro %}
 
+{% macro parlay_bar() -%}
+<button type="button" class="parlay-bar" x-show="barVisible" x-cloak x-on:click="openParlay" data-testid="parlay-bar">
+  <span class="parlay-count num" x-text="legs.length"></span>
+  <span class="parlay-text"><strong>Parlay</strong> <span class="muted" x-text="barText"></span></span>
+  <span class="parlay-cta">Review</span>
+</button>
+{%- endmacro %}
+
+{# Small stroke icons, drawn for this app (no icon library). #}
+{% macro icon(name) -%}
+<svg class="icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+{%- if name == "close" %}<path d="M6 6l12 12M18 6L6 18"/>
+{%- elif name == "board" %}<rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/>
+{%- elif name == "ticket" %}<path d="M4 8a2 2 0 0 0 2-2h12a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H6a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z"/><path d="M10 9h4M10 15h4"/>
+{%- elif name == "feed" %}<path d="M4 12h3l2-6 4 12 2-6h5"/>
+{%- elif name == "trophy" %}<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 20h6"/>
+{%- elif name == "chart" %}<path d="M5 19V9M12 19V5M19 19v-7"/>
+{%- endif %}
+</svg>
+{%- endmacro %}
+
+{# One card per bet: who and what on top, the pick and the money below; the result chip is
+   the peak moment for a win (issue #43). Hidden bets (another player's open bet) carry no
+   side or stake at all (issue #42). #}
 {% macro bet_rows(bets, show_name=False) -%}
 {% set sides = {"over": "Over", "under": "Under", "yes": "Yes", "no": "No"} %}
-{% if not bets %}<p class="muted">No bets yet.</p>{% endif %}
+{% if not bets %}
+<div class="empty-state" data-testid="no-bets"><strong>No bets yet</strong><p class="muted">Pick a side on the board and it shows up here.</p><div class="empty-actions"><a class="secondary" href="/">Go to the board</a></div></div>
+{% endif %}
 <ul class="bets">
   {% for b in bets %}
   <li class="bet status-{{ b.status }}" data-testid="bet-{{ b.bet_id }}">
-    <div class="bet-main">
-      {% if show_name %}<strong>{{ b.display_name }}</strong> · {% endif %}
-      {% if b.kind == "parlay" %}<strong>{{ b.title }}</strong>{% else %}<a href="/markets/{{ b.market_id }}">{{ b.title }}</a>{% endif %}
+    <div class="bet-top">
+      {% if show_name %}<span class="avatar" aria-hidden="true">{{ b.display_name[:1] | upper }}</span>{% endif %}
+      <div class="bet-head">
+        {% if show_name %}<span class="bet-who">{{ b.display_name }}</span>{% endif %}
+        {% if b.kind == "parlay" %}<strong class="bet-title">{{ b.title }}</strong>{% else %}<a class="bet-title" href="/markets/{{ b.market_id }}">{{ b.title }}</a>{% endif %}
+      </div>
+      {% if b.status == "won" %}<span class="result-chip result-won num">Won {{ (b.payout_cents - b.stake_cents) | signed_money }}</span>
+      {% else %}<span class="result-chip result-{{ b.status }}">{{ b.status | capitalize }}</span>{% endif %}
     </div>
     {% if b.hidden %}
     <div class="bet-detail" data-testid="bet-hidden">{{ "Placed a parlay" if b.kind == "parlay" else "Placed a bet" }} · side and stake shown once it settles</div>
@@ -62,16 +153,18 @@
     {% endif %}
     {% else %}
     <div class="bet-detail">
-      {% if b.kind == "parlay" %}Combined {{ b.american | odds }}{% else %}{{ sides[b.side] }} {{ b.line_x10 | line(b.metric) }} at {{ b.american | odds }}{% endif %}
-      · {{ b.stake_cents | money }}
-      · {% if b.status == "open" %}to return {{ b.potential_payout_cents | money }}
-        {% elif b.status == "lost" %}lost{% else %}{{ b.status }}, returned {{ b.payout_cents | money }}{% endif %}
+      <span class="bet-pick">{% if b.kind == "parlay" %}Combined {{ b.american | odds }}{% else %}{{ sides[b.side] }} {{ b.line_x10 | line(b.metric) }} at {{ b.american | odds }}{% endif %}</span>
+      <span class="bet-money num">{{ b.stake_cents | money }}
+        {% if b.status == "open" %} to return <strong>{{ b.potential_payout_cents | money }}</strong>
+        {% elif b.status == "lost" %} lost
+        {% elif b.status != "won" %} · returned {{ b.payout_cents | money }}
+        {% else %} · returned <strong>{{ b.payout_cents | money }}</strong>{% endif %}</span>
     </div>
     {% if b.reason %}<p class="bet-reason" data-testid="bet-reason">{{ b.reason }}</p>{% endif %}
     {% if b.kind == "parlay" %}
     <ol class="legs">
       {% for leg in b.legs %}
-      <li><a href="/markets/{{ leg.market_id }}">{{ leg.title }}</a>: {{ sides[leg.side] }} {{ leg.line_x10 | line(leg.metric) }} at {{ leg.american | odds }} <span class="badge status-{{ leg.status }}">{{ leg.status }}</span>{% if leg.reason %} <span class="bet-reason">{{ leg.reason }}</span>{% endif %}</li>
+      <li><span class="leg-main"><a href="/markets/{{ leg.market_id }}">{{ leg.title }}</a><span class="muted">{{ sides[leg.side] }} {{ leg.line_x10 | line(leg.metric) }} at {{ leg.american | odds }}</span>{% if leg.reason %}<span class="bet-reason">{{ leg.reason }}</span>{% endif %}</span> <span class="badge status-{{ leg.status }}">{{ leg.status }}</span></li>
       {% endfor %}
     </ol>
     {% endif %}

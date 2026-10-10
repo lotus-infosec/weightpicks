@@ -294,6 +294,7 @@ def build_router() -> APIRouter:
                 "wallet": board.wallet(conn, user_id),
                 "parlays": bool(flags.get("parlays")),
                 "max_legs": config.economy.max_parlay_legs if config else Economy().max_parlay_legs,
+                "max_bet": (config.economy if config else Economy()).max_bet_cents,
             }
 
     @router.get("/")
@@ -326,6 +327,9 @@ def build_router() -> APIRouter:
                 "outcome": outcome,
                 "bets": bets,
                 "wallet": wallet,
+                "max_bet": (
+                    state.live.config.economy if state.live.config else Economy()
+                ).max_bet_cents,
                 "open": card.status == "open" and card.lock_at > state.domain_clock.now(),
             },
         )
@@ -410,6 +414,12 @@ def build_router() -> APIRouter:
         name = "_board_tab.html" if "HX-Request" in request.headers else "board.html"
         return render(request, name, context, status if name == "board.html" else 200)
 
+    def _balance(state: Any, user_id: int) -> int | None:
+        """The player's balance after a bet, so the header can update without a reload."""
+        with state.engine.connect() as conn:
+            wallet = board.wallet(conn, user_id)
+        return wallet.balance_cents if wallet else None
+
     @router.post("/api/bets")
     async def place(request: Request, session: Player) -> Response:
         try:
@@ -438,6 +448,7 @@ def build_router() -> APIRouter:
                 "stake_cents": placed.stake_cents,
                 "potential_payout_cents": placed.potential_payout_cents,
                 "replayed": placed.replayed,
+                "balance_cents": await run_in_threadpool(_balance, state, session.user_id),
             }
         )
 
@@ -472,6 +483,7 @@ def build_router() -> APIRouter:
                 "stake_cents": placed.stake_cents,
                 "potential_payout_cents": placed.potential_payout_cents,
                 "replayed": placed.replayed,
+                "balance_cents": await run_in_threadpool(_balance, state, session.user_id),
             }
         )
 

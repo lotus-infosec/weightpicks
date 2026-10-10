@@ -1,6 +1,7 @@
 """Jinja filters: money, odds, lines and local times for display."""
 
 from datetime import datetime
+from typing import Any
 from zoneinfo import ZoneInfo
 
 MINUS = "\u2212"  # typographic minus for odds and lines
@@ -38,6 +39,23 @@ def line(line_x10: int | None, metric: str, unit: str) -> str:
     whole, tenth = divmod(abs(line_x10), 10)
     text = f"{sign}{whole:,}.{tenth}"
     return f"{text} {unit}" if metric == "weight" else text
+
+
+SIDE_LABELS = {"over": "Over", "under": "Under", "yes": "Yes", "no": "No"}
+
+
+def sides_data(card: Any) -> list[dict[str, Any]]:
+    """A market's sides for the bet sheet (issue #43)."""
+    return [
+        {
+            "side": s.side,
+            "label": SIDE_LABELS[s.side],
+            "selection": s.selection_id,
+            "odds": s.odds,
+            "oddsText": odds(s.odds),
+        }
+        for s in card.sides
+    ]
 
 
 def local_time(ts: datetime, tz: ZoneInfo) -> str:
