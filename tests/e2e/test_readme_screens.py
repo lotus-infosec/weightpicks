@@ -12,11 +12,10 @@ import re
 from pathlib import Path
 
 import pytest
-from PIL import Image
 from playwright.sync_api import Browser, Page, expect
 
 from tests.e2e.conftest import RichServer
-from tests.e2e.test_layout import SCREENS
+from tests.e2e.test_layout import SCREENS, compress
 from tests.e2e.test_system_appearance import log_in
 
 pytestmark = pytest.mark.e2e
@@ -29,8 +28,7 @@ def shot(page: Page, name: str) -> None:
     page.wait_for_timeout(450)  # sheet and check-mark animations
     path = OUT / f"{name}.png"
     page.screenshot(path=path)
-    with Image.open(path) as im:  # keep the repo small: 256-colour PNGs look the same here
-        im.convert("RGB").quantize(256, method=Image.Quantize.MEDIANCUT).save(path, optimize=True)
+    compress(path)  # keeps the repo small
 
 
 def test_readme_screens(browser: Browser, rich_server: RichServer) -> None:

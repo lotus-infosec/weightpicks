@@ -4,6 +4,7 @@ stylesheet applied, no console/CSP errors. Screenshots go to test-screens/."""
 from pathlib import Path
 
 import pytest
+from PIL import Image
 from playwright.sync_api import Browser, ConsoleMessage, Page, expect
 
 from tests.e2e.conftest import RichServer
@@ -13,6 +14,12 @@ pytestmark = pytest.mark.e2e
 SCREENS = Path("test-screens")  # git-ignored; pytest-playwright wipes test-results/
 SIZES = {"phone": (375, 812), "desktop": (1280, 800)}
 UNSTYLED = {"rgba(0, 0, 0, 0)", "rgb(255, 255, 255)"}  # browser defaults: no stylesheet
+
+
+def compress(path: Path) -> None:
+    """256-colour PNG: a fraction of the size, and it looks the same for this flat UI."""
+    with Image.open(path) as im:
+        im.convert("RGB").quantize(256, method=Image.Quantize.MEDIANCUT).save(path, optimize=True)
 
 
 def check(page: Page, name: str, size: str, errors: list[str]) -> None:
@@ -31,6 +38,7 @@ def check(page: Page, name: str, size: str, errors: list[str]) -> None:
         assert height >= 43.5, f"{name}@{size}: a button is only {height}px tall"  # 44, rounded
     SCREENS.mkdir(parents=True, exist_ok=True)
     page.screenshot(path=SCREENS / f"{size}-{name}.png", full_page=True)
+    compress(SCREENS / f"{size}-{name}.png")
     assert errors == [], f"{name}@{size}: {errors}"
 
 

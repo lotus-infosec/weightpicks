@@ -8,7 +8,7 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.e2e.conftest import RichServer
-from tests.e2e.test_layout import SCREENS
+from tests.e2e.test_layout import SCREENS, compress
 from tests.e2e.test_system_appearance import log_in
 
 pytestmark = pytest.mark.e2e
@@ -18,6 +18,7 @@ def shot(page: Page, name: str) -> None:
     SCREENS.mkdir(parents=True, exist_ok=True)
     page.wait_for_timeout(400)  # let the sheet and check-mark animations finish
     page.screenshot(path=SCREENS / f"{name}.png")
+    compress(SCREENS / f"{name}.png")
 
 
 @pytest.mark.parametrize(
