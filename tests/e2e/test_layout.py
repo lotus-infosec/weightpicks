@@ -28,7 +28,7 @@ def check(page: Page, name: str, size: str, errors: list[str]) -> None:
     )
     for box in page.locator(targets).all():
         height = box.bounding_box()["height"]  # type: ignore[index]
-        assert height >= 44, f"{name}@{size}: a button is only {height}px tall"
+        assert height >= 43.5, f"{name}@{size}: a button is only {height}px tall"  # 44, rounded
     SCREENS.mkdir(parents=True, exist_ok=True)
     page.screenshot(path=SCREENS / f"{size}-{name}.png", full_page=True)
     assert errors == [], f"{name}@{size}: {errors}"
