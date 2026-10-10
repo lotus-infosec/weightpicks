@@ -131,13 +131,14 @@ def test_review_queue_approve_reject(admin: tuple[TestClient, World]) -> None:
     assert m.blurb == "Last week set the bar for steps."
     again = post(c, "/admin/props", f"/admin/props/ai/{proposal_id}/approve")
     assert again.status_code == 409 and "no longer waiting" in again.text
-    # Players see the blurb under the code-built title, on the board and the market page.
+    # Players see the blurb under the code-built title: in the bet sheet (carried on the
+    # board row) and on the market page.
     player = web.client(create_app(w.settings, domain_clock=w.clock))
     with player:
         web.register(player, auth.rotate_registration_code(w.engine, SystemClock()))
         board = player.get("/?tab=prop").text
         page = player.get(f"/markets/{m.id}").text
-    assert m.title in board and 'data-testid="blurb">Last week set the bar for steps.' in board
+    assert m.title in board and 'data-blurb="Last week set the bar for steps."' in board
     assert 'class="muted blurb">Last week set the bar for steps.' in page
     with immediate(w.engine) as conn:
         conn.execute(update(AiProposal).values(status="pending", market_id=None))

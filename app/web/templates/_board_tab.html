@@ -1,4 +1,4 @@
-{% from "_macros.html" import side_buttons %}
+{% from "_macros.html" import market_row %}
 {# The tabs are part of the swapped fragment so the active tab follows the content. #}
 <div class="tabs" role="tablist">
   {% for t in tabs %}
@@ -36,19 +36,21 @@
   {% endfor %}
 </div>
 {% else %}
-{% if not cards %}<p class="muted empty">No open {{ tab }} markets right now. New lines drop at 11:00.</p>{% endif %}
-<div class="cards">
-  {% for c in cards %}
-  <article class="market" data-testid="market-{{ c.market_id }}" data-metric="{{ c.metric }}">
-    <header>
-      <a href="/markets/{{ c.market_id }}" class="market-title">{{ c.title }}</a>
-      {% if c.provisional %}<span class="badge">provisional</span>{% endif %}
-    </header>
-    {% if c.blurb %}<p class="muted small blurb" data-testid="blurb">{{ c.blurb }}</p>{% endif %}
-    {% if c.line_x10 is not none %}<p class="market-line">O/U <strong>{{ c.line_x10 | line(c.metric) }}</strong></p>{% else %}<p class="market-line">Yes or no</p>{% endif %}
-    {{ side_buttons(c) }}
-    <p class="muted small">Locks {{ c.lock_at | local_time }}</p>
-  </article>
-  {% endfor %}
+{% set labels = {"daily": "Daily", "weekly": "Weekly", "monthly": "Monthly", "prop": "Props", "future": "Futures"} %}
+{% if not groups %}
+<div class="empty-state" data-testid="board-empty">
+  <strong>No open markets right now</strong>
+  <p class="muted">New lines drop every day at 11:00. Meanwhile, see how your bets are doing.</p>
+  <div class="empty-actions"><a class="secondary" href="/bets/mine">My bets</a><a class="secondary" href="/stats">Stats</a></div>
 </div>
+{% endif %}
+{% for timeframe, cards in groups %}
+<section class="market-group" data-testid="group-{{ timeframe }}">
+{% if tab == "all" %}<h2 class="group-title">{{ labels[timeframe] }}</h2>{% endif %}
+{% if not cards %}<p class="muted empty">No open {{ timeframe }} markets right now. New lines drop at 11:00.</p>{% endif %}
+<div class="cards">
+  {% for c in cards %}{{ market_row(c) }}{% endfor %}
+</div>
+</section>
+{% endfor %}
 {% endif %}

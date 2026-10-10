@@ -17,7 +17,7 @@
   <p class="muted">Every open bet is refunded and the market never settles. This can't be undone.</p>
   <form method="post" action="/admin/markets/{{ card.market_id }}/void" class="stack">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <label>Reason <input type="text" name="reason" required maxlength="200"></label>
+    <label>Reason <span class="muted small">(players see it in My Bets and Discord)</span> <input type="text" name="reason" required maxlength="200"></label>
     {{ password() }}
     <button type="submit" class="danger-button">Void market</button>
   </form>

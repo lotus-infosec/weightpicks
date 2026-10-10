@@ -17,11 +17,11 @@ from tests.integration.test_bets_settlement import player
 from tests.integration.world import World, create_admin
 
 
-def standings(w: World) -> list[tuple[str, int, int]]:
+def standings(w: World) -> list[tuple[str, int, int, int]]:
     with w.engine.connect() as conn:
         season = ledger.active_season_id(conn)
         return [
-            (s.display_name, s.pnl_cents, s.balance_cents)
+            (s.display_name, s.pnl_cents, s.wins, s.open_bets)
             for s in leaderboard.standings(conn, season)
         ]
 

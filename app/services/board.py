@@ -4,7 +4,7 @@ Read-only queries; nothing here writes. The feed and market pages show display n
 only, never emails (bets are public by design).
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from typing import Any
 
@@ -13,6 +13,7 @@ from sqlalchemy import Connection, case, select
 from app.domain import parlay
 from app.domain.ledger import AccountKind
 from app.domain.markets import MarketStatus
+from app.domain.results import result_reason
 from app.models import (
     Account,
     Bet,
@@ -24,6 +25,7 @@ from app.models import (
     Settlement,
     User,
 )
+from app.services import leaderboard
 from app.services.ledger import active_season_id
 from app.services.pools import entries_by_pool
 
@@ -62,6 +64,7 @@ class LegRow:
     american: int
     line_x10: int | None
     status: str
+    reason: str | None = None  # why it was voided or pushed (issue #44)
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +84,9 @@ class BetRow:
     placed_at: datetime
     kind: str = "single"
     legs: tuple[LegRow, ...] = ()
+    reason: str | None = None  # a single's void or push reason; parlays carry it per leg
+    user_id: int = 0
+    hidden: bool = False  # another player's open bet: only who and which market(s)
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,6 +182,7 @@ def _bets(conn: Connection, *conditions: Any, limit: int = 50) -> list[BetRow]:
     rows = conn.execute(
         select(
             Bet.id.label("bet_id"),
+            Bet.user_id,
             case((User.status == "banned", "Removed player"), else_=User.display_name).label(
                 "display_name"
             ),
@@ -192,9 +199,13 @@ def _bets(conn: Connection, *conditions: Any, limit: int = 50) -> list[BetRow]:
             Bet.payout_cents,
             Bet.placed_at,
             Bet.kind,
+            Market.void_reason,
+            Market.void_note,
+            Settlement.outcome,
         )
         .join(BetLeg, BetLeg.bet_id == Bet.id)
         .join(Market, Market.id == BetLeg.market_id)
+        .outerjoin(Settlement, Settlement.market_id == Market.id)
         .join(Selection, Selection.id == BetLeg.selection_id)
         .join(User, User.id == Bet.user_id)
         .where(Bet.id.in_(wanted))
@@ -207,7 +218,21 @@ def _bets(conn: Connection, *conditions: Any, limit: int = 50) -> list[BetRow]:
     for legs in grouped.values():
         first = legs[0]
         leg_rows = tuple(
-            LegRow(r.market_id, r.title, r.metric, r.side, r.american, r.line_x10, r.leg_status)
+            LegRow(
+                r.market_id,
+                r.title,
+                r.metric,
+                r.side,
+                r.american,
+                r.line_x10,
+                r.leg_status,
+                result_reason(
+                    r.leg_status,
+                    r.void_reason,
+                    r.void_note,
+                    (r.outcome or {}).get("reason"),
+                ),
+            )
             for r in legs
         )
         is_parlay = first.kind == "parlay"
@@ -230,6 +255,8 @@ def _bets(conn: Connection, *conditions: Any, limit: int = 50) -> list[BetRow]:
                 placed_at=first.placed_at,
                 kind=first.kind,
                 legs=leg_rows,
+                reason=None if is_parlay else leg_rows[0].reason,
+                user_id=first.user_id,
             )
         )
     return out
@@ -242,15 +269,39 @@ def my_bets(conn: Connection, user_id: int, season_id: int | None = None) -> lis
     return _bets(conn, Bet.user_id == user_id, Bet.season_id == season_id, limit=200)
 
 
-def feed(conn: Connection, limit: int = 50) -> list[BetRow]:
-    return _bets(conn, Bet.season_id == active_season_id(conn), limit=limit)
+def private(rows: list[BetRow], viewer_id: int | None) -> list[BetRow]:
+    """Another player's bet that hasn't settled keeps only who and which market(s): no
+    side, line, odds, stake or return (issue #42), so nobody can copy an open bet.
+    Settled bets and the viewer's own show in full; `viewer_id=None` (the admin) sees all."""
+    if viewer_id is None:
+        return rows
+    return [
+        replace(
+            r,
+            side="",
+            american=0,
+            line_x10=None,
+            stake_cents=0,
+            potential_payout_cents=0,
+            legs=tuple(replace(leg, side="", american=0, line_x10=None) for leg in r.legs),
+            hidden=True,
+        )
+        if r.status == "open" and r.user_id != viewer_id
+        else r
+        for r in rows
+    ]
 
 
-def market_bets(conn: Connection, market_id: int) -> list[BetRow]:
-    return _bets(conn, BetLeg.market_id == market_id, limit=500)
+def feed(conn: Connection, viewer_id: int | None, limit: int = 50) -> list[BetRow]:
+    return private(_bets(conn, Bet.season_id == active_season_id(conn), limit=limit), viewer_id)
+
+
+def market_bets(conn: Connection, market_id: int, viewer_id: int | None) -> list[BetRow]:
+    return private(_bets(conn, BetLeg.market_id == market_id, limit=500), viewer_id)
 
 
 def wallet(conn: Connection, user_id: int) -> Wallet | None:
+    """The viewer's balance and their settled P&L (the leaderboard's figure)."""
     season = active_season_id(conn)
     row = conn.execute(
         select(Account.balance_cents, Account.pnl_cents).where(
@@ -259,7 +310,10 @@ def wallet(conn: Connection, user_id: int) -> Wallet | None:
             Account.season_id == season,
         )
     ).one_or_none()
-    return None if row is None else Wallet(row.balance_cents, row.pnl_cents)
+    if row is None or season is None:
+        return None
+    pnl = leaderboard.settled_pnl(conn, season, user_id=user_id).get(user_id, 0)
+    return Wallet(row.balance_cents, pnl)
 
 
 # ---- special events (pools) --------------------------------------------------------
