@@ -173,7 +173,7 @@ def change(engine: Engine, clock: Clock, actor: audit.Actor | None, zone: str) -
         live = conn.execute(select(Market.id).where(Market.status.in_(LIVE)).order_by(Market.id))
         market_ids = list(live.scalars())
         for market_id in market_ids:
-            admin.void_open_market(conn, clock, market_id, REASON, announce=False)
+            admin.void_open_market(conn, clock, market_id, "timezone_changed", announce=False)
         pending = list(
             conn.execute(
                 select(Market.id).where(Market.status == MarketStatus.PENDING_APPROVAL.value)

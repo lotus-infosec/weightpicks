@@ -13,7 +13,7 @@ from sqlalchemy import Engine, select
 
 from app.core.clock import SystemClock
 from app.core.migrations import upgrade_to_head
-from app.models import LedgerEntry
+from app.models import Account, LedgerEntry
 from app.services import backups, leaderboard, ledger, maintenance, sim
 from tests.season.harness import SeasonRun, run_season
 
@@ -23,20 +23,25 @@ pytestmark = pytest.mark.season
 @dataclass
 class Drill:
     run: SeasonRun
-    at_backup: list[tuple[int, str, int, int]]
+    at_backup: list[tuple[int, str, int, int, int, int]]
     entries_at_backup: int
-    after_week: list[tuple[int, str, int, int]]
-    restored: list[tuple[int, str, int, int]]
+    after_week: list[tuple[int, str, int, int, int, int]]
+    restored: list[tuple[int, str, int, int, int, int]]
     entries_restored: int
     applied: str
     backup_name: str
 
 
-def board(engine: Engine) -> list[tuple[int, str, int, int]]:
+def board(engine: Engine) -> list[tuple[int, str, int, int, int, int]]:
     with engine.connect() as conn:
         season = ledger.active_season_id(conn)
+        balances = dict(
+            conn.execute(
+                select(Account.user_id, Account.balance_cents).where(Account.season_id == season)
+            ).all()
+        )
         return [
-            (s.user_id, s.display_name, s.pnl_cents, s.balance_cents)
+            (s.user_id, s.display_name, s.pnl_cents, s.wins, s.open_bets, balances[s.user_id])
             for s in leaderboard.standings(conn, season)
         ]
 
@@ -80,7 +85,8 @@ def test_restore_reproduces_the_leaderboard(drill: Drill) -> None:
         ("restored", drill.restored),
     ):
         print(
-            f"{label:>10}: " + ", ".join(f"{n} {p / 100:+.2f}/{b / 100:.2f}" for _, n, p, b in rows)
+            f"{label:>10}: "
+            + ", ".join(f"{n} {p / 100:+.2f}/{b / 100:.2f}" for _, n, p, _, _, b in rows)
         )
     assert drill.applied == "restored"
     assert drill.after_week != drill.at_backup  # the extra week really changed things

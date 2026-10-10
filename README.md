@@ -8,7 +8,26 @@
 
 Self-hosted, fake-money, pick'em-style betting on one person's Garmin weigh-ins and health stats. Friends and family bet against an automated house; lines come from math, bets settle from Garmin data, Discord carries the trash talk.
 
-> **Status:** v1 release candidate. Feature-complete, security-reviewed, with an installer for Ubuntu and published multi-arch images.
+> **Status:** v1 is released: security-reviewed, with an installer for Ubuntu and published multi-arch images.
+
+## Screenshots
+
+Mobile-first: everything a player does sits in thumb reach. These come from the test instance (simulated weigh-ins, made-up players) and are refreshed by `tests/e2e/test_readme_screens.py`.
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/assets/screens/board.png" width="200" alt="The board: every open market as a compact row with its over/under line and lock time"><br><sub><b>Board</b>: every open market, grouped</sub></td>
+    <td align="center"><img src="docs/assets/screens/bet-sheet.png" width="200" alt="The bet sheet: over and under toggles, quick stakes and the return"><br><sub><b>Bet sheet</b>: pick a side, tap a stake</sub></td>
+    <td align="center"><img src="docs/assets/screens/parlay.png" width="200" alt="A three-leg parlay with combined odds"><br><sub><b>Parlays</b>: combine picks</sub></td>
+    <td align="center"><img src="docs/assets/screens/bet-placed.png" width="200" alt="The bet placed confirmation"><br><sub><b>Placed</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/assets/screens/my-bets.png" width="200" alt="My bets: balance, profit and loss, open and settled bets"><br><sub><b>My bets</b></sub></td>
+    <td align="center"><img src="docs/assets/screens/leaderboard.png" width="200" alt="The leaderboard ranked by profit and loss from finished bets, with wins"><br><sub><b>Leaderboard</b>: settled P&amp;L and wins</sub></td>
+    <td align="center"><img src="docs/assets/screens/stats.png" width="200" alt="Stats: weigh-ins with the trend line the odds use"><br><sub><b>Stats</b>: the trend behind the lines</sub></td>
+    <td align="center"><img src="docs/assets/screens/admin.png" width="200" alt="The admin markets list"><br><sub><b>Admin</b>: markets, players, bank and more</sub></td>
+  </tr>
+</table>
 
 ## Quick start
 
@@ -30,7 +49,7 @@ This project is **entirely vibe-coded with [Claude Code](https://claude.com/clau
 
 - **Markets:** daily, weekly and monthly over/unders on weigh-ins and activity (steps, active and intensity minutes, calories, workouts), priced by a line engine (trend, noise, Monte Carlo) with vig. Props, futures and parlays; special-event pools.
 - **Settlement:** automatic from Garmin data (GarminDB), never on stale data; a missed weigh-in pushes. Goal Reached settles or refunds everything and freezes the season; a new season carries balances over.
-- **Players:** invite code, bankroll, daily allowance, busts and bailouts, leaderboard, stats.
+- **Players:** invite code, bankroll, daily allowance, busts and bailouts, a leaderboard ranked by profit and loss from finished bets (with wins), stats. Other players' open bets show who and which market, never the side or stake, until they settle.
 - **Admin:** dashboard, markets, players, bank and economy, props and the AI review queue, special events, seasons, System (health, backups, restore, factory reset), Appearance, Integrations, audit log.
 - **Integrations, all optional:** Discord webhooks, Cloudflare Workers AI (only packages props and writes copy; never sets odds or settles), SMTP for password reset.
 

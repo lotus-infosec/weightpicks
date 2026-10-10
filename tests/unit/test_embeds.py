@@ -108,7 +108,8 @@ def test_bet_won_text_and_links() -> None:
     assert "collected $47.73 on a $25.00 bet (+$22.73)" in embed["description"]
     assert embed["url"] == "https://picks.example.invalid/markets/7"
     placed = embeds.build("bets_placed", PAYLOADS["bets_placed"], ctx())["embeds"][0]
-    assert "$25.00 on **UNDER -0.5** at -110" in placed["description"]
+    assert "placed a bet on" in placed["description"]  # issue #42: no side or stake
+    assert "$25" not in placed["description"] and "UNDER" not in placed["description"]
 
 
 def test_settlement_push_and_void() -> None:
@@ -147,7 +148,7 @@ def test_parlay_posts() -> None:
     )
     assert (
         "3-leg parlay" in placed["embeds"][0]["description"]
-        and "+596" in placed["embeds"][0]["description"]
+        and "+596" not in placed["embeds"][0]["description"]
     )
     won = embeds.build(
         "bet_results",
