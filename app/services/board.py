@@ -13,7 +13,7 @@ from sqlalchemy import Connection, case, select
 from app.domain import parlay
 from app.domain.ledger import AccountKind
 from app.domain.markets import MarketStatus
-from app.domain.results import result_reason
+from app.domain.results import locked_reason, result_reason
 from app.models import (
     Account,
     Bet,
@@ -53,6 +53,7 @@ class MarketCard:
     correlation_keys: tuple[str, ...] = ()
     blurb: str | None = None  # AI flavour text; the title is the binding terms
     origin: str = "core"
+    lock_note: str | None = None  # the admin locked it early, and why (issue #60)
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +96,16 @@ class Wallet:
     pnl_cents: int
 
 
+def _leg_reason(r: Any) -> str | None:
+    """Why a leg is where it is: locked early by the admin (#60), voided or pushed
+    (#44); a parlay leg voided only because its parlay was (#69) defers to the bet."""
+    if r.leg_status == "open" and r.lock_note:
+        return locked_reason(r.lock_note)
+    if r.kind == "parlay" and r.leg_status == "void" and not r.void_reason:
+        return None
+    return result_reason(r.leg_status, r.void_reason, r.void_note, (r.outcome or {}).get("reason"))
+
+
 def _parlay_reason(status: str, legs: list[Any], rows: tuple[LegRow, ...]) -> str | None:
     """A voided parlay says which leg's market was voided (issue #69: one voided leg
     voids the whole parlay); otherwise parlays carry reasons per leg."""
@@ -123,6 +134,7 @@ def _cards(conn: Connection, *conditions: Any) -> list[MarketCard]:
             Market.correlation_keys,
             Market.blurb,
             Market.origin,
+            Market.lock_note,
         )
         .join(OddsVersion, (OddsVersion.market_id == Market.id) & OddsVersion.is_current)
         .where(*conditions)
@@ -152,6 +164,7 @@ def _cards(conn: Connection, *conditions: Any) -> list[MarketCard]:
             correlation_keys=tuple(r.correlation_keys or ()),
             blurb=r.blurb,
             origin=r.origin,
+            lock_note=r.lock_note,
         )
         for r in rows
     ]
@@ -212,6 +225,7 @@ def _bets(conn: Connection, *conditions: Any, limit: int = 50) -> list[BetRow]:
             Bet.kind,
             Market.void_reason,
             Market.void_note,
+            Market.lock_note,
             Settlement.outcome,
         )
         .join(BetLeg, BetLeg.bet_id == Bet.id)
@@ -237,14 +251,7 @@ def _bets(conn: Connection, *conditions: Any, limit: int = 50) -> list[BetRow]:
                 r.american,
                 r.line_x10,
                 r.leg_status,
-                None
-                if r.kind == "parlay" and r.leg_status == "void" and not r.void_reason
-                else result_reason(  # a parlay leg voided with its parlay: the bet says why
-                    r.leg_status,
-                    r.void_reason,
-                    r.void_note,
-                    (r.outcome or {}).get("reason"),
-                ),
+                _leg_reason(r),
             )
             for r in legs
         )

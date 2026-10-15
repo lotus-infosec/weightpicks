@@ -11,6 +11,7 @@
     {% if card.blurb %}<p class="muted blurb">{{ card.blurb }}</p>{% endif %}
     <div class="hero-line">{% if card.line_x10 is not none %}<span class="mrow-label">O/U</span><span class="hero-value num">{{ card.line_x10 | line(card.metric) }}</span>{% else %}<span class="hero-value">Yes or no</span>{% endif %}</div>
     <p class="muted small">{{ "Locks" if open else "Locked" }} {{ card.lock_at | local_time }}</p>
+    {% if card.lock_note %}<p class="bet-reason" data-testid="lock-note">{{ card.lock_note | locked_reason }}</p>{% endif %}
     {% if outcome %}
     <p class="hero-result" data-testid="market-result">Result <strong>{{ results.get(outcome.reason, outcome.reason) }}</strong>{% if outcome.value_x10 is not none %} · actual {{ outcome.value_x10 | line(card.metric) }}{% endif %}</p>
     {% endif %}

@@ -97,7 +97,7 @@ This covers one self-hosted WeightPicks instance: a Docker Compose stack (`web` 
 
 | | Threat | Mitigation |
 | --- | --- | --- |
-| E | Stolen admin session does damage | 12 h sessions. Destructive and money actions (void, ban, bailout, adjust, restore, reset, secrets, logo) ask for the password again. Factory reset also needs the instance name typed. |
+| E | Stolen admin session does damage | 12 h sessions. Destructive and money actions (void, lock a market early, ban, bailout, adjust, restore, reset, secrets, logo) ask for the password again. Factory reset also needs the instance name typed. |
 | R | — | Everything is in the audit log. |
 
 ### 9. Supply chain and build

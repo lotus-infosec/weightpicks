@@ -18,7 +18,7 @@ from app.domain import setup as setup_steps
 from app.domain.economy import Economy
 from app.domain.ledger import AccountKind, InsufficientFunds
 from app.domain.markets import MarketStatus
-from app.domain.results import result_reason
+from app.domain.results import locked_reason, result_reason
 from app.models import (
     Account,
     BannedEmail,
@@ -211,6 +211,51 @@ def void_market(engine: Engine, clock: Clock, actor: Actor, market_id: int, reas
         busts.check(conn, clock, market.season_id)
     log.info("market_voided", market_id=market_id, bets=voided)
     return voided
+
+
+def lock_market(engine: Engine, clock: Clock, actor: Actor, market_id: int, note: str) -> None:
+    """Lock an open market now, before its lock time, with a reason players see (issue
+    #60). Bets already placed stay and settle as usual; a locked market never reopens."""
+    note = note.strip()[:200]
+    if not note:
+        raise AdminError("reason_required", "Give a reason for locking.")
+    now = clock.now()
+    with immediate(engine) as conn:
+        market = conn.execute(
+            select(Market.status, Market.title, Market.lock_at).where(Market.id == market_id)
+        ).one_or_none()
+        if market is None:
+            raise AdminError("not_found", "No such market.")
+        if market.status != MarketStatus.OPEN.value:
+            raise AdminError("not_open", f"A {market.status} market can't be locked.")
+        set_status(conn, [market_id], MarketStatus.OPEN, MarketStatus.LOCKED, now)
+        lock_at = min(market.lock_at, now)
+        conn.execute(
+            update(Market).where(Market.id == market_id).values(lock_note=note, lock_at=lock_at)
+        )
+        audit.record(
+            conn,
+            clock,
+            actor,
+            action="market.lock",
+            target=("market", market_id),
+            before={"status": market.status, "lock_at": market.lock_at.isoformat()},
+            after={"status": "locked", "lock_at": lock_at.isoformat()},
+            reason=note,
+        )
+        enqueue(
+            conn,
+            clock,
+            category=Category.MARKET_SETTLEMENTS,
+            payload={
+                "market_id": market_id,
+                "title": market.title,
+                "result": "locked",
+                "reason": locked_reason(note),
+            },
+            dedupe_key=f"market_locked:{market_id}",
+        )
+    log.info("market_locked_early", market_id=market_id)
 
 
 # ---- users --------------------------------------------------------------------------------
