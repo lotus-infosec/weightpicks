@@ -51,6 +51,9 @@ def test_board_sheet_parlay_and_placed(
     weight.click()
     sheet = page.get_by_test_id("slip")
     expect(sheet).to_be_visible()
+    # Issue #67: each side says what it means, and which weigh-ins are compared.
+    expect(sheet.get_by_test_id("market-explain")).to_contain_text("weigh-in to the")
+    expect(sheet.locator(".toggle-hint").first).to_contain_text(re.compile(r"^(Lose|Gain)"))
     sheet.locator("button.toggle").first.click()
     expect(sheet.locator("button.toggle").first).to_have_attribute("aria-pressed", "true")
     sheet.get_by_role("button", name="$10", exact=True).click()

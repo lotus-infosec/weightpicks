@@ -53,6 +53,7 @@ class MarketCard:
     correlation_keys: tuple[str, ...] = ()
     blurb: str | None = None  # AI flavour text; the title is the binding terms
     origin: str = "core"
+    window: tuple[date, date] | None = None  # the days it covers (issue #67: explain it)
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +113,8 @@ def _cards(conn: Connection, *conditions: Any) -> list[MarketCard]:
             Market.correlation_keys,
             Market.blurb,
             Market.origin,
+            Market.window_start,
+            Market.window_end,
         )
         .join(OddsVersion, (OddsVersion.market_id == Market.id) & OddsVersion.is_current)
         .where(*conditions)
@@ -141,6 +144,7 @@ def _cards(conn: Connection, *conditions: Any) -> list[MarketCard]:
             correlation_keys=tuple(r.correlation_keys or ()),
             blurb=r.blurb,
             origin=r.origin,
+            window=(r.window_start, r.window_end),
         )
         for r in rows
     ]

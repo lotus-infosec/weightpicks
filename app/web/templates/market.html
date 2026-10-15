@@ -10,6 +10,8 @@
     <h1 class="hero-title">{{ card.title }}</h1>
     {% if card.blurb %}<p class="muted blurb">{{ card.blurb }}</p>{% endif %}
     <div class="hero-line">{% if card.line_x10 is not none %}<span class="mrow-label">O/U</span><span class="hero-value num">{{ card.line_x10 | line(card.metric) }}</span>{% else %}<span class="hero-value">Yes or no</span>{% endif %}</div>
+    {% set explain = card | market_explain %}{% if explain %}<p class="muted small" data-testid="market-explain">{{ explain }}</p>{% endif %}
+    {% if card | side_hint("over") %}<ul class="plain side-hints small" data-testid="side-hints">{% for s in card.sides %}<li><strong>{{ s.side | capitalize }}</strong>: {{ card | side_hint(s.side) }}</li>{% endfor %}</ul>{% endif %}
     <p class="muted small">{{ "Locks" if open else "Locked" }} {{ card.lock_at | local_time }}</p>
     {% if outcome %}
     <p class="hero-result" data-testid="market-result">Result <strong>{{ results.get(outcome.reason, outcome.reason) }}</strong>{% if outcome.value_x10 is not none %} · actual {{ outcome.value_x10 | line(card.metric) }}{% endif %}</p>
