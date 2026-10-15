@@ -97,6 +97,27 @@ class Wallet:
     pnl_cents: int
 
 
+def _leg_reason(r: Any) -> str | None:
+    """Why a leg is where it is: locked early by the admin (#60), voided or pushed
+    (#44); a parlay leg voided only because its parlay was (#69) defers to the bet."""
+    if r.leg_status == "open" and r.lock_note:
+        return locked_reason(r.lock_note)
+    if r.kind == "parlay" and r.leg_status == "void" and not r.void_reason:
+        return None
+    return result_reason(r.leg_status, r.void_reason, r.void_note, (r.outcome or {}).get("reason"))
+
+
+def _parlay_reason(status: str, legs: list[Any], rows: tuple[LegRow, ...]) -> str | None:
+    """A voided parlay says which leg's market was voided (issue #69: one voided leg
+    voids the whole parlay); otherwise parlays carry reasons per leg."""
+    if status != "void":
+        return None
+    for raw, row in zip(legs, rows, strict=True):
+        if raw.void_reason and row.reason:
+            return f"{row.reason}. The whole parlay was refunded."
+    return None
+
+
 def _cards(conn: Connection, *conditions: Any) -> list[MarketCard]:
     rows = conn.execute(
         select(
@@ -234,14 +255,7 @@ def _bets(conn: Connection, *conditions: Any, limit: int = 50) -> list[BetRow]:
                 r.american,
                 r.line_x10,
                 r.leg_status,
-                locked_reason(r.lock_note)
-                if r.leg_status == "open" and r.lock_note
-                else result_reason(
-                    r.leg_status,
-                    r.void_reason,
-                    r.void_note,
-                    (r.outcome or {}).get("reason"),
-                ),
+                _leg_reason(r),
             )
             for r in legs
         )
@@ -265,7 +279,9 @@ def _bets(conn: Connection, *conditions: Any, limit: int = 50) -> list[BetRow]:
                 placed_at=first.placed_at,
                 kind=first.kind,
                 legs=leg_rows,
-                reason=None if is_parlay else leg_rows[0].reason,
+                reason=_parlay_reason(first.status, legs, leg_rows)
+                if is_parlay
+                else leg_rows[0].reason,
                 user_id=first.user_id,
             )
         )

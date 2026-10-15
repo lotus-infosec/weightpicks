@@ -32,7 +32,7 @@
     <p>Everything open was priced on {{ tz_preview.current }}'s days, so it's <strong>pushed and refunded</strong>:</p>
     <ul class="plain stack">
       <li>{{ tz_preview.markets }} market(s): {{ tz_preview.bets }} bet(s), {{ tz_preview.stake_cents | money }} back to players</li>
-      {% if tz_preview.parlays %}<li>{{ tz_preview.parlays }} parlay(s) lose those legs and are re-checked on the rest</li>{% endif %}
+      {% if tz_preview.parlays %}<li>{{ tz_preview.parlays }} parlay(s) with a leg here: voided, {{ tz_preview.parlay_cents | money }} back to players</li>{% endif %}
       {% if tz_preview.pools %}<li>{{ tz_preview.pools }} event(s): {{ tz_preview.entries }} entr{{ "y" if tz_preview.entries == 1 else "ies" }}, {{ tz_preview.entry_cents | money }} back</li>{% endif %}
     </ul>
     <p class="muted small">Markets whose results are already in settle normally first. Players get a notice in Discord.</p>

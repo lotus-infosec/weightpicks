@@ -33,7 +33,7 @@ Set the goal during `/setup`, or for later seasons when you start one.
 **What it does, in order:**
 1. **Freezes** the instance first, so no bet can slip in.
 2. **Settles** every market the data already decides. That includes the goal day's daily line, and any milestone the goal weigh-in crossed.
-3. **Voids and refunds** everything that can't be decided yet: weekly and monthly windows still running, futures, and later props. A parlay drops those legs and resolves on the rest.
+3. **Voids and refunds** everything that can't be decided yet: weekly and monthly windows still running, futures, and later props. A parlay with one of those legs is voided and refunded in full.
 4. **Settles** pots whose target day is complete and **refunds** the others.
 5. **Posts Goal Reached** to Discord, with the start, the goal, the days taken and the top three.
 

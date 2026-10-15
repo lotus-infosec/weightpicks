@@ -9,7 +9,7 @@ from datetime import time, timedelta
 from typing import Any
 
 import structlog
-from sqlalchemy import Connection, Engine, insert, select, update
+from sqlalchemy import Connection, Engine, func, insert, select, update
 
 from app.core.clock import Clock
 from app.core.db import immediate
@@ -36,7 +36,6 @@ from app.services import secrets as secret_store
 from app.services.audit import Actor
 from app.services.markets import set_status
 from app.services.outbox import Category, enqueue
-from app.services.settlement import reevaluate_parlay
 
 log = structlog.get_logger()
 
@@ -75,8 +74,11 @@ def _account(conn: Connection, user_id: int) -> tuple[int, int, int]:
     return row.id, row.balance_cents, row.season_id
 
 
-def _void_bets(conn: Connection, clock: Clock, bet_rows: list[Any], reason: str) -> int:
-    """Void and refund open bets (single legs); outbox one result per bet."""
+def _void_bets(
+    conn: Connection, clock: Clock, bet_rows: list[Any], reason: str, *, kind: str = "single"
+) -> int:
+    """Void and refund open bets, every open leg with them; outbox one result per bet.
+    A parlay's legs that already won or pushed keep their result for the record."""
     for bet in bet_rows:
         ledger.refund(
             conn,
@@ -86,24 +88,32 @@ def _void_bets(conn: Connection, clock: Clock, bet_rows: list[Any], reason: str)
             idempotency_key=f"bet:{bet.id}:refund",
             ref_id=bet.id,
         )
-        conn.execute(update(BetLeg).where(BetLeg.bet_id == bet.id).values(status="void"))
+        conn.execute(
+            update(BetLeg)
+            .where(BetLeg.bet_id == bet.id, BetLeg.status == "open")
+            .values(status="void")
+        )
         conn.execute(
             update(Bet)
             .where(Bet.id == bet.id)
             .values(status="void", payout_cents=bet.stake_cents, settled_at=clock.now())
         )
+        payload = {
+            "bet_id": bet.id,
+            "user_id": bet.user_id,
+            "result": "void",
+            "reason": reason,
+            "stake_cents": bet.stake_cents,
+            "payout_cents": bet.stake_cents,
+        }
+        if kind == "parlay":
+            legs = conn.execute(select(func.count()).where(BetLeg.bet_id == bet.id)).scalar_one()
+            payload |= {"kind": "parlay", "legs": int(legs)}
         enqueue(
             conn,
             clock,
-            category=Category.BET_RESULTS,
-            payload={
-                "bet_id": bet.id,
-                "user_id": bet.user_id,
-                "result": "void",
-                "reason": reason,
-                "stake_cents": bet.stake_cents,
-                "payout_cents": bet.stake_cents,
-            },
+            category=Category.PARLAY_RESULTS if kind == "parlay" else Category.BET_RESULTS,
+            payload=payload,
             dedupe_key=f"bet_result:{bet.id}",
         )
     return len(bet_rows)
@@ -139,17 +149,20 @@ def void_open_market(
         .order_by(Bet.id)
     ).all()
     voided = _void_bets(conn, clock, list(bets), reason)
-    # In a parlay only this leg is voided: it drops out and the parlay is re-evaluated.
-    parlay_legs = conn.execute(
-        select(BetLeg.id, BetLeg.bet_id)
-        .join(Bet, Bet.id == BetLeg.bet_id)
-        .where(BetLeg.market_id == market_id, BetLeg.status == "open", Bet.kind == "parlay")
-        .order_by(BetLeg.id)
+    # A voided leg voids its whole parlay and refunds the stake (issue #69); a pushed leg
+    # still just drops out (settlement). Parlays already decided are left alone.
+    parlays = conn.execute(
+        select(Bet.id, Bet.account_id, Bet.user_id, Bet.stake_cents)
+        .join(BetLeg, BetLeg.bet_id == Bet.id)
+        .where(
+            BetLeg.market_id == market_id,
+            BetLeg.status == "open",
+            Bet.kind == "parlay",
+            Bet.status == "open",
+        )
+        .order_by(Bet.id)
     ).all()
-    for leg_id, bet_id in parlay_legs:
-        conn.execute(update(BetLeg).where(BetLeg.id == leg_id).values(status="void"))
-        reevaluate_parlay(conn, clock, bet_id, clock.now())
-    voided += len(parlay_legs)
+    voided += _void_bets(conn, clock, list(parlays), reason, kind="parlay")
     set_status(conn, [market_id], MarketStatus(market.status), MarketStatus.VOIDED, clock.now())
     if not announce:
         return voided

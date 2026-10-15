@@ -48,7 +48,7 @@ every post, even if a player picks such a display name.
 | Weekly standings | Monday 09:00: top 10 by profit and loss from finished bets and events, with last week's change and wins |
 | Busts and badges | A player goes bust |
 | Admin alerts (private) | Sync failures, stale markets, posts that could not be delivered |
-| Parlay results | A parlay wins or loses once its legs are in (a refunded parlay is a bet result) |
+| Parlay results | A parlay wins or loses once its legs are in, or is refunded because a leg was voided |
 | Special events | A special event opens, settles or is voided |
 | Stat updates and hype | AI-written stat updates, while hype is on (docs/ai.md) |
 | Goal reached | The goal weight is hit and the season ends |
