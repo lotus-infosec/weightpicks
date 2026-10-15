@@ -11,8 +11,14 @@ from sqlalchemy import Connection, select
 from app.domain.lines import SIGMA_WINDOW_DAYS, WINDOW_DAYS, change_distribution, fit_weight
 from app.domain.units import Unit
 from app.models import Observation, Season
+from app.providers.base import WORKOUT_MIN_MINUTES
 from app.services.ledger import active_season_id
-from app.services.observations import activity_counts, canonical_weigh_ins, latest_totals
+from app.services.observations import (
+    activity_counts,
+    canonical_weigh_ins,
+    latest_totals,
+    workouts,
+)
 
 RANGES = (14, 30, 90)
 PROJECTION_DAYS = 7
@@ -21,7 +27,7 @@ METRIC_LABELS = {
     "active_minutes": "Active minutes",
     "intensity_minutes": "Intensity minutes",
     "kcal": "Active calories",
-    "workouts": "Workouts (10+ min)",
+    "workouts": "Workouts",
 }
 
 
@@ -124,16 +130,30 @@ def _metric_series(
         for d in days:
             window = [daily[x] for x in _days(d - timedelta(days=6), d) if x in daily]
             avg.append(_round(sum(window) / len(window)) if window else None)
-        out.append(
-            {
-                "metric": metric,
-                "label": METRIC_LABELS[metric],
-                "values": [daily.get(d) for d in days],
-                "avg7": avg,
-                "labels": [d.isoformat() for d in days],
-            }
-        )
+        item: dict[str, Any] = {
+            "metric": metric,
+            "label": METRIC_LABELS[metric],
+            "values": [daily.get(d) for d in days],
+            "avg7": avg,
+            "labels": [d.isoformat() for d in days],
+        }
+        if metric == "workouts":  # issue #66: each workout's length, not a daily count
+            item |= _workout_dots(conn, first, last)
+        out.append(item)
     return out
+
+
+def _workout_dots(conn: Connection, first: date, last: date) -> dict[str, Any]:
+    """One dot per workout (day, minutes), plus what a bettor wants at a glance: how
+    many count for markets (10+ minutes) and the typical length of those."""
+    found = workouts(conn, first, last)
+    counted = sorted(m for _, m in found if m >= WORKOUT_MIN_MINUTES)
+    return {
+        "dots": [{"x": d.isoformat(), "y": m} for d, m in found],
+        "min_minutes": WORKOUT_MIN_MINUTES,
+        "counted": len(counted),
+        "median": counted[len(counted) // 2] if counted else None,
+    }
 
 
 def _strip(conn: Connection, as_of: date, by_day: dict[date, Any]) -> dict[str, Any]:
