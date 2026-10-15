@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Upgrade a running WeightPicks to another release:
 #
-#   sudo ./scripts/upgrade.sh 1.1.0          # a published release
+#   sudo ./scripts/upgrade.sh 1.2.0          # a published release
 #   sudo ./scripts/upgrade.sh --build        # rebuild from this clone (for --build installs)
 #   (--no-checkout keeps the clone's files as they are)
 #
