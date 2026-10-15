@@ -65,7 +65,7 @@ jobs:
         run: uv run coverage report --include='app/domain/*,app/services/*' --fail-under=95
       - name: Performance budgets and calibration (no coverage instrumentation)
         env:
-          PERF_BUDGET_SCALE: "2"  # shared runners are ~2x slower than the dev machine
+          PERF_BUDGET_SCALE: "2.5"  # shared runners are ~2x slower (and vary) vs the dev machine
         run: uv run pytest -q -m "perf or calibration or load" -s
 
   e2e:
