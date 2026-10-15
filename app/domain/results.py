@@ -10,6 +10,7 @@ PUSH_REASONS = {
     "tie": "Push: an exact tie with the line",
     "missing_weigh_in": "Push: no weigh-in on a day it needed",
     "missing_day": "Push: no data for a day it needed",
+    "no_watch_sync": "Push: the watch didn't sync that night",
 }
 
 

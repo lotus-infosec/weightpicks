@@ -131,3 +131,72 @@ def test_timezone_preview_confirm_and_change(admin: tuple[TestClient, World]) ->
         ) == {"voided"}
     same = post(c, "/admin/discord/timezone/preview", timezone="America/Chicago")
     assert "already America/Chicago" in same.text
+
+
+def test_watch_sync_save_validate_and_audit(admin: tuple[TestClient, World]) -> None:
+    """Issue #57: the cutoff and grace period, behind the admin password."""
+    from datetime import time
+
+    c, w = admin
+    page = c.get(PAGE).text
+    assert 'value="22:00"' in page and "14:00 the next day" in page
+    r = post(c, "/admin/discord/watch-sync", cutoff="21:30", grace_hours="6", admin_password="no")
+    assert r.status_code == 403
+    r = post(
+        c,
+        "/admin/discord/watch-sync",
+        cutoff="09:00",
+        grace_hours="6",
+        admin_password=web.PASSWORD,
+    )
+    assert r.status_code == 400 and "at or after 12:00" in r.text and 'value="09:00"' in r.text
+    r = post(
+        c,
+        "/admin/discord/watch-sync",
+        cutoff="21:30",
+        grace_hours="6",
+        admin_password=web.PASSWORD,
+    )
+    assert r.status_code == 303
+    with w.engine.connect() as conn:
+        config = instance.read(conn)
+        entry = conn.execute(
+            select(AuditEntry.before, AuditEntry.after).where(
+                AuditEntry.action == "settings.watch_sync"
+            )
+        ).one()
+    assert config is not None
+    assert (config.schedule.watch_sync_cutoff, config.schedule.watch_sync_grace_hours) == (
+        time(21, 30),
+        6,
+    )
+    assert config.schedule.bet_lock == time(22)  # the rest of the schedule is untouched
+    assert entry.before == {"cutoff": "22:00", "grace_hours": 12}
+    assert entry.after == {"cutoff": "21:30", "grace_hours": 6}
+    assert "08:00 the next day" in c.get(PAGE).text
+
+
+def test_system_shows_when_the_watch_last_synced(admin: tuple[TestClient, World]) -> None:
+    from datetime import UTC, datetime
+
+    from sqlalchemy import insert
+
+    from app.core.db import immediate
+    from app.models import SyncRun
+
+    c, w = admin
+    assert 'data-testid="watch-last-sync"' not in c.get("/admin/system").text  # simulator
+    with immediate(w.engine) as conn:
+        conn.execute(
+            insert(SyncRun).values(
+                provider="garmindb",
+                started_at=w.clock.now(),
+                finished_at=w.clock.now(),
+                status="ok",
+                rows_new=0,
+                watch_upload_at=datetime(2026, 10, 5, 2, 30, tzinfo=UTC),
+                watch_device="Test watch",
+            )
+        )
+    page = c.get("/admin/system").text
+    assert 'data-testid="watch-last-sync"' in page and "Test watch" in page

@@ -58,6 +58,19 @@
   {% endif %}
 </section>
 
+<section class="card" data-testid="watch-sync-settings">
+  <h2>Garmin watch sync</h2>
+  <p class="muted">An iPhone doesn't sync Garmin Connect in the background, so Garmin can hold a partial day. A day's steps, minutes, calories and workouts count only once the watch syncs at or after the cutoff that evening. Without one, that day's markets wait (re-checked at every sync) and push, with stakes refunded, at <strong data-testid="watch-deadline">{{ watch_deadline }}</strong> if no sync arrives. A reminder goes to the Admin alerts webhook at the cutoff.</p>
+  {% if watch_error %}<p class="alert" role="alert">{{ watch_error }}</p>{% endif %}
+  <form method="post" action="/admin/discord/watch-sync" class="stack" data-testid="watch-sync-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>A watch sync counts from <input type="time" name="cutoff" value="{{ watch_cutoff }}" required></label>
+    <label>Grace period after 02:00, in hours (0–48) <input type="number" name="grace_hours" value="{{ watch_grace }}" min="0" max="48" step="1" inputmode="numeric" required></label>
+    {{ password() }}
+    <button type="submit" class="primary">Save watch sync</button>
+  </form>
+</section>
+
 <section class="card">
   <h2>Features</h2>
   <form method="post" action="/admin/discord/flags" class="stack">

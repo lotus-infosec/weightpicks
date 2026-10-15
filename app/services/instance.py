@@ -78,6 +78,8 @@ def schedule_from_json(data: dict[str, Any]) -> Schedule:
         weekly_drop=wall("weekly_drop", d.weekly_drop),
         monthly_drop=wall("monthly_drop", d.monthly_drop),
         weigh_in_end=wall("weigh_in_end", d.weigh_in_end),
+        watch_sync_cutoff=wall("watch_sync_cutoff", d.watch_sync_cutoff),
+        watch_sync_grace_hours=int(data.get("watch_sync_grace_hours", d.watch_sync_grace_hours)),
     )
 
 

@@ -3,25 +3,28 @@
 The provider is called outside any database transaction (the real GarminDB sync is a
 slow subprocess); only the ingest itself is one short BEGIN IMMEDIATE write.
 Observations are inserted with ON CONFLICT DO NOTHING on (metric, source_ref), so
-overlapping fetches and replays never duplicate data.
+overlapping fetches and replays never duplicate data. A daily total Garmin now reports
+differently from the stored one (the watch synced more of that day) is stored as a
+correction: a new row whose ref names this run; readers take the newest (issue #57).
 """
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import structlog
-from sqlalchemy import Engine, func, select, update
+from sqlalchemy import Connection, Engine, bindparam, func, select, update
 from sqlalchemy.dialects.sqlite import insert
 
 from app.core.clock import Clock
 from app.core.config import Settings
 from app.core.db import immediate
+from app.domain.markets import Schedule
 from app.domain.schedule import in_weigh_in_window, local_date, next_local_midnight
 from app.domain.units import Unit, grams_to_tenths
 from app.models import Observation, SyncRun
-from app.providers.base import Batch, DataProvider
+from app.providers.base import COUNT_METRICS, Batch, DataProvider
 from app.providers.garmindb import GarminDBProvider
 from app.providers.garmindb_runner import GarminDBRunner, GarminRunError
 from app.providers.simulated import SimulatedProvider
@@ -46,6 +49,7 @@ class SyncResult:
     status: str  # ok | failed
     rows_new: int
     error: str | None = None
+    rows_corrected: int = 0  # daily totals stored again with a new value
 
 
 def make_provider(
@@ -55,9 +59,11 @@ def make_provider(
     cached: DataProvider | None = None,
     *,
     tz: ZoneInfo | None = None,
+    schedule: Schedule | None = None,
 ) -> DataProvider:
     """The configured provider. A cached simulator is reused while its config is unchanged
-    (keeping its per-day data cache); a reseed produces a fresh one."""
+    (keeping its per-day data cache); a reseed produces a fresh one. The schedule carries
+    the watch sync cutoff and grace period (issue #57)."""
     if settings.data_provider == "simulated":
         with engine.connect() as conn:  # no write lock once the state exists
             state = sim.read_state(conn)
@@ -79,12 +85,18 @@ def make_provider(
             tz=tz or settings.tz,
         )
     zone = tz or settings.tz
-    if isinstance(cached, GarminDBProvider) and cached.tz == zone:
+    sched = schedule or Schedule()
+    cutoff, grace = sched.watch_sync_cutoff, timedelta(hours=sched.watch_sync_grace_hours)
+    if isinstance(cached, GarminDBProvider) and (cached.tz, cached.cutoff, cached.grace) == (
+        zone,
+        cutoff,
+        grace,
+    ):
         return cached
     if not (settings.garmin_home / ".GarminDb" / "garmin_tokens.json").is_file():
         raise ProviderUnavailable("no Garmin token yet: run garmin-login once")
     runner = GarminDBRunner(settings.garmin_home, settings.garmindb_python, zone.key)
-    return GarminDBProvider(settings.garmin_home, zone, runner)
+    return GarminDBProvider(settings.garmin_home, zone, runner, cutoff=cutoff, grace=grace)
 
 
 def _rows(
@@ -164,6 +176,7 @@ def run_sync(
 
     rows = _rows(batch, provider.name, run_id, tz, unit)
     with immediate(engine) as conn:
+        rows, corrected = _corrections(conn, rows, run_id)
         new_ids = (
             conn.execute(
                 insert(Observation)
@@ -184,14 +197,39 @@ def run_sync(
                 finished_at=clock.now(),
                 rows_new=len(new_ids),
                 complete_through={metric: day.isoformat() for metric, day in complete.items()},
+                watch_upload_at=batch.watch_upload_at,
+                watch_device=batch.watch_device,
             )
         )
-    log.info("sync_ok", provider=provider.name, run_id=run_id, rows_new=len(new_ids))
-    stale = _stale_since(engine, clock.now())
+        if batch.watch_waiting is not None:
+            day, deadline = batch.watch_waiting
+            enqueue(
+                conn,
+                clock,
+                category=Category.ADMIN_ALERTS,
+                payload={
+                    "kind": "watch_sync_waiting",
+                    "day": day.isoformat(),
+                    "deadline": deadline.isoformat(),
+                    "deadline_local": f"{deadline.astimezone(tz):%H:%M}",
+                },
+                dedupe_key=f"watch_sync_waiting:{day.isoformat()}",
+            )
+    log.info(
+        "sync_ok",
+        provider=provider.name,
+        run_id=run_id,
+        rows_new=len(new_ids),
+        rows_corrected=corrected,
+    )
+    # A sync that heard from Garmin about the watch is healthy even with nothing new:
+    # the watch just hasn't uploaded (a trip), and its days push at the deadline instead
+    # of waiting on "no new data" failures (issue #57).
+    stale = _stale_since(engine, clock.now()) if batch.watch_upload_at is None else None
     if stale is not None:
         hours = int((clock.now() - stale).total_seconds() // 3600)
         return _fail(engine, clock, provider.name, run_id, f"no new data for {hours} h")
-    return SyncResult(run_id, "ok", len(new_ids))
+    return SyncResult(run_id, "ok", len(new_ids), rows_corrected=corrected)
 
 
 def _stale_since(engine: Engine, now: datetime) -> datetime | None:
@@ -210,6 +248,66 @@ def _stale_since(engine: Engine, now: datetime) -> datetime | None:
     if reference.tzinfo is None:  # func.max() bypasses UTCDateTime
         reference = reference.replace(tzinfo=UTC)
     return reference if now - reference >= STALE_AFTER else None
+
+
+# Built once: this runs on every sync. Newest last, so the dict below keeps the latest.
+_STORED_TOTALS = (
+    select(Observation.metric, Observation.local_date, Observation.value)
+    .where(
+        Observation.metric.in_(COUNT_METRICS),
+        Observation.local_date.between(bindparam("first"), bindparam("last")),
+    )
+    .order_by(Observation.observed_at, Observation.id)
+)
+
+
+def _corrections(
+    conn: Connection, rows: list[dict[str, Any]], run_id: int
+) -> tuple[list[dict[str, Any]], int]:
+    """Drop daily totals equal to the stored one; a changed one gets a ref naming this
+    run, so it is stored as a new row next to the old (observations are append-only)."""
+    totals = [r for r in rows if r["metric"] in COUNT_METRICS]
+    if not totals:
+        return rows, 0
+    days = {
+        "first": min(r["local_date"] for r in totals),
+        "last": max(r["local_date"] for r in totals),
+    }
+    stored = {(m, day): value for m, day, value in conn.execute(_STORED_TOTALS, days)}
+    kept: list[dict[str, Any]] = []
+    corrected = 0
+    for row in rows:
+        before = (
+            stored.get((row["metric"], row["local_date"]))
+            if row["metric"] in COUNT_METRICS
+            else None
+        )
+        if before is not None:
+            if before == row["value"]:
+                continue
+            row = row | {"source_ref": f"{row['source_ref']}@{run_id}"}
+            corrected += 1
+        kept.append(row)
+    return kept, corrected
+
+
+def remind_watch_sync(engine: Engine, clock: Clock, day: date, cutoff: time) -> bool:
+    """The bedtime reminder (issue #57): once per day at the cutoff, during a season.
+    False when it was already queued or no season is running."""
+    with immediate(engine) as conn:
+        if active_season_id(conn) is None:
+            return False
+        return enqueue(
+            conn,
+            clock,
+            category=Category.ADMIN_ALERTS,
+            payload={
+                "kind": "watch_sync_reminder",
+                "day": day.isoformat(),
+                "cutoff": f"{cutoff:%H:%M}",
+            },
+            dedupe_key=f"watch_sync_reminder:{day.isoformat()}",
+        )
 
 
 def record_failure(engine: Engine, clock: Clock, provider: str, error: str) -> SyncResult:

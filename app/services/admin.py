@@ -4,7 +4,8 @@ entry can never disagree. Password re-prompts are enforced by the web layer.
 """
 
 import secrets as pysecrets
-from datetime import timedelta
+from dataclasses import replace
+from datetime import time, timedelta
 from typing import Any
 
 import structlog
@@ -405,6 +406,41 @@ def set_public_url(engine: Engine, clock: Clock, actor: Actor | None, url: str |
             target=("settings", 1),
             before={"public_url": before},
             after={"public_url": url},
+        )
+    return True
+
+
+def set_watch_sync(
+    engine: Engine, clock: Clock, actor: Actor | None, cutoff: time, grace_hours: int
+) -> bool:
+    """Store the watch sync cutoff and grace period (issue #57; already checked by
+    domain.watch.parse_settings). Returns False when nothing changed. Audited."""
+    with immediate(engine) as conn:
+        stored = conn.execute(
+            select(InstanceSettingsRow.schedule).where(InstanceSettingsRow.id == 1)
+        ).scalar_one()
+        current = instance_service.schedule_from_json(stored)
+        before = {
+            "cutoff": f"{current.watch_sync_cutoff:%H:%M}",
+            "grace_hours": current.watch_sync_grace_hours,
+        }
+        after = {"cutoff": f"{cutoff:%H:%M}", "grace_hours": grace_hours}
+        if before == after:
+            return False
+        updated = replace(current, watch_sync_cutoff=cutoff, watch_sync_grace_hours=grace_hours)
+        conn.execute(
+            update(InstanceSettingsRow)
+            .where(InstanceSettingsRow.id == 1)
+            .values(schedule=instance_service.schedule_to_json(updated), updated_at=clock.now())
+        )
+        audit.record(
+            conn,
+            clock,
+            actor,
+            action="settings.watch_sync",
+            target=("settings", 1),
+            before=before,
+            after=after,
         )
     return True
 

@@ -2,6 +2,7 @@
 No real data: every value here is made up."""
 
 import json
+import os
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -64,6 +65,10 @@ def activity(activity_id: int, start_gmt: str, seconds: float) -> dict[str, obje
         "duration": seconds,
         "activityType": {"typeKey": "walking"},
     }
+
+
+def watch_file(upload: datetime | None, device: str = "Test watch") -> dict[str, object]:
+    return {"upload_ms": ms(upload) if upload else None, "device": device}
 
 
 def write(path: Path, data: object) -> None:
@@ -156,6 +161,8 @@ def home(tmp_path: Path) -> Path:
             data / "FitFiles" / "Monitoring" / "2026" / f"daily_summary_{day.isoformat()}.json",
             summary(day),
         )
+    # The watch last synced at 02:00 on the 3rd: after the 1st's and 2nd's 22:00 cutoffs.
+    write(data / "watch_sync.json", watch_file(datetime(2026, 10, 3, 6, 0, tzinfo=UTC)))
     acts = data / "FitFiles" / "Activities"
     write(acts / "activity_501.json", activity(501, "2026-10-02 22:00:00", 1800))
     write(acts / "activity_details_501.json", {"activityId": 501, "detail": True})
@@ -174,6 +181,11 @@ def test_fetch_reads_every_file_once_and_only_final_count_days(home: Path) -> No
     now = datetime(2026, 10, 3, 15, 0, tzinfo=UTC)  # 11:00 local: window closed
     batch = p.fetch_since(datetime(2026, 9, 1, tzinfo=UTC), now)
     assert calls == [date(2026, 10, 3)]
+    assert (batch.watch_upload_at, batch.watch_device, batch.watch_waiting) == (
+        datetime(2026, 10, 3, 6, 0, tzinfo=UTC),
+        "Test watch",
+        None,
+    )
     assert sorted(w.ref for w in batch.weigh_ins) == ["garmin:w:10", "garmin:w:11", "garmin:w:12"]
     # Today's steps are still growing and yesterday's only settle 2 h after midnight.
     assert {t.local_date for t in batch.daily_totals} == {date(2026, 10, 1), date(2026, 10, 2)}
@@ -211,7 +223,62 @@ def test_runner_failure_propagates_and_nothing_is_read(home: Path) -> None:
 
 
 def test_missing_tree_is_an_empty_batch(tmp_path: Path) -> None:
+    write(tmp_path / "HealthData" / "watch_sync.json", watch_file(None))
     batch = provider(tmp_path).fetch_since(
         datetime(2026, 9, 1, tzinfo=UTC), datetime(2026, 10, 3, 15, tzinfo=UTC)
     )
     assert len(batch) == 0
+
+
+def test_without_the_watch_sync_time_the_sync_fails(tmp_path: Path) -> None:
+    """Unknown is not "the watch didn't sync": failing keeps markets waiting, never pushing."""
+    p = provider(tmp_path)
+    with pytest.raises(GarminRunError, match="last sync time"):
+        p.fetch_since(datetime(2026, 9, 1, tzinfo=UTC), datetime(2026, 10, 3, 15, tzinfo=UTC))
+    assert p.fetched_at is None
+
+
+# ---- the watch's last sync (issue #57) ---------------------------------------------------
+
+
+def set_watch(home: Path, upload: datetime) -> None:
+    write(home / "HealthData" / "watch_sync.json", watch_file(upload))
+
+
+def test_a_day_the_watch_never_synced_is_held_back_then_final_without_data(home: Path) -> None:
+    set_watch(home, datetime(2026, 10, 2, 22, 0, tzinfo=UTC))  # 18:00 on the 2nd: too early
+    p = provider(home)
+    at_2am = datetime(2026, 10, 3, 6, 30, tzinfo=UTC)  # 02:30 on the 3rd
+    batch = p.fetch_since(at_2am - timedelta(days=1), at_2am)
+    assert {t.local_date for t in batch.daily_totals} == {date(2026, 10, 1)}  # never the 2nd
+    assert p.complete_through(at_2am)["steps"] == date(2026, 10, 1)
+    deadline = datetime(2026, 10, 3, 18, 0, tzinfo=UTC)  # 14:00 on the 3rd
+    assert batch.watch_waiting == (date(2026, 10, 2), deadline)
+
+    after = deadline + timedelta(minutes=30)
+    batch = p.fetch_since(after - timedelta(days=1), after)
+    assert p.complete_through(after)["steps"] == date(2026, 10, 2)  # final: its markets push
+    assert date(2026, 10, 2) not in {t.local_date for t in batch.daily_totals}
+    assert batch.watch_waiting is None
+
+
+def test_a_morning_sync_fills_the_day_in(home: Path) -> None:
+    set_watch(home, datetime(2026, 10, 3, 11, 5, tzinfo=UTC))  # 07:05 on the 3rd
+    p = provider(home)
+    now = datetime(2026, 10, 3, 11, 30, tzinfo=UTC)
+    batch = p.fetch_since(now - timedelta(days=1), now)
+    assert date(2026, 10, 2) in {t.local_date for t in batch.daily_totals}
+    assert p.complete_through(now)["steps"] == date(2026, 10, 2)
+
+
+def test_a_summary_saved_before_the_upload_is_not_trusted(home: Path) -> None:
+    upload = datetime(2026, 10, 3, 6, 0, tzinfo=UTC)
+    set_watch(home, upload)
+    stale = (
+        home / "HealthData" / "FitFiles" / "Monitoring" / "2026" / "daily_summary_2026-10-02.json"
+    )
+    old = (upload - timedelta(hours=3)).timestamp()
+    os.utime(stale, (old, old))  # downloaded before the watch's last upload: maybe partial
+    now = datetime(2026, 10, 3, 15, 0, tzinfo=UTC)
+    batch = provider(home).fetch_since(now - timedelta(days=1), now)
+    assert {t.local_date for t in batch.daily_totals} == {date(2026, 10, 1)}
