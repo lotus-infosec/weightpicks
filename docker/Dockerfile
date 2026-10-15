@@ -29,7 +29,7 @@ COPY app/web/static/app.js ./static/app.js
 RUN cd styles && tailwindcss --input input.css --output /out/app.css --minify
 
 # ---- build: resolve the locked environment into /opt/venv ----
-FROM python:3.12-slim-bookworm@sha256:54c85f3c47607a77f32adec749d3c81d1348bf25833671f512b26a9b6d778cb3 AS build
+FROM python:3.12-slim-bookworm@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258 AS build
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_COMPILE_BYTECODE=1 \
@@ -55,7 +55,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
       -r /tmp/garmindb-requirements.txt
 
 # ---- runtime: venv + source only, non-root, read-only friendly ----
-FROM python:3.12-slim-bookworm@sha256:54c85f3c47607a77f32adec749d3c81d1348bf25833671f512b26a9b6d778cb3 AS runtime
+FROM python:3.12-slim-bookworm@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258 AS runtime
 ARG VERSION=dev
 ARG REVISION=unknown
 LABEL org.opencontainers.image.title="WeightPicks" \
