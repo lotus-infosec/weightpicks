@@ -54,7 +54,8 @@ class Impact:
     markets: int  # open or locked markets to push
     bets: int  # open single bets refunded
     stake_cents: int  # their stakes
-    parlays: int  # parlays losing a leg (re-evaluated without it)
+    parlays: int  # open parlays with a leg here: voided and refunded in full (issue #69)
+    parlay_cents: int  # their stakes
     pools: int  # open or locked pools refunded
     entries: int
     entry_cents: int
@@ -70,7 +71,7 @@ class Result:
     zone: str
     settled: int
     voided_markets: int
-    refunded_bets: int  # single bets; parlays lose the leg instead
+    refunded_bets: int  # single bets; parlays are counted on their own
     parlays: int
     refunded_pools: int
     redropped: int
@@ -119,8 +120,8 @@ def preview(conn: Connection, zone: str, now: datetime) -> Impact:
             Bet.status == "open",
         )
     ).one()
-    parlays = conn.execute(
-        select(func.count(func.distinct(Bet.id)))
+    hit = (
+        select(Bet.id, Bet.stake_cents)
         .join(BetLeg, BetLeg.bet_id == Bet.id)
         .where(
             BetLeg.market_id.in_(live),
@@ -128,7 +129,12 @@ def preview(conn: Connection, zone: str, now: datetime) -> Impact:
             Bet.kind == "parlay",
             Bet.status == "open",
         )
-    ).scalar_one()
+        .distinct()
+        .subquery()
+    )
+    parlays, parlay_cents = conn.execute(
+        select(func.count(), func.coalesce(func.sum(hit.c.stake_cents), 0))
+    ).one()
     live_pools = select(Pool.id).where(Pool.status.in_(LIVE_POOLS))
     n_pools = conn.execute(select(func.count()).select_from(live_pools.subquery())).scalar_one()
     entries, entry_cents = conn.execute(
@@ -143,6 +149,7 @@ def preview(conn: Connection, zone: str, now: datetime) -> Impact:
         bets=int(bets),
         stake_cents=int(stake),
         parlays=int(parlays),
+        parlay_cents=int(parlay_cents),
         pools=int(n_pools),
         entries=int(entries),
         entry_cents=int(entry_cents),

@@ -177,7 +177,7 @@ def test_goal_reached_settles_voids_refunds_and_freezes(mid_season: dict[str, An
         "voided",
     ]
     assert left == 0
-    assert parlay in ("won", "lost")  # the voided leg dropped out; resolved on the other
+    assert parlay == "void"  # the "before" leg won, the "after" leg was voided: refunded (#69)
     assert pool_status == ["settled", "refunded"]
     assert (post["value_x10"], post["day"], post["goal_x10"]) == (2194, "2026-10-11", GOAL_X10)
     assert "season.goal_reached" in actions

@@ -9,7 +9,7 @@ from app.core.db import immediate
 from app.domain import parlay
 from app.domain.money import payout_cents
 from app.models import Bet, BetLeg, InstanceSettingsRow, OutboxMessage
-from app.services import admin, audit, settlement
+from app.services import admin, audit, ledger, settlement
 from app.services.bets import BetRejected, place_parlay
 from tests.integration.test_bets_settlement import (
     account,
@@ -141,13 +141,39 @@ def test_settlement_truths_through_real_markets(world: World) -> None:
     assert set(parlay_posts) == {b.bet_id for b in (both_win, early_loss, one_push, all_push)}
 
 
-def test_a_voided_market_drops_only_that_leg(world: World) -> None:
+def test_a_voided_leg_voids_the_whole_parlay(world: World) -> None:
+    """Issue #69: one voided leg refunds the whole open parlay (a pushed leg still just
+    drops out); a parlay that is already decided doesn't change."""
     w = world
     flags(w, parlays=True)
     user = player(w, 1)
     keep, gone = market(w, D5, "over"), market(w, D7, "over")
     bet_id = bet(w, user, legs(w, keep, gone), "v").bet_id
+    balance = account(w, user)[0]
     admin.void_market(w.engine, w.clock, audit.Actor(user_id=user), gone, "bad line")
-    assert status(w, bet_id) == ("open", None, ["open", "void"])
+    assert status(w, bet_id) == ("void", STAKE, ["void", "void"])
+    assert account(w, user)[0] == balance + STAKE
+    with w.engine.connect() as conn:
+        post = conn.execute(
+            select(OutboxMessage.category, OutboxMessage.payload).where(
+                OutboxMessage.dedupe_key == f"bet_result:{bet_id}"
+            )
+        ).one()
+        assert ledger.verify(conn).ok
+    assert post.category == "parlay_results"
+    assert (post.payload["result"], post.payload["legs"]) == ("void", 2)
+    settle_day(w, D6)  # the other leg's market still settles; the parlay stays refunded
+    assert status(w, bet_id)[:2] == ("void", STAKE)
+
+
+def test_voiding_a_leg_of_a_lost_parlay_changes_nothing(world: World) -> None:
+    w = world
+    flags(w, parlays=True)
+    user = player(w, 1)
+    loser, later = market(w, D5, "under"), market(w, D7, "over")
+    bet_id = bet(w, user, legs(w, loser, later), "l").bet_id
     settle_day(w, D6)
-    assert status(w, bet_id) == ("won", payout_cents(STAKE, -110), ["won", "void"])
+    assert status(w, bet_id)[0] == "lost"
+    balance = account(w, user)[0]
+    admin.void_market(w.engine, w.clock, audit.Actor(user_id=user), later, "bad line")
+    assert status(w, bet_id)[0] == "lost" and account(w, user)[0] == balance
