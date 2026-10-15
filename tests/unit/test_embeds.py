@@ -163,3 +163,18 @@ def test_parlay_posts() -> None:
         ctx(),
     )
     assert "3-leg parlay" in won["embeds"][0]["description"]
+
+
+def test_watch_sync_alerts() -> None:
+    """Issue #57: the bedtime reminder, a day waiting on the watch, and its push."""
+
+    def text(payload: dict[str, Any]) -> str:
+        return str(embeds.build("admin_alerts", payload, ctx())["embeds"][0]["description"])
+
+    reminder = text({"kind": "watch_sync_reminder", "day": "2026-10-06", "cutoff": "22:00"})
+    assert "before bed" in reminder and "22:00" in reminder and "Tue Oct 6" in reminder
+    waiting = text({"kind": "watch_sync_waiting", "day": "2026-10-06", "deadline_local": "14:00"})
+    assert "Tue Oct 6" in waiting and "push at 14:00" in waiting
+    pushed = text({"kind": "watch_sync_push", "day": "2026-10-06"})
+    assert "Tue Oct 6" in pushed and "refunded" in pushed
+    assert "nonsense" in text({"kind": "watch_sync_push", "day": "nonsense"})

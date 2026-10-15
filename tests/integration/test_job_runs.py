@@ -91,6 +91,7 @@ def test_registered_jobs_have_unique_names(
         "heartbeat",
         "garmin_sync",
         "goal_watch",
+        "watch_sync_reminder",  # real Garmin data only
         "daily_drop",
         "weekly_drop",
         "monthly_drop",

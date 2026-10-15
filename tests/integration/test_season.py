@@ -212,9 +212,10 @@ def test_freeze_unfreeze_and_unfreeze_refused_after_goal(world: World) -> None:
     actor = admin_actor(w)
     market = weight_market(w, -5, day=date(2026, 10, 8))
     season.set_frozen(w.engine, w.clock, actor, True)
-    assert statuses(w, market) == ["locked"]  # freezing locks every open market
+    assert statuses(w, market) == ["open"]  # a freeze pauses betting; markets stay open
     season.set_frozen(w.engine, w.clock, actor, True)  # no-op
     season.set_frozen(w.engine, w.clock, actor, False)
+    assert statuses(w, market) == ["open"]
     with w.engine.connect() as conn:
         assert instance.current_state(conn) == instance.ACTIVE
         actions = conn.execute(select(AuditEntry.action)).scalars().all()
@@ -223,6 +224,47 @@ def test_freeze_unfreeze_and_unfreeze_refused_after_goal(world: World) -> None:
     with pytest.raises(season.SeasonError) as info:
         season.set_frozen(w.engine, w.clock, actor, False)
     assert info.value.code == "goal_reached"
+
+
+def test_unfreeze_reopens_betting_and_posts_the_missed_drop(world: World) -> None:
+    """Issue #59: betting stops while frozen and resumes on the same markets after; a
+    drop that came due while frozen is posted on unfreeze, unless its lock time passed."""
+    w = world
+    actor = admin_actor(w)
+    user = player(w, 1)
+    market = weight_market(w, -5, day=date(2026, 10, 8))
+    season.set_frozen(w.engine, w.clock, actor, True)
+    with pytest.raises(BetRejected, match="instance_frozen"):
+        bet(w, user, market, "over")
+    skipped = markets.drop(w.engine, w.clock, w.config, Timeframe.DAILY, date(2026, 10, 5))
+    assert skipped.created == [] and set(skipped.skipped.values()) == {"frozen"}
+
+    assert season.set_frozen(w.engine, w.clock, actor, False) == 5  # today's daily drop
+    assert bet(w, user, market, "over").stake_cents > 0
+    assert season.set_frozen(w.engine, w.clock, actor, True) == 0
+    assert season.set_frozen(w.engine, w.clock, actor, False) == 0  # already posted
+    with w.engine.connect() as conn:
+        after = (
+            conn.execute(select(AuditEntry.after).where(AuditEntry.action == "instance.unfreeze"))
+            .scalars()
+            .all()
+        )
+    assert after == [{"state": "active"}, {"state": "active"}]
+
+
+def test_unfreezing_after_the_lock_time_posts_nothing(world: World) -> None:
+    w = world
+    actor = admin_actor(w)
+    season.set_frozen(w.engine, w.clock, actor, True)
+    w.clock.set(local(2026, 10, 5, 22, 30))  # today's drop locked at 22:00
+    assert season.set_frozen(w.engine, w.clock, actor, False) == 0
+
+
+def test_goal_reached_still_locks_and_resolves_open_markets(world: World) -> None:
+    w = world
+    market = weight_market(w, -5, day=date(2026, 10, 8))
+    season.goal_reached(w.engine, w.clock, actor=admin_actor(w))
+    assert statuses(w, market) == ["voided"]
 
 
 def test_new_season_carries_balances_and_restarts_pnl(mid_season: dict[str, Any]) -> None:

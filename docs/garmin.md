@@ -45,7 +45,9 @@ the GarminDB config it writes has no username or password.
 
 The admin dashboard shows the reason for the last failed sync, and an admin alert is
 queued once per failure streak. While syncs fail or no new data has arrived for 36
-hours during a season, **markets wait: nothing settles on stale data**.
+hours during a season, **markets wait: nothing settles on stale data**. A sync that heard
+from Garmin about the watch is never stale: see "The watch has to sync" in
+[self-host/garmin.md](self-host/garmin.md) for the cutoff, grace period and pushes.
 
 | Message | What to do |
 | --- | --- |
@@ -62,7 +64,13 @@ read-only (not GarminDB's database, which drops the time of each weigh-in):
 - **Weigh-ins:** every entry with its real time (`timestampGMT`), and manual vs scale. Today's
   weigh-ins are fetched separately because GarminDB's own download stops at yesterday.
 - **Daily totals:** steps, active minutes, intensity minutes (moderate + 2 × vigorous) and
-  active calories, once the day is over.
+  active calories, once the day is over and the watch has synced after the day's cutoff
+  (`lastUsedDeviceUploadTime` from Garmin's last-used-device call, saved to
+  `watch_sync.json`). A summary file older than that upload isn't trusted; the recent fetch
+  downloads the last week's summaries again after each upload. A changed total for a stored
+  day is stored as a correction (newest wins); settled markets don't change. The admin's
+  **Sync now** passes a day count (30) to the recent fetch: the same refresh over a month,
+  plus activity-list entries for workouts GarminDB's "latest activities" download missed.
 - **Workouts:** activities of 10 minutes or more.
 
 `wp report reconcile --days N` prints, day by day, every weigh-in Garmin sent next to the
