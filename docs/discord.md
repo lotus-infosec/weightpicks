@@ -43,7 +43,7 @@ every post, even if a player picks such a display name.
 | --- | --- |
 | Bets placed / High-roller bets | A player places a bet (high roller: at or above the high-roller amount). Shows who and which market only: the side and stake stay private until the bet settles. |
 | Bet results | A bet wins, loses, pushes or is refunded |
-| Market settlements | A market settles or is voided |
+| Market settlements | A market settles, is voided, or is locked early by the admin |
 | New markets and props | Each daily, weekly and monthly drop |
 | Weekly standings | Monday 09:00: top 10 by profit and loss from finished bets and events, with last week's change and wins |
 | Busts and badges | A player goes bust |

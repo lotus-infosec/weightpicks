@@ -85,6 +85,25 @@ def register(router: APIRouter) -> None:
             return market(request, session, market_id, exc.message)
         return back(f"/admin/markets/{market_id}", "voided")
 
+    @router.post("/markets/{market_id}/lock")
+    async def lock(request: Request, session: Admin, market_id: int) -> Response:
+        form = await read_form(request)
+        state = request.app.state
+        if not await reauth(request, session, form, "market.lock"):
+            return market(request, session, market_id, REAUTH_FAILED_MESSAGE)
+        try:
+            await run_in_threadpool(
+                admin.lock_market,
+                state.engine,
+                state.domain_clock,
+                actor(request, session),
+                market_id,
+                form.get("reason", ""),
+            )
+        except AdminError as exc:
+            return market(request, session, market_id, exc.message)
+        return back(f"/admin/markets/{market_id}", "locked")
+
     # ---- users --------------------------------------------------------------------------------
 
     @router.get("/users")

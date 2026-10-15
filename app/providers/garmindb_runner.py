@@ -14,6 +14,7 @@ from pathlib import Path
 
 TIMEOUT_SECONDS = 15 * 60
 RECENT_TIMEOUT_SECONDS = 2 * 60
+DEEP_TIMEOUT_SECONDS = 10 * 60  # Sync now: a month of summaries and activities
 GARMINDB_ARGS = ("--all", "--download", "--import", "--analyze", "--latest")
 LOGIN_EXPIRED = "Garmin login failed: the token expired or was revoked; rerun garmin-login"
 FAILURE_MARKERS = (
@@ -87,15 +88,17 @@ class GarminDBRunner:
             raise GarminRunError(f"{step} exited {proc.returncode}: {scrub(last)}")
         return output
 
-    def __call__(self, today: date) -> None:
+    def __call__(self, today: date, days: int | None = None) -> None:
+        """`days`: re-download that many recent days (the admin's deep Sync now)."""
         if not _lock.acquire(blocking=False):
             raise GarminRunError("a Garmin sync is already running")
         try:
             self._run([str(self.python), str(self.cli), *GARMINDB_ARGS], self.timeout, "GarminDB")
+            args = [str(self.python), "-P", str(self.recent_script), today.isoformat()]
             self._run(
-                [str(self.python), "-P", str(self.recent_script), today.isoformat()],
-                RECENT_TIMEOUT_SECONDS,
-                "recent weigh-ins",
+                [*args, str(days)] if days else args,
+                DEEP_TIMEOUT_SECONDS if days else RECENT_TIMEOUT_SECONDS,
+                "recent fetch",
             )
         finally:
             _lock.release()

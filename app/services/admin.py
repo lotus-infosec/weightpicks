@@ -4,7 +4,8 @@ entry can never disagree. Password re-prompts are enforced by the web layer.
 """
 
 import secrets as pysecrets
-from datetime import timedelta
+from dataclasses import replace
+from datetime import time, timedelta
 from typing import Any
 
 import structlog
@@ -17,7 +18,7 @@ from app.domain import setup as setup_steps
 from app.domain.economy import Economy
 from app.domain.ledger import AccountKind, InsufficientFunds
 from app.domain.markets import MarketStatus
-from app.domain.results import result_reason
+from app.domain.results import locked_reason, result_reason
 from app.models import (
     Account,
     BannedEmail,
@@ -197,6 +198,51 @@ def void_market(engine: Engine, clock: Clock, actor: Actor, market_id: int, reas
         busts.check(conn, clock, market.season_id)
     log.info("market_voided", market_id=market_id, bets=voided)
     return voided
+
+
+def lock_market(engine: Engine, clock: Clock, actor: Actor, market_id: int, note: str) -> None:
+    """Lock an open market now, before its lock time, with a reason players see (issue
+    #60). Bets already placed stay and settle as usual; a locked market never reopens."""
+    note = note.strip()[:200]
+    if not note:
+        raise AdminError("reason_required", "Give a reason for locking.")
+    now = clock.now()
+    with immediate(engine) as conn:
+        market = conn.execute(
+            select(Market.status, Market.title, Market.lock_at).where(Market.id == market_id)
+        ).one_or_none()
+        if market is None:
+            raise AdminError("not_found", "No such market.")
+        if market.status != MarketStatus.OPEN.value:
+            raise AdminError("not_open", f"A {market.status} market can't be locked.")
+        set_status(conn, [market_id], MarketStatus.OPEN, MarketStatus.LOCKED, now)
+        lock_at = min(market.lock_at, now)
+        conn.execute(
+            update(Market).where(Market.id == market_id).values(lock_note=note, lock_at=lock_at)
+        )
+        audit.record(
+            conn,
+            clock,
+            actor,
+            action="market.lock",
+            target=("market", market_id),
+            before={"status": market.status, "lock_at": market.lock_at.isoformat()},
+            after={"status": "locked", "lock_at": lock_at.isoformat()},
+            reason=note,
+        )
+        enqueue(
+            conn,
+            clock,
+            category=Category.MARKET_SETTLEMENTS,
+            payload={
+                "market_id": market_id,
+                "title": market.title,
+                "result": "locked",
+                "reason": locked_reason(note),
+            },
+            dedupe_key=f"market_locked:{market_id}",
+        )
+    log.info("market_locked_early", market_id=market_id)
 
 
 # ---- users --------------------------------------------------------------------------------
@@ -405,6 +451,41 @@ def set_public_url(engine: Engine, clock: Clock, actor: Actor | None, url: str |
             target=("settings", 1),
             before={"public_url": before},
             after={"public_url": url},
+        )
+    return True
+
+
+def set_watch_sync(
+    engine: Engine, clock: Clock, actor: Actor | None, cutoff: time, grace_hours: int
+) -> bool:
+    """Store the watch sync cutoff and grace period (issue #57; already checked by
+    domain.watch.parse_settings). Returns False when nothing changed. Audited."""
+    with immediate(engine) as conn:
+        stored = conn.execute(
+            select(InstanceSettingsRow.schedule).where(InstanceSettingsRow.id == 1)
+        ).scalar_one()
+        current = instance_service.schedule_from_json(stored)
+        before = {
+            "cutoff": f"{current.watch_sync_cutoff:%H:%M}",
+            "grace_hours": current.watch_sync_grace_hours,
+        }
+        after = {"cutoff": f"{cutoff:%H:%M}", "grace_hours": grace_hours}
+        if before == after:
+            return False
+        updated = replace(current, watch_sync_cutoff=cutoff, watch_sync_grace_hours=grace_hours)
+        conn.execute(
+            update(InstanceSettingsRow)
+            .where(InstanceSettingsRow.id == 1)
+            .values(schedule=instance_service.schedule_to_json(updated), updated_at=clock.now())
+        )
+        audit.record(
+            conn,
+            clock,
+            actor,
+            action="settings.watch_sync",
+            target=("settings", 1),
+            before=before,
+            after=after,
         )
     return True
 

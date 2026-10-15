@@ -7,18 +7,23 @@ at midnight (no time of day, no manual/scale flag) and its range skips today
 
 Weigh-in times come from `timestampGMT`. Garmin's `date` field is the local wall clock
 encoded as if it were UTC; reading it as UTC would shift every weigh-in by the offset.
+
+Daily totals are stored only for days the watch synced after that day's cutoff, and only
+from a summary file downloaded after the watch's latest upload (issue #57): a partial
+total is never stored, because a stored day is final for settlement.
 """
 
 import json
-from collections.abc import Callable, Iterator
-from datetime import UTC, date, datetime, timedelta
+from collections.abc import Iterator
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
 import structlog
 
-from app.domain.schedule import local_date, next_local_midnight, window_close
+from app.domain import watch
+from app.domain.schedule import local_date, window_close
 from app.providers.base import (
     COUNT_METRICS,
     WORKOUT_MIN_MINUTES,
@@ -29,11 +34,12 @@ from app.providers.base import (
     WeighIn,
     WeighInSource,
 )
+from app.providers.garmindb_runner import GarminRunError
 
 log = structlog.get_logger()
 LOOKBACK = timedelta(days=3)  # late manual entries and re-downloaded days
-# Daily totals are final once the day has ended and the watch has had time to sync.
-COUNTS_SETTLE = timedelta(hours=2)
+RECENT_DAYS = 7  # summaries garmin_recent.py refreshes after a watch upload
+WATCH_FILE = "watch_sync.json"
 MANUAL_SOURCES = {"MANUAL"}
 
 
@@ -61,6 +67,14 @@ def parse_weigh_ins(data: Any) -> Iterator[WeighIn]:
             continue
         source: WeighInSource = "manual" if entry.get("sourceType") in MANUAL_SOURCES else "scale"
         yield WeighIn(ref=f"garmin:w:{pk}", at=at, grams=round(grams), source=source)
+
+
+def parse_watch(data: Any) -> tuple[datetime | None, str | None]:
+    """The watch's latest upload and device name, from garmin_recent.py's file."""
+    if not isinstance(data, dict):
+        raise GarminRunError("the watch's last sync time is missing; it is fetched every sync")
+    device = data.get("device")
+    return _gmt(data.get("upload_ms")), device if isinstance(device, str) else None
 
 
 def _minutes(seconds: Any) -> int:
@@ -104,14 +118,30 @@ def parse_activity(data: Any) -> Activity | None:
     return Activity(ref=f"garmin:a:{activity_id}", at=at, duration_min=minutes, kind=str(kind))
 
 
+class Runner(Protocol):
+    def __call__(self, today: date, days: int | None = None) -> None: ...
+
+
 class GarminDBProvider:
     name = "garmindb"
 
-    def __init__(self, home: Path, tz: ZoneInfo, runner: Callable[[date], None]) -> None:
+    def __init__(
+        self,
+        home: Path,
+        tz: ZoneInfo,
+        runner: Runner,
+        *,
+        cutoff: time = watch.DEFAULT_CUTOFF,
+        grace: timedelta = timedelta(hours=watch.DEFAULT_GRACE_HOURS),
+    ) -> None:
         self.home = home
         self.tz = tz
         self.runner = runner
+        self.cutoff = cutoff
+        self.grace = grace
         self.fetched_at: datetime | None = None
+        self.watch_upload_at: datetime | None = None
+        self.watch_device: str | None = None
 
     @property
     def data_dir(self) -> Path:
@@ -124,7 +154,10 @@ class GarminDBProvider:
                 found[w.ref] = w
         return found
 
-    def daily_totals(self, first: date, last: date) -> list[DailyTotal]:
+    def daily_totals(
+        self, first: date, last: date, fresh_after: datetime | None = None
+    ) -> list[DailyTotal]:
+        """Totals for [first, last], from files written at or after `fresh_after`."""
         totals: list[DailyTotal] = []
         day = first
         while day <= last:
@@ -135,7 +168,9 @@ class GarminDBProvider:
                 / str(day.year)
                 / f"daily_summary_{day.isoformat()}.json"
             )
-            if path.exists():
+            if path.exists() and (
+                fresh_after is None or path.stat().st_mtime >= fresh_after.timestamp()
+            ):
                 totals += parse_daily_summary(_load(path))
             day += timedelta(days=1)
         return totals
@@ -150,32 +185,52 @@ class GarminDBProvider:
                 found.append(activity)
         return found
 
-    def fetch_since(self, since: datetime, now: datetime) -> Batch:
+    def fetch_since(self, since: datetime, now: datetime, *, days: int | None = None) -> Batch:
         # Raises GarminRunError; the sync is then recorded as failed.
-        self.runner(local_date(now, self.tz))
+        self.runner(local_date(now, self.tz), days)
+        upload, device = parse_watch(_load(self.data_dir / WATCH_FILE))
+        self.watch_upload_at, self.watch_device = upload, device
         self.fetched_at = now
         floor = since - LOOKBACK
         counts_final = self.complete_through(now)["steps"]
-        first = max(local_date(floor, self.tz), counts_final - timedelta(days=120))
+        first = max(
+            min(
+                local_date(floor, self.tz),
+                counts_final - timedelta(days=max(RECENT_DAYS, days or 0)),
+            ),
+            counts_final - timedelta(days=120),
+        )
         return Batch(
             weigh_ins=[w for w in self.weigh_ins().values() if floor < w.at <= now],
-            daily_totals=self.daily_totals(first, counts_final),
+            daily_totals=[
+                t
+                for t in self.daily_totals(first, counts_final, fresh_after=upload)
+                if watch.synced(t.local_date, upload, self.cutoff, self.tz)
+            ],
             activities=[
                 a
                 for a in self.activities()
                 if floor < a.at and local_date(a.at, self.tz) <= counts_final
             ],
+            watch_upload_at=upload,
+            watch_device=device,
+            watch_waiting=watch.waiting(now, upload, self.cutoff, self.grace, self.tz),
         )
 
     def complete_through(self, now: datetime) -> dict[str, date]:
         """A day is final only once a successful download ran after it was over: after
-        the weigh-in window for weight, and two hours after midnight for counts."""
+        the weigh-in window for weight; for counts two hours after midnight, and only
+        once the watch synced after the day's cutoff or the grace period ran out."""
         seen = self.fetched_at or datetime.min.replace(tzinfo=UTC)
         today = local_date(min(now, seen) if self.fetched_at else now, self.tz)
         weight = today if seen >= window_close(today, self.tz) else today - timedelta(days=1)
-        counts = today - timedelta(days=1)
-        if seen < next_local_midnight(counts, self.tz) + COUNTS_SETTLE:
-            counts -= timedelta(days=1)
+        counts = (
+            watch.final_through(
+                min(now, seen), self.watch_upload_at, self.cutoff, self.grace, self.tz
+            )
+            if self.fetched_at
+            else today - timedelta(days=2)
+        )
         result = {"weight": weight, "workout": counts}
         result.update(dict.fromkeys(COUNT_METRICS, counts))
         return result

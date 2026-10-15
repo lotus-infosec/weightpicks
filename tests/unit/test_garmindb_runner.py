@@ -47,7 +47,7 @@ def test_runs_garmindb_then_the_recent_fetch(
     recent.write_text(
         "import os, sys\n"
         "ran = os.path.join(os.environ['HOME'], 'ran')\n"
-        "open(ran, 'a').write('recent ' + sys.argv[1] + '\\n')\n"
+        "open(ran, 'a').write('recent ' + ' '.join(sys.argv[1:]) + '\\n')\n"
     )
     recent.chmod(recent.stat().st_mode | stat.S_IXUSR)
     monkeypatch.setattr(GarminDBRunner, "recent_script", property(lambda _self: recent))
@@ -57,6 +57,8 @@ def test_runs_garmindb_then_the_recent_fetch(
         "--all --download --import --analyze --latest|America/Chicago",
         "recent 2026-10-03",
     ]
+    runner(date(2026, 10, 3), 30)  # the admin's deep Sync now
+    assert (runner.home / "ran").read_text().splitlines()[-1] == "recent 2026-10-03 30"
 
 
 @pytest.mark.parametrize(

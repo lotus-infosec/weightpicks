@@ -4,6 +4,8 @@ from fastapi import APIRouter, Request, Response
 from fastapi.concurrency import run_in_threadpool
 
 from app.domain import setup as setup_steps
+from app.domain import watch
+from app.domain.markets import Schedule
 from app.domain.urls import InvalidPublicUrl, parse_public_url
 from app.notify import email as email_settings
 from app.services import (
@@ -32,6 +34,8 @@ def register(router: APIRouter) -> None:
         tz_error: str | None = None,
         url_error: str | None = None,
         url_value: str | None = None,
+        watch_error: str | None = None,
+        watch_values: tuple[str, str] | None = None,
     ) -> Response:
         state = request.app.state
         with state.engine.connect() as conn:
@@ -44,6 +48,11 @@ def register(router: APIRouter) -> None:
             smtp = email_settings.stored(conn)
             smtp_password = "smtp.password" in secret_store.names(conn)
         public_url, public_url_source = instance.public_url(config, state.settings)
+        schedule = config.schedule if config else Schedule()
+        cutoff, grace = watch_values or (
+            f"{schedule.watch_sync_cutoff:%H:%M}",
+            str(schedule.watch_sync_grace_hours),
+        )
         return render(
             request,
             "admin/discord.html",
@@ -52,6 +61,10 @@ def register(router: APIRouter) -> None:
                 "public_url_source": public_url_source,
                 "url_value": public_url if url_value is None else url_value,
                 "url_error": url_error,
+                "watch_cutoff": cutoff,
+                "watch_grace": grace,
+                "watch_deadline": watch.deadline_label(schedule.watch_sync_grace_hours),
+                "watch_error": watch_error,
                 "timezone": config.timezone if config else state.settings.wp_timezone,
                 "zones": setup_steps.COMMON_ZONES,
                 "tz_preview": tz_preview,
@@ -96,6 +109,29 @@ def register(router: APIRouter) -> None:
             admin.set_public_url, state.engine, state.auth_clock, actor(request, session), url
         )
         return back("/admin/discord", "public_url")
+
+    @router.post("/discord/watch-sync")
+    async def discord_watch_sync(request: Request, session: Admin) -> Response:
+        form = await read_form(request)
+        state = request.app.state
+        values = (form.get("cutoff", ""), form.get("grace_hours", ""))
+        if not await reauth(request, session, form, "settings.watch_sync"):
+            return discord_page(
+                request, watch_error=REAUTH_FAILED_MESSAGE, watch_values=values, status=403
+            )
+        try:
+            cutoff, grace = watch.parse_settings(*values)
+        except ValueError as exc:
+            return discord_page(request, watch_error=str(exc), watch_values=values, status=400)
+        await run_in_threadpool(
+            admin.set_watch_sync,
+            state.engine,
+            state.auth_clock,
+            actor(request, session),
+            cutoff,
+            grace,
+        )
+        return back("/admin/discord", "watch_sync")
 
     @router.post("/discord/timezone/preview")
     async def discord_timezone_preview(request: Request, session: Admin) -> Response:

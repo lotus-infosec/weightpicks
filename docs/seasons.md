@@ -41,8 +41,7 @@ Set the goal during `/setup`, or for later seasons when you start one.
 
 ## Freezing and new seasons
 
-**Freezing:** Admin → Season → **Freeze** stops new bets and pool entries and locks every open market. Nothing is refunded. Players see a "Betting is paused" banner, and their history stays available.
-- **Unfreeze** reopens betting.
+**Freezing:** Admin → Season → **Freeze** pauses betting: no new bets or pool entries. Open markets stay open and lock at their usual time, bets already placed settle as usual, and nothing is refunded. **Unfreeze** reopens betting and posts any of today's drops that were skipped while frozen (if their lock time hasn't passed). Players see a "Betting is paused" banner, and their history stays available.
 - After Goal Reached you can't unfreeze; you start a new season instead.
 
 **Starting a new season:** Admin → Season → **Start a new season**. It's available while the instance is frozen and nothing is still open.

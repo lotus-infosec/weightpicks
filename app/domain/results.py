@@ -10,7 +10,13 @@ PUSH_REASONS = {
     "tie": "Push: an exact tie with the line",
     "missing_weigh_in": "Push: no weigh-in on a day it needed",
     "missing_day": "Push: no data for a day it needed",
+    "no_watch_sync": "Push: the watch didn't sync that night",
 }
+
+
+def locked_reason(note: str) -> str:
+    """An open bet on a market the admin locked early (issue #60)."""
+    return f"Locked early by the admin: {note}"
 
 
 def result_reason(

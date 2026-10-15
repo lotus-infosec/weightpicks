@@ -290,6 +290,12 @@ def system_health(conn: Connection, now: datetime, cap: int) -> dict[str, Any]:
         select(SyncRun.status, SyncRun.started_at).order_by(SyncRun.id.desc()).limit(1)
     ).one_or_none()
     sync_running = latest.started_at if latest and latest.status == "running" else None
+    watch = conn.execute(  # issue #57: as of the newest sync that asked Garmin
+        select(SyncRun.watch_upload_at, SyncRun.watch_device)
+        .where(SyncRun.status == "ok", SyncRun.watch_upload_at.is_not(None))
+        .order_by(SyncRun.id.desc())
+        .limit(1)
+    ).one_or_none()
     locked = conn.execute(select(func.count()).where(Market.status == "locked")).scalar_one()
     overdue = conn.execute(
         select(func.count()).where(Market.status == "locked", Market.settle_deadline < now)
@@ -323,6 +329,7 @@ def system_health(conn: Connection, now: datetime, cap: int) -> dict[str, Any]:
         "last_ok_sync": last_ok,
         "last_failed_sync": last_failed,
         "sync_running": sync_running,
+        "watch": watch,
         "complete_through": latest_complete_through(conn),
         "last_drop": conn.execute(
             select(func.max(Market.created_at)).where(Market.origin == "core")

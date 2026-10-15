@@ -16,6 +16,7 @@ from app.web.security import client_ip
 
 MESSAGES = {
     "voided": "Market voided and every open stake refunded.",
+    "locked": "Market locked: no more bets. Bets already placed settle as usual.",
     "frozen": "Player frozen: they can log in but not bet.",
     "unfrozen": "Player unfrozen.",
     "banned": "Player removed. Their open bets were refunded and their email is blocked.",
@@ -25,6 +26,7 @@ MESSAGES = {
     "sync": "Sync requested. The worker picks it up within a minute.",
     "webhook": "Webhook saved.",
     "public_url": "Public URL saved.",
+    "watch_sync": "Watch sync settings saved.",
     "timezone": "Time zone changed. Open bets were refunded and players notified.",
     "test": "Test post queued. It should appear in Discord within a minute.",
     "flags": "Settings saved.",
@@ -39,7 +41,7 @@ MESSAGES = {
     "pool": "Special event published. Players can enter until the night before.",
     "pool_void": "Special event voided and every buy-in refunded.",
     "instance_frozen": "Instance frozen: no bets or pool entries until you unfreeze.",
-    "instance_unfrozen": "Instance unfrozen.",
+    "instance_unfrozen": "Instance unfrozen: betting is open again.",
     "goal": "Goal Reached: everything is settled or refunded and the instance is frozen.",
     "season": "New season started. Balances carried over; betting is open again.",
     "backup": "Backup created.",
