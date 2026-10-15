@@ -84,7 +84,7 @@ class SimulatedProvider:
 
     # ---- public protocol -------------------------------------------------------------
 
-    def fetch_since(self, since: datetime, now: datetime) -> Batch:
+    def fetch_since(self, since: datetime, now: datetime, *, days: int | None = None) -> Batch:
         batch = Batch()
         first = max(self.anchor, local_date(since, self.tz) - timedelta(days=1))
         for offset in range((local_date(now, self.tz) - first).days + 1):

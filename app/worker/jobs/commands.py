@@ -22,6 +22,10 @@ from app.worker.registry import JobContext
 log = structlog.get_logger()
 
 
+# The admin's Sync now re-reads a month and corrects what changed (issue #61).
+DEEP_SYNC_DAYS = 30
+
+
 class CommandsJob:
     name = "commands"
     every_tick = True
@@ -69,9 +73,22 @@ class CommandsJob:
     def handle(self, ctx: JobContext, kind: str) -> dict[str, Any]:
         if kind == "sync_now":
             config = instance.load(ctx.engine, self.domain_clock, self.settings)
-            provider = make_provider(self.settings, ctx.engine, self.domain_clock, tz=config.tz)
-            sync = run_sync(ctx.engine, self.domain_clock, provider, tz=config.tz, unit=config.unit)
-            return {"sync_status": sync.status, "rows_new": sync.rows_new}
+            provider = make_provider(
+                self.settings, ctx.engine, self.domain_clock, tz=config.tz, schedule=config.schedule
+            )
+            sync = run_sync(
+                ctx.engine,
+                self.domain_clock,
+                provider,
+                tz=config.tz,
+                unit=config.unit,
+                deep_days=DEEP_SYNC_DAYS,
+            )
+            return {
+                "sync_status": sync.status,
+                "rows_new": sync.rows_new,
+                "rows_corrected": sync.rows_corrected,
+            }
         if kind == "ai_props_now":
             report = ai_props.run(
                 ctx.engine, self.domain_clock, ctx.clock, self.settings, "props_manual"

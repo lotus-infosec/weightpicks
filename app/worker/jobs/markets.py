@@ -9,9 +9,9 @@ from app.services.instance import InstanceConfig
 from app.worker.registry import JobContext
 
 # Every-tick passes re-read their next due time at least this often (app time), so work
-# created by another process is still picked up. Freezing locks in its own transaction,
-# bet placement checks `lock_at` itself, and settlement already waits for 2-hourly syncs,
-# so this lag only delays a status flip, never lets a late bet in.
+# created by another process (an unfreeze's catch-up drop) is still picked up. Freezing
+# refuses bets on its own, bet placement checks `lock_at` itself, and settlement already
+# waits for 2-hourly syncs, so this lag only delays a status flip, never lets a late bet in.
 RECHECK = timedelta(minutes=30)
 
 
@@ -59,7 +59,7 @@ class DropJob:
 
 
 class LockMarketsJob:
-    """Every tick: lock open markets whose lock time has passed (all of them if frozen)."""
+    """Every tick: lock open markets whose lock time has passed."""
 
     name = "lock_markets"
     every_tick = True

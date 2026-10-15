@@ -93,6 +93,9 @@ def test_roles_are_enforced_everywhere(
         if path == "/":  # the board sends the admin to their own home
             assert r.headers["location"] == "/admin"
             continue
+        if path == "/markets/{market_id}":  # a market link opens the admin's own view (#58)
+            assert r.headers["location"] == f"/admin{concrete(path)}"
+            continue
         assert r.status_code == 403, (method, path, r.status_code)
 
 
