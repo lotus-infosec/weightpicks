@@ -38,6 +38,8 @@ An iPhone doesn't sync Garmin Connect in the background: until the app is opened
 
 Change the cutoff and the grace period (0–48 hours) in **Admin → Settings → Garmin watch sync**.
 
+**Sync now** on the admin dashboard re-reads the last 30 days (scheduled syncs only look at the last week). Use it after a long trip or whenever a day on Stats looks wrong: any day whose total changed is corrected, and missed workouts are added. Settled bets never change.
+
 ## When something goes wrong
 
 While syncs fail, or no new data arrives for 36 hours, **markets wait: nothing settles on stale data**. (A sync that heard from Garmin about the watch doesn't count as stale: the watch just hasn't uploaded, and its days push at the grace deadline.) The dashboard shows the reason, and an admin alert is posted once per failure streak (if Discord admin alerts are set up).

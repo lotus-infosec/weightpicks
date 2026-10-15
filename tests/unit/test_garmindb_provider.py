@@ -172,7 +172,11 @@ def home(tmp_path: Path) -> Path:
 
 def provider(home: Path, calls: list[date] | None = None) -> GarminDBProvider:
     seen = calls if calls is not None else []
-    return GarminDBProvider(home, NY, seen.append)
+
+    def runner(today: date, days: int | None = None) -> None:
+        seen.append(today)
+
+    return GarminDBProvider(home, NY, runner)
 
 
 def test_fetch_reads_every_file_once_and_only_final_count_days(home: Path) -> None:
@@ -213,7 +217,7 @@ def test_completeness_waits_for_a_download_after_the_day_ends(home: Path) -> Non
 
 
 def test_runner_failure_propagates_and_nothing_is_read(home: Path) -> None:
-    def broken(_today: date) -> None:
+    def broken(today: date, days: int | None = None) -> None:
         raise GarminRunError("Garmin login failed: rerun garmin-login")
 
     p = GarminDBProvider(home, NY, broken)

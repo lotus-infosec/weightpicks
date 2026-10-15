@@ -14,8 +14,9 @@
     <form method="post" action="/admin/sync" class="inline-form">
       <input type="hidden" name="csrf_token" value="{{ csrf }}">
       <button type="submit" class="secondary">Sync now</button>
-      {% if d.command %}<span class="muted small" data-testid="sync-status">Last request: {{ d.command.status }}{% if d.command.result and d.command.result.rows_new is defined %} ({{ d.command.result.rows_new }} new rows){% endif %}</span>{% endif %}
+      {% if d.command %}<span class="muted small" data-testid="sync-status">Last request: {{ d.command.status }}{% if d.command.result and d.command.result.rows_new is defined %} ({{ d.command.result.rows_new }} new rows{% if d.command.result.rows_corrected %}, {{ d.command.result.rows_corrected }} day total{{ "s" if d.command.result.rows_corrected != 1 }} corrected{% endif %}){% endif %}</span>{% endif %}
     </form>
+    <p class="muted small">Sync now re-reads the last 30 days from Garmin and corrects any day whose total changed (for Stats and the odds). Settled bets don't change.</p>
   </section>
   <section class="card">
     <h2>Markets</h2>

@@ -347,6 +347,7 @@ def test_sync_now_command(world: World, boss: Actor) -> None:
     with world.engine.connect() as conn:
         status, result = conn.execute(select(Command.status, Command.result)).one()
     assert status == "done" and result["sync_status"] == "ok"
+    assert result["rows_corrected"] == 0  # the deep sync re-read a month; nothing changed
     with immediate(world.engine) as conn:
         conn.execute(
             insert(Command).values(

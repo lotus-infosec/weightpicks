@@ -68,7 +68,9 @@ read-only (not GarminDB's database, which drops the time of each weigh-in):
   (`lastUsedDeviceUploadTime` from Garmin's last-used-device call, saved to
   `watch_sync.json`). A summary file older than that upload isn't trusted; the recent fetch
   downloads the last week's summaries again after each upload. A changed total for a stored
-  day is stored as a correction (newest wins); settled markets don't change.
+  day is stored as a correction (newest wins); settled markets don't change. The admin's
+  **Sync now** passes a day count (30) to the recent fetch: the same refresh over a month,
+  plus activity-list entries for workouts GarminDB's "latest activities" download missed.
 - **Workouts:** activities of 10 minutes or more.
 
 `wp report reconcile --days N` prints, day by day, every weigh-in Garmin sent next to the

@@ -57,8 +57,9 @@ class Batch:
 class DataProvider(Protocol):
     name: str
 
-    def fetch_since(self, since: datetime, now: datetime) -> Batch:
-        """Records that became available in (since, now]."""
+    def fetch_since(self, since: datetime, now: datetime, *, days: int | None = None) -> Batch:
+        """Records that became available in (since, now]. `days` asks the provider to
+        download that many recent days again (the admin's deep Sync now, issue #61)."""
         ...
 
     def complete_through(self, now: datetime) -> dict[str, date]:

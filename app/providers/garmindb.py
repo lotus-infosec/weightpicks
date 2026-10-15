@@ -14,10 +14,10 @@ total is never stored, because a stored day is final for settlement.
 """
 
 import json
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
 import structlog
@@ -118,6 +118,10 @@ def parse_activity(data: Any) -> Activity | None:
     return Activity(ref=f"garmin:a:{activity_id}", at=at, duration_min=minutes, kind=str(kind))
 
 
+class Runner(Protocol):
+    def __call__(self, today: date, days: int | None = None) -> None: ...
+
+
 class GarminDBProvider:
     name = "garmindb"
 
@@ -125,7 +129,7 @@ class GarminDBProvider:
         self,
         home: Path,
         tz: ZoneInfo,
-        runner: Callable[[date], None],
+        runner: Runner,
         *,
         cutoff: time = watch.DEFAULT_CUTOFF,
         grace: timedelta = timedelta(hours=watch.DEFAULT_GRACE_HOURS),
@@ -181,16 +185,19 @@ class GarminDBProvider:
                 found.append(activity)
         return found
 
-    def fetch_since(self, since: datetime, now: datetime) -> Batch:
+    def fetch_since(self, since: datetime, now: datetime, *, days: int | None = None) -> Batch:
         # Raises GarminRunError; the sync is then recorded as failed.
-        self.runner(local_date(now, self.tz))
+        self.runner(local_date(now, self.tz), days)
         upload, device = parse_watch(_load(self.data_dir / WATCH_FILE))
         self.watch_upload_at, self.watch_device = upload, device
         self.fetched_at = now
         floor = since - LOOKBACK
         counts_final = self.complete_through(now)["steps"]
         first = max(
-            min(local_date(floor, self.tz), counts_final - timedelta(days=RECENT_DAYS)),
+            min(
+                local_date(floor, self.tz),
+                counts_final - timedelta(days=max(RECENT_DAYS, days or 0)),
+            ),
             counts_final - timedelta(days=120),
         )
         return Batch(

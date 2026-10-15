@@ -12,6 +12,9 @@ in the background, issue #57). So this asks Garmin when the watch last uploaded,
 re-downloads any of the last `DAYS` daily summaries saved before that upload (GarminDB
 itself only refreshes 3 days). The upload time is written last: the provider trusts a
 summary file only if it is at least as new as the upload.
+
+The admin's Sync now passes a day count (30): the same refresh over a month, plus any
+workout in that month GarminDB's "latest activities" download missed (issue #61).
 """
 
 import json
@@ -89,6 +92,25 @@ def fetch_summary(client: Any, day: date) -> dict[str, Any]:
     return data
 
 
+def save_activities(client: Any, today: date, days: int, folder: Path) -> int:
+    """Save workouts from the last `days` days that have no file yet, in the shape
+    GarminDB saves them (one activity-list entry per file). Returns how many."""
+    start = today - timedelta(days=days)
+    found = client.get_activities_by_date(start.isoformat(), today.isoformat())
+    if not isinstance(found, list):
+        raise ValueError("unexpected activities response shape")
+    saved = 0
+    for activity in found:
+        activity_id = activity.get("activityId") if isinstance(activity, dict) else None
+        if not isinstance(activity_id, int):
+            continue
+        path = folder / f"activity_{activity_id}.json"
+        if not path.exists():
+            write(activity, path)
+            saved += 1
+    return saved
+
+
 def write(data: dict[str, Any], out: Path) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".tmp")
@@ -113,6 +135,8 @@ def main() -> int:
             if n:
                 time.sleep(PAUSE_SECONDS)
             write(fetch_summary(client, day), summary_path(day))
+        if days > DAYS:  # the deep Sync now
+            save_activities(client, today, days, DATA / "FitFiles" / "Activities")
         write(watch, WATCH_FILE)
     except Exception as exc:  # the runner records only the class name
         print(f"recent fetch failed: {type(exc).__name__}", file=sys.stderr)

@@ -23,6 +23,10 @@ class FakeClient:
     def get_device_last_used(self) -> Any:
         return self.device
 
+    def get_activities_by_date(self, start: str, end: str) -> Any:
+        self.calls.append((f"activities {start} {end}", None))
+        return [{"activityId": 501, "duration": 1800}, {"activityId": 502}, {"bad": 1}]
+
     def connectapi(self, url: str, params: dict[str, str] | None = None) -> Any:
         self.calls.append((url, params))
         return {"calendarDate": params["calendarDate"] if params else None, "totalSteps": 1}
@@ -61,3 +65,12 @@ def test_fetch_summary_quotes_the_display_name() -> None:
             {"calendarDate": "2026-10-09"},
         )
     ]
+
+
+def test_deep_sync_saves_only_missing_activities(tmp_path: Path) -> None:
+    (tmp_path / "activity_501.json").write_text('{"kept": true}')
+    client = FakeClient({})
+    assert garmin_recent.save_activities(client, TODAY, 30, tmp_path) == 1
+    assert client.calls == [("activities 2026-09-10 2026-10-10", None)]
+    assert (tmp_path / "activity_501.json").read_text() == '{"kept": true}'  # GarminDB's own
+    assert '"activityId": 502' in (tmp_path / "activity_502.json").read_text()
