@@ -29,6 +29,7 @@ from app.core.config import Settings
 from app.core.db import make_engine
 from app.core.logging import configure_logging
 from app.core.migrations import is_at_head
+from app.domain.results import locked_reason
 from app.domain.urls import is_loopback
 from app.services import instance, maintenance
 from app.services import setup as setup_service
@@ -127,6 +128,7 @@ def build_templates(live: LiveInstance) -> Jinja2Templates:
     env.filters["sides_data"] = lambda card: fmt.sides_data(card, live.unit)
     env.filters["side_hint"] = lambda card, side: fmt.side_hint(card, side, live.unit)
     env.filters["market_explain"] = fmt.market_explain
+    env.filters["locked_reason"] = locked_reason
     env.filters["local_time"] = lambda ts: fmt.local_time(ts, live.tz)
     env.filters["line"] = lambda x10, metric: fmt.line(x10, metric, live.unit)
     env.globals["instance"] = live

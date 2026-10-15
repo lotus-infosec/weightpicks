@@ -13,7 +13,7 @@ from sqlalchemy import Connection, case, select
 from app.domain import parlay
 from app.domain.ledger import AccountKind
 from app.domain.markets import MarketStatus
-from app.domain.results import result_reason
+from app.domain.results import locked_reason, result_reason
 from app.models import (
     Account,
     Bet,
@@ -53,6 +53,7 @@ class MarketCard:
     correlation_keys: tuple[str, ...] = ()
     blurb: str | None = None  # AI flavour text; the title is the binding terms
     origin: str = "core"
+    lock_note: str | None = None  # the admin locked it early, and why (issue #60)
     window: tuple[date, date] | None = None  # the days it covers (issue #67: explain it)
 
 
@@ -113,6 +114,7 @@ def _cards(conn: Connection, *conditions: Any) -> list[MarketCard]:
             Market.correlation_keys,
             Market.blurb,
             Market.origin,
+            Market.lock_note,
             Market.window_start,
             Market.window_end,
         )
@@ -144,6 +146,7 @@ def _cards(conn: Connection, *conditions: Any) -> list[MarketCard]:
             correlation_keys=tuple(r.correlation_keys or ()),
             blurb=r.blurb,
             origin=r.origin,
+            lock_note=r.lock_note,
             window=(r.window_start, r.window_end),
         )
         for r in rows
@@ -205,6 +208,7 @@ def _bets(conn: Connection, *conditions: Any, limit: int = 50) -> list[BetRow]:
             Bet.kind,
             Market.void_reason,
             Market.void_note,
+            Market.lock_note,
             Settlement.outcome,
         )
         .join(BetLeg, BetLeg.bet_id == Bet.id)
@@ -230,7 +234,9 @@ def _bets(conn: Connection, *conditions: Any, limit: int = 50) -> list[BetRow]:
                 r.american,
                 r.line_x10,
                 r.leg_status,
-                result_reason(
+                locked_reason(r.lock_note)
+                if r.leg_status == "open" and r.lock_note
+                else result_reason(
                     r.leg_status,
                     r.void_reason,
                     r.void_note,

@@ -54,17 +54,27 @@ def test_operate_a_week_from_the_admin_ui(
     check(page, "admin-users", size, errors)
     expect(page.locator("tr", has_text="Reckless")).to_contain_text("bust")
 
-    # Void an open market (password re-prompt).
+    # Lock an open market early (issue #60), then void it (password re-prompt each time).
     page.goto(f"{url}/admin/markets?status=open")
     check(page, "admin-markets", size, errors)
     page.locator("table a").first.click()
-    page.get_by_label("Reason").fill("bad data feed")
-    page.get_by_label("Your admin password").fill("wrong password")
-    page.get_by_role("button", name="Void market").click()
+    lock = page.get_by_test_id("lock-market")
+    lock.get_by_label("Reason").fill("line under review")
+    lock.get_by_label("Your admin password").fill(pw)
+    lock.get_by_role("button", name="Lock market").click()
+    expect(page.get_by_role("status")).to_contain_text("Market locked")
+    expect(page.get_by_test_id("lock-note")).to_have_text(
+        "Locked early by the admin: line under review"
+    )
+    check(page, "admin-market-locked", size, errors)
+    void = page.locator("section.danger")
+    void.get_by_label("Reason").fill("bad data feed")
+    void.get_by_label("Your admin password").fill("wrong password")
+    void.get_by_role("button", name="Void market").click()
     expect(page.get_by_role("alert")).to_contain_text("not your password")
-    page.get_by_label("Reason").fill("bad data feed")
-    page.get_by_label("Your admin password").fill(pw)
-    page.get_by_role("button", name="Void market").click()
+    void.get_by_label("Reason").fill("bad data feed")
+    void.get_by_label("Your admin password").fill(pw)
+    void.get_by_role("button", name="Void market").click()
     expect(page.get_by_role("status")).to_contain_text("Market voided")
     check(page, "admin-market-voided", size, errors)
 
