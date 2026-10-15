@@ -8,7 +8,7 @@ ever posted without it. Colour encodes the result, and the text always says it t
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 GREEN, RED, GREY, BLUE, GOLD, AMBER, BLURPLE = (
@@ -235,11 +235,32 @@ ALERT_TEXT = {
         f"{safe(ctx.market_title(p.get('market_id')))} is waiting to settle "
         f"({safe(p.get('waiting_for'))}). Nothing settles on stale data."
     ),
+    "watch_sync_reminder": lambda p, ctx: (
+        f"Open Garmin Connect before bed so today's steps count. A watch sync from "
+        f"{safe(p.get('cutoff'))} on counts for {_day_name(p.get('day'))}."
+    ),
+    "watch_sync_waiting": lambda p, ctx: (
+        f"The watch hasn't synced since before {_day_name(p.get('day'))}'s cutoff, so that "
+        f"day's steps and other totals are waiting. Open Garmin Connect: its markets push at "
+        f"{safe(p.get('deadline_local'))} if no sync arrives."
+    ),
+    "watch_sync_push": lambda p, ctx: (
+        f"No watch sync arrived for {_day_name(p.get('day'))}: its markets pushed and every "
+        "stake was refunded. Its totals still fill in on Stats once the watch syncs."
+    ),
     "delivery_failed": lambda p, ctx: (
         f"A {CATEGORY_LABELS.get(str(p.get('category')), p.get('category'))} post could not be "
         f"delivered: {safe(p.get('error'), 500)}"
     ),
 }
+
+
+def _day_name(iso: object) -> str:
+    try:
+        day = date.fromisoformat(str(iso))
+    except ValueError:
+        return safe(iso)
+    return f"{day:%a %b} {day.day}"
 
 
 def _alert(category: str, p: dict[str, Any], ctx: Context) -> dict[str, Any]:
