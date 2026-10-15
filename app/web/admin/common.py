@@ -25,6 +25,7 @@ MESSAGES = {
     "sync": "Sync requested. The worker picks it up within a minute.",
     "webhook": "Webhook saved.",
     "public_url": "Public URL saved.",
+    "watch_sync": "Watch sync settings saved.",
     "timezone": "Time zone changed. Open bets were refunded and players notified.",
     "test": "Test post queued. It should appear in Discord within a minute.",
     "flags": "Settings saved.",

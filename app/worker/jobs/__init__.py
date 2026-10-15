@@ -3,7 +3,7 @@ from app.domain.markets import Timeframe
 from app.services.instance import InstanceConfig
 from app.worker.jobs.ai import AiHypeJob, AiPropsJob
 from app.worker.jobs.economy import DailyAllowanceJob, WeeklyStandingsJob
-from app.worker.jobs.garmin_sync import GarminSyncJob, SyncSignal
+from app.worker.jobs.garmin_sync import GarminSyncJob, SyncSignal, WatchSyncReminderJob
 from app.worker.jobs.heartbeat import HeartbeatJob
 from app.worker.jobs.ledger_verify import LedgerVerifyJob
 from app.worker.jobs.markets import DropJob, DueCache, LockMarketsJob, SettleMarketsJob
@@ -21,9 +21,13 @@ def domain_jobs(settings: Settings, config: InstanceConfig) -> tuple[Job, ...]:
     then drops, the lock pass and the settle pass."""
     locks, settles = DueCache(), DueCache()
     synced = SyncSignal()
+    # The bedtime reminder only means something with a real watch behind the data.
+    garmin = settings.data_provider == "garmindb"
+    reminder: tuple[Job, ...] = (WatchSyncReminderJob(config),) if garmin else ()
     return (
         GarminSyncJob(settings, config, synced),
         GoalWatchJob(synced),
+        *reminder,
         DropJob(Timeframe.DAILY, config, locks),
         DropJob(Timeframe.WEEKLY, config, locks),
         DropJob(Timeframe.MONTHLY, config, locks),

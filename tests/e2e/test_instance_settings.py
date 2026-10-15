@@ -1,6 +1,6 @@
-"""Admin -> Settings -> Instance (issues #17, #30): public URL and the time zone change
-warning. Only the preview is opened (the shared server keeps its zone). Phone and
-desktop; screenshots go to test-screens/ for review."""
+"""Admin -> Settings -> Instance (issues #17, #30, #57): public URL, the time zone change
+warning and the watch sync card. Only the preview is opened (the shared server keeps its
+zone). Phone and desktop; screenshots go to test-screens/ for review."""
 
 import pytest
 from playwright.sync_api import Browser, ConsoleMessage, expect
@@ -43,4 +43,10 @@ def test_instance_settings(browser: Browser, rich_server: RichServer, size: str)
     check(page, "admin-timezone-warning", size, errors)
     page.get_by_role("link", name="Cancel").click()
     expect(page.get_by_test_id("current-timezone")).to_have_text("America/New_York")
+
+    watch = page.get_by_test_id("watch-sync-settings")  # issue #57
+    watch.scroll_into_view_if_needed()
+    expect(page.get_by_test_id("watch-deadline")).to_have_text("14:00 the next day")
+    expect(watch.get_by_label("A watch sync counts from")).to_have_value("22:00")
+    check(page, "admin-watch-sync", size, errors)
     context.close()
