@@ -21,7 +21,17 @@ from app.domain.ledger import AccountKind
 from app.domain.markets import MarketStatus
 from app.domain.schedule import local_date
 from app.models import Account, AiProposal, JobRun, Market, Pool, Season, User
-from app.services import admin, audit, busts, instance, leaderboard, ledger, pools, settlement
+from app.services import (
+    admin,
+    audit,
+    busts,
+    instance,
+    leaderboard,
+    ledger,
+    markets,
+    pools,
+    settlement,
+)
 from app.services.observations import canonical_weigh_ins, latest_complete_through
 from app.services.outbox import Category, enqueue
 
@@ -133,8 +143,10 @@ def goal_reached(
             return None
         if hit is None and actor is not None:  # manual: use today's weigh-in if it counts
             hit = detect(conn)
-        # 1. Freeze first (locks every open market) so nothing can slip in.
+        # 1. Freeze and lock every open market so nothing can slip in, and so markets the
+        # goal weigh-in already decides (milestones) settle in step 2.
         instance.set_instance_state(conn, clock, instance.FROZEN)
+        markets.lock_open_markets(conn, now, everything=True)
         conn.execute(
             update(Season)
             .where(Season.id == season.id)
@@ -233,7 +245,10 @@ def goal_reached(
 # ---- freeze / unfreeze -------------------------------------------------------------------
 
 
-def set_frozen(engine: Engine, clock: Clock, actor: audit.Actor, frozen: bool) -> None:
+def set_frozen(engine: Engine, clock: Clock, actor: audit.Actor, frozen: bool) -> int:
+    """Pause or resume betting. Open markets stay open and lock at their own time
+    (issue #59); unfreezing posts today's drops that were skipped while frozen. Returns
+    how many markets that posted."""
     with immediate(engine) as conn:
         season = _season(conn)
         if not frozen and season is not None and season.status == "frozen":
@@ -243,8 +258,8 @@ def set_frozen(engine: Engine, clock: Clock, actor: audit.Actor, frozen: bool) -
         before = instance.current_state(conn)
         target = instance.FROZEN if frozen else instance.ACTIVE
         if before == target:
-            return
-        locked = instance.set_instance_state(conn, clock, target)
+            return 0
+        instance.set_instance_state(conn, clock, target)
         audit.record(
             conn,
             clock,
@@ -252,8 +267,12 @@ def set_frozen(engine: Engine, clock: Clock, actor: audit.Actor, frozen: bool) -
             action="instance.freeze" if frozen else "instance.unfreeze",
             target=("settings", 1),
             before={"state": before},
-            after={"state": target, "markets_locked": locked},
+            after={"state": target},
         )
+        config = instance.read(conn)
+    if frozen or config is None:
+        return 0
+    return markets.catch_up_drops(engine, clock, config)
 
 
 # ---- new season --------------------------------------------------------------------------

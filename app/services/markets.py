@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 import structlog
-from sqlalchemy import Connection, Engine, exists, func, insert, select, update
+from sqlalchemy import Connection, Engine, func, insert, select, update
 
 from app.core.clock import Clock
 from app.core.db import immediate
@@ -30,8 +30,8 @@ from app.domain.markets import (
     drop_specs,
     transition,
 )
-from app.domain.schedule import local_date
-from app.models import InstanceSettingsRow, Market, Observation, OddsVersion, Selection
+from app.domain.schedule import latest_daily, latest_month_end, latest_weekly, local_date
+from app.models import Market, Observation, OddsVersion, Selection
 from app.providers.base import COUNT_METRICS, WORKOUT_MIN_MINUTES
 from app.services import instance
 from app.services.instance import InstanceConfig
@@ -293,14 +293,14 @@ def set_status(
 
 
 def lock_open_markets(conn: Connection, now: datetime, *, everything: bool = False) -> int:
-    """Lock open markets whose lock time has come (or all of them: instance frozen)."""
+    """Lock open markets whose lock time has come (or all of them: Goal Reached)."""
     query = select(Market.id).where(Market.status == MarketStatus.OPEN.value)
     if not everything:
         query = query.where(Market.lock_at <= now)
     ids = list(conn.execute(query).scalars())
     count = set_status(conn, ids, MarketStatus.OPEN, MarketStatus.LOCKED, now)
     if count:
-        log.info("markets_locked", count=count, frozen=everything)
+        log.info("markets_locked", count=count, everything=everything)
     return count
 
 
@@ -311,26 +311,27 @@ class LockPass:
 
 
 def lock_due(engine: Engine, now: datetime) -> LockPass:
-    """Every-tick lock pass: one read; takes the write lock only when something is due."""
+    """Every-tick lock pass: one read; takes the write lock only when something is due.
+    Markets lock at their own time, frozen or not (issue #59)."""
     open_ = Market.status == MarketStatus.OPEN.value
-    state = (
-        select(InstanceSettingsRow.instance_state)
-        .where(InstanceSettingsRow.id == 1)
-        .scalar_subquery()
-    )
     with engine.connect() as conn:
-        frozen_state, earliest, any_open = conn.execute(
-            select(
-                state,
-                select(func.min(Market.lock_at)).where(open_).scalar_subquery(),
-                select(exists().where(open_)).scalar_subquery(),
-            )
-        ).one()
-    frozen = frozen_state == instance.FROZEN
-    if not any_open or (not frozen and earliest > now):
+        earliest = conn.execute(select(func.min(Market.lock_at)).where(open_)).scalar_one()
+    if earliest is None or earliest > now:
         return LockPass(0, earliest)
     with immediate(engine) as conn:
-        frozen = instance.current_state(conn) == instance.FROZEN
-        locked = lock_open_markets(conn, now, everything=frozen)
+        locked = lock_open_markets(conn, now)
         pending = conn.execute(select(func.min(Market.lock_at)).where(open_)).scalar_one()
     return LockPass(locked, pending)
+
+
+def catch_up_drops(engine: Engine, clock: Clock, config: InstanceConfig) -> int:
+    """After an unfreeze: post today's drops that were skipped while frozen (each one only
+    if it's still the drop's day and its lock time hasn't passed; existing markets are
+    left alone). Returns how many markets were posted (issue #59)."""
+    now, tz, sched = clock.now(), config.tz, config.schedule
+    due = {
+        Timeframe.DAILY: latest_daily(now, sched.daily_drop, tz),
+        Timeframe.WEEKLY: latest_weekly(now, sched.weekly_drop_weekday, sched.weekly_drop, tz),
+        Timeframe.MONTHLY: latest_month_end(now, sched.monthly_drop, tz),
+    }
+    return sum(len(drop(engine, clock, config, tf, day).created) for tf, day in due.items())
