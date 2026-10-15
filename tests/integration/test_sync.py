@@ -42,7 +42,7 @@ class ScriptedProvider:
         self.complete: dict[str, date] = {}
         self.fail = False
 
-    def fetch_since(self, since: datetime, now: datetime) -> Batch:
+    def fetch_since(self, since: datetime, now: datetime, *, days: int | None = None) -> Batch:
         if self.fail:
             raise ConnectionError("garmin down")
         return Batch(
@@ -140,7 +140,7 @@ class ScriptedProviderAll(ScriptedProvider):
         self.weigh_ins = inner.weigh_ins
         self.name = inner.name
 
-    def fetch_since(self, since: datetime, now: datetime) -> Batch:
+    def fetch_since(self, since: datetime, now: datetime, *, days: int | None = None) -> Batch:
         return Batch(weigh_ins=[w for w in self.weigh_ins if w.at <= now])
 
 
@@ -269,7 +269,7 @@ def test_a_failure_streak_alerts_once(migrated_engine: Engine) -> None:
 
 def test_garmin_errors_are_stored_as_given(migrated_engine: Engine) -> None:
     class Expired(ScriptedProvider):
-        def fetch_since(self, since: datetime, now: datetime) -> Batch:
+        def fetch_since(self, since: datetime, now: datetime, *, days: int | None = None) -> Batch:
             raise GarminRunError("Garmin login failed: rerun garmin-login")
 
     result = _sync(migrated_engine, SimClock(local(2026, 10, 5, 7)), Expired())

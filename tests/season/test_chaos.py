@@ -72,11 +72,13 @@ def chaos(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Chaos]:
     patch = pytest.MonkeyPatch()
     fetch = SimulatedProvider.fetch_since
 
-    def flaky_fetch(self: SimulatedProvider, since: datetime, now: datetime) -> Any:
+    def flaky_fetch(
+        self: SimulatedProvider, since: datetime, now: datetime, *, days: int | None = None
+    ) -> Any:
         if not calm and rng.random() < SYNC_FAILURE_RATE:
             run.sync_failures += 1
             raise ConnectionError("chaos: Garmin is down")
-        return fetch(self, since, now)
+        return fetch(self, since, now, days=days)
 
     finish = registry._finish
 

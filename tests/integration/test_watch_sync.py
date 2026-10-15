@@ -4,6 +4,7 @@ markets wait (re-checked every sync) until 14:00, then push. A changed total is 
 as a correction; settled markets never change. Synthetic files only, no real data."""
 
 import json
+import os
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 
@@ -31,8 +32,10 @@ class FakeGarmin:
         self.steps: dict[date, int] = {}
         self.upload: datetime | None = None
         self.fail = False
+        self.asked: list[int | None] = []  # days to re-download, per run
 
-    def __call__(self, today: date) -> None:
+    def __call__(self, today: date, days: int | None = None) -> None:
+        self.asked.append(days)
         if self.fail:
             raise GarminRunError("Garmin login failed: the token expired")
         for day, steps in self.steps.items():
@@ -45,7 +48,11 @@ class FakeGarmin:
                 "moderateIntensityMinutes": 10,
                 "activeKilocalories": 300,
             }
-            (path / f"daily_summary_{day}.json").write_text(json.dumps(summary))
+            file = path / f"daily_summary_{day}.json"
+            file.write_text(json.dumps(summary))
+            if self.upload:  # downloaded after the watch's upload, as the real fetch does
+                stamp = self.upload.timestamp() + 60
+                os.utime(file, (stamp, stamp))
         upload = int(self.upload.timestamp() * 1000) if self.upload else None
         self.data.mkdir(parents=True, exist_ok=True)
         (self.data / "watch_sync.json").write_text(json.dumps({"upload_ms": upload}))
@@ -73,9 +80,11 @@ def steps_market(w: World) -> int:
         )
 
 
-def sync_and_settle(w: World, p: GarminDBProvider, at: datetime) -> SyncResult:
+def sync_and_settle(
+    w: World, p: GarminDBProvider, at: datetime, deep_days: int | None = None
+) -> SyncResult:
     w.clock.set(at)
-    result = run_sync(w.engine, w.clock, p, tz=NY, unit="lb")
+    result = run_sync(w.engine, w.clock, p, tz=NY, unit="lb", deep_days=deep_days)
     markets.lock_due(w.engine, w.clock.now())
     settlement.settle_due(w.engine, w.clock)
     return result
@@ -235,3 +244,26 @@ def test_the_bedtime_reminder_posts_once_at_the_cutoff(world: World) -> None:
     world.clock.set(local(2026, 10, 7, 0, 30))
     run_due([late], world.engine, world.clock)
     assert alerts(world, "watch_sync_reminder:2026-10-06") == []
+
+
+def test_sync_now_rereads_a_month_and_corrects_old_days(world: World, garmin: FakeGarmin) -> None:
+    """Issue #61: the deep sync corrects a day too old for the scheduled sync to re-read;
+    settled markets stay as they were."""
+    market = steps_market(world)
+    p = provider(garmin)
+    garmin.steps, garmin.upload = {DAY: 5_000}, local(2026, 10, 6, 22, 30)
+    sync_and_settle(world, p, local(2026, 10, 7, 2, 5))
+    settled = outcome(world, market)
+    assert settled is not None and settled["value_x10"] == 50_000
+
+    garmin.upload = local(2026, 10, 16, 7)  # syncs keep running; the stored day is old now
+    assert sync_and_settle(world, p, local(2026, 10, 16, 8)).rows_corrected == 0
+    garmin.steps, garmin.upload = {DAY: 10_200}, local(2026, 10, 17, 7)  # Garmin changed it
+    scheduled = sync_and_settle(world, p, local(2026, 10, 17, 8))
+    assert scheduled.rows_corrected == 0 and stored_steps(world, DAY) == 5_000  # too old
+    deep = sync_and_settle(world, p, local(2026, 10, 17, 8, 15), deep_days=30)
+    assert deep.rows_corrected == 1 and stored_steps(world, DAY) == 10_200
+    assert garmin.asked[-2:] == [None, 30]
+    assert outcome(world, market) == settled
+    again = sync_and_settle(world, p, local(2026, 10, 17, 8, 30), deep_days=30)
+    assert again.rows_corrected == 0

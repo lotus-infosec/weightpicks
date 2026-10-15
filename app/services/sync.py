@@ -148,8 +148,16 @@ def _rows(
 
 
 def run_sync(
-    engine: Engine, clock: Clock, provider: DataProvider, *, tz: ZoneInfo, unit: Unit
+    engine: Engine,
+    clock: Clock,
+    provider: DataProvider,
+    *,
+    tz: ZoneInfo,
+    unit: Unit,
+    deep_days: int | None = None,
 ) -> SyncResult:
+    """One sync and ingest. `deep_days` (the admin's Sync now, issue #61) re-reads that
+    many days: missing records are added and changed daily totals corrected."""
     now = clock.now()
     with immediate(engine) as conn:
         last_ok = conn.execute(
@@ -165,9 +173,11 @@ def run_sync(
     if last_ok is not None and last_ok.tzinfo is None:  # func.max() bypasses UTCDateTime
         last_ok = last_ok.replace(tzinfo=UTC)
     since = last_ok - FETCH_OVERLAP if last_ok is not None else EPOCH
+    if deep_days:
+        since = min(since, now - timedelta(days=deep_days))
 
     try:
-        batch = provider.fetch_since(since, now)
+        batch = provider.fetch_since(since, now, days=deep_days)
         complete = provider.complete_through(now)
     except Exception as exc:
         # GarminRunError messages are already scrubbed; anything else is shown by type.
