@@ -65,8 +65,10 @@ def test_board_sheet_parlay_and_placed(
     expect(page.get_by_test_id("parlay-bar")).to_be_visible()
     for metric in ("steps", "kcal"):
         page.locator(f'article[data-metric="{metric}"] button.mrow').last.click()
+        if metric == "steps":  # issue #68: with a parlay open, a tap on a side joins it
+            expect(page.get_by_test_id("parlay-mode")).to_be_visible()
+            shot(page, f"redesign-{tag}-parlay-mode")
         sheet.locator("button.toggle").last.click()
-        page.get_by_test_id("add-leg").click()
     expect(page.get_by_test_id("parlay-bar")).to_contain_text("3")
     shot(page, f"redesign-{tag}-parlay-bar")
     page.get_by_test_id("parlay-bar").click()

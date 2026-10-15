@@ -53,7 +53,11 @@ data-sides='{{ card | sides_data | tojson }}'
         </button>
       </template>
     </div>
-    <div class="stake-block" x-show="hasSide">
+    <div class="parlay-mode" x-show="parlayMode" data-testid="parlay-mode">
+      <p class="small" x-text="parlayModeText"></p>
+      <button type="button" class="secondary wide" x-on:click="openParlay">Review parlay</button>
+    </div>
+    <div class="stake-block" x-show="showSingle">
       <label class="stake-label" for="stake">Stake</label>
       <div class="stake-row">
         <span class="stake-prefix">$</span>
@@ -66,7 +70,7 @@ data-sides='{{ card | sides_data | tojson }}'
       </div>
       <p class="returns">Returns <strong class="num" x-text="payoutText" data-testid="payout"></strong> if it wins</p>
     </div>
-    <div class="sheet-actions" x-show="hasSide">
+    <div class="sheet-actions" x-show="showSingle">
       <button type="button" class="primary wide" x-on:click="place" x-bind:disabled="cannotPlace" data-testid="place" x-text="placeLabel">Place bet</button>
       <button type="button" class="secondary wide" x-show="parlayAllowed" x-on:click="toggleLeg" x-text="legLabel" data-testid="add-leg">Add to parlay</button>
     </div>
@@ -101,6 +105,7 @@ data-sides='{{ card | sides_data | tojson }}'
     <div class="sheet-actions">
       <button type="button" class="primary wide" x-on:click="place" x-bind:disabled="cannotPlace" data-testid="place-parlay" x-text="placeLabel">Place parlay</button>
       <button type="button" class="secondary wide" x-on:click="close">Add more legs</button>
+      <button type="button" class="ghost wide" x-on:click="clearParlay" data-testid="clear-parlay">Clear parlay</button>
     </div>
   </div>
 

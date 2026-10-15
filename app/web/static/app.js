@@ -176,6 +176,14 @@
         get barText() {
           return this.legs.length < 2 ? "add one more leg" : "combined " + this.combinedText;
         },
+        // Issue #68: while a parlay has legs, a tapped side goes straight into it; singles
+        // come back once the parlay is placed or cleared.
+        get parlayMode() { return this.parlayAllowed && this.legs.length > 0; },
+        get showSingle() { return this.hasSide && !this.parlayMode; },
+        get parlayModeText() {
+          return "Your parlay is open (" + this.legs.length + (this.legs.length === 1 ? " leg" : " legs") +
+            "): tap a side to add it, tap it again to take it out.";
+        },
         get inParlay() {
           const id = this.market && this.market.id;
           return this.legs.find(function (l) { return l.marketId === id; }) || null;
@@ -214,6 +222,12 @@
         chooseSide(event) {
           this.sideIndex = Number(event.currentTarget.dataset.index);
           this.message = "";
+          if (this.parlayMode) this.toggleLeg();
+        },
+        clearParlay() {
+          this.legs = [];
+          this.stake = "";
+          this.close();
         },
         setStake(event) {
           this.stake = (Number(event.currentTarget.dataset.cents) / 100).toFixed(2);

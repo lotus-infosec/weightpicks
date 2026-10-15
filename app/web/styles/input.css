@@ -116,6 +116,7 @@
   .toggle[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent), 0 8px 24px var(--accent-glow); }
   .toggle:disabled { @apply opacity-40; }
   .toggle-name { @apply text-sm; color: var(--text-2); }
+  .parlay-mode { @apply flex flex-col gap-2; padding: 12px; border-radius: 16px; background: var(--accent-soft); border: 1px solid var(--accent-line); }
   .toggle-odds { @apply text-2xl; }
   .toggle-hint { @apply text-xs font-normal text-center; color: var(--text-3); padding-inline: 8px; }
   .stake-block { @apply flex flex-col gap-2; }

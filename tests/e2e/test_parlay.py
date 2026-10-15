@@ -35,18 +35,25 @@ def test_build_and_place_a_parlay(browser: Browser, rich_server: RichServer, siz
     sheet = page.get_by_test_id("slip")
     bar = page.get_by_test_id("parlay-bar")
 
-    def leg(metric: str, side: int) -> None:
-        """Open the market row, pick side 0 (over/yes) or 1 (under/no), add it."""
+    def leg(metric: str, side: int, first: bool = False) -> None:
+        """Open the market row and pick side 0 (over/yes) or 1 (under/no). The first leg
+        needs "Add to parlay"; after that a tap on a side joins the parlay (issue #68)."""
         page.locator(f'article[data-metric="{metric}"] button.mrow').first.click()
         sheet.locator("button.toggle").nth(side).click()
-        page.get_by_test_id("add-leg").click()
+        if first:
+            page.get_by_test_id("add-leg").click()
 
     # Leg 1: tonight's daily weight market; legs 2 and 3: weekly steps and calories.
-    leg("weight", 0)
+    leg("weight", 0, first=True)
     expect(bar).to_be_visible()
     page.get_by_role("tab", name="Weekly").click()
     expect(page.get_by_role("tab", name="Weekly")).to_have_attribute("aria-selected", "true")
-    leg("steps", 0)
+    page.locator('article[data-metric="steps"] button.mrow').first.click()
+    expect(page.get_by_test_id("parlay-mode")).to_be_visible()  # a parlay is open:
+    expect(page.get_by_test_id("add-leg")).to_be_hidden()  # no single bet, no extra button
+    expect(page.get_by_test_id("stake")).to_be_hidden()
+    sheet.locator("button.toggle").nth(0).click()
+    expect(sheet).to_be_hidden()
     leg("kcal", 1)
     expect(bar.locator(".parlay-count")).to_have_text("3")
     # The weekly weight market shares the start weigh-in with leg 1: refused in the sheet.
@@ -59,18 +66,15 @@ def test_build_and_place_a_parlay(browser: Browser, rich_server: RichServer, siz
     steps = page.locator('article[data-metric="steps"] button.mrow').first
     steps.click()
     expect(sheet.locator("button.toggle").nth(0)).to_have_attribute("aria-pressed", "true")
-    expect(page.get_by_test_id("add-leg")).to_have_text("Remove from parlay")
     sheet.locator("button.toggle").nth(1).click()
-    expect(page.get_by_test_id("add-leg")).to_have_text("Switch parlay leg")
-    page.get_by_test_id("add-leg").click()
     bar.click()
     legs = page.get_by_test_id("slip-legs").locator("li")
     expect(legs).to_have_count(3)
     expect(legs.nth(1)).to_contain_text("Under")
     page.keyboard.press("Escape")
-    # Tapping the picked side again takes the leg out; adding it once more puts it back.
+    # Tapping the picked side again takes the leg out; picking it once more puts it back.
     steps.click()
-    page.get_by_test_id("add-leg").click()
+    sheet.locator("button.toggle").nth(1).click()
     expect(bar.locator(".parlay-count")).to_have_text("2")
     leg("steps", 1)
     expect(bar.locator(".parlay-count")).to_have_text("3")
@@ -83,6 +87,12 @@ def test_build_and_place_a_parlay(browser: Browser, rich_server: RichServer, siz
     page.get_by_test_id("place-parlay").click()
     expect(page.get_by_test_id("bet-done")).to_contain_text("Parlay placed")
     expect(bar).to_be_hidden()
+    # Placed: picks are single bets again.
+    page.locator('article[data-metric="kcal"] button.mrow').first.click()
+    sheet.locator("button.toggle").nth(0).click()
+    expect(page.get_by_test_id("stake")).to_be_visible()
+    expect(page.get_by_test_id("add-leg")).to_have_text("Add to parlay")
+    page.keyboard.press("Escape")
 
     page.get_by_role("link", name="My bets").click()
     first = page.locator("li.bet").first

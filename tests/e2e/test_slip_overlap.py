@@ -32,7 +32,8 @@ def test_parlay_bar_never_covers_the_last_market(browser: Browser, rich_server: 
         box = sheet.bounding_box()
         assert box is not None and box["height"] <= 0.88 * 812 + 1
         sheet.locator("button.toggle").first.click()
-        page.get_by_test_id("add-leg").click()
+        if metric == "steps":  # the first leg; then a tap joins the parlay (issue #68)
+            page.get_by_test_id("add-leg").click()
     bar = page.get_by_test_id("parlay-bar")
     expect(bar.locator(".parlay-count")).to_have_text("3")
 
