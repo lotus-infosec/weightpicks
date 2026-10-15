@@ -44,12 +44,50 @@ def line(line_x10: int | None, metric: str, unit: str) -> str:
 SIDE_LABELS = {"over": "Over", "under": "Under", "yes": "Yes", "no": "No"}
 
 
-def sides_data(card: Any) -> list[dict[str, Any]]:
-    """A market's sides for the bet sheet (issue #43)."""
+def side_hint(card: Any, side: str, unit: str) -> str:
+    """What a side means in words (issue #67): over/under on a weight change is easy to
+    misread, since "over -2.0" means losing less than 2.0, or gaining."""
+    x10 = card.line_x10
+    if x10 is None or side not in ("over", "under"):
+        return ""
+    if card.template == "weight_change_ou":
+        amount = line(abs(x10), "weight", unit).lstrip("+")
+        if x10 < 0:
+            return (
+                f"Lose less than {amount}, or gain"
+                if side == "over"
+                else f"Lose more than {amount}"
+            )
+        if x10 > 0:
+            return (
+                f"Gain more than {amount}"
+                if side == "over"
+                else f"Gain less than {amount}, or lose"
+            )
+        return "Gain weight" if side == "over" else "Lose weight"
+    if card.template == "metric_total_ou":
+        return f"{'More' if side == 'over' else 'Less'} than {line(x10, card.metric, unit)}"
+    return ""
+
+
+def market_explain(card: Any) -> str:
+    """Which weigh-ins a weight change compares (issue #67)."""
+    if card.template != "weight_change_ou" or card.window is None:
+        return ""
+    start, end = card.window
+    return (
+        f"Change from the {start:%a %b} {start.day} weigh-in to the {end:%a %b} {end.day} "
+        "weigh-in. A minus means weight lost."
+    )
+
+
+def sides_data(card: Any, unit: str = "lb") -> list[dict[str, Any]]:
+    """A market's sides for the bet sheet (issue #43), with what each means (#67)."""
     return [
         {
             "side": s.side,
             "label": SIDE_LABELS[s.side],
+            "hint": side_hint(card, s.side, unit),
             "selection": s.selection_id,
             "odds": s.odds,
             "oddsText": odds(s.odds),

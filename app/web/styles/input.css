@@ -118,6 +118,7 @@
   .toggle-name { @apply text-sm; color: var(--text-2); }
   .parlay-mode { @apply flex flex-col gap-2; padding: 12px; border-radius: 16px; background: var(--accent-soft); border: 1px solid var(--accent-line); }
   .toggle-odds { @apply text-2xl; }
+  .toggle-hint { @apply text-xs font-normal text-center; color: var(--text-3); padding-inline: 8px; }
   .stake-block { @apply flex flex-col gap-2; }
   .stake-label { @apply text-xs; color: var(--text-3); }
   .stake-row { @apply flex items-center gap-2 rounded-xl px-3; background: var(--color-raised); border: 1px solid var(--color-line); }

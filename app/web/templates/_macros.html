@@ -5,6 +5,7 @@ data-market="{{ card.market_id }}" data-title="{{ card.title }}" data-metric="{{
 data-line="{{ card.line_x10 | line(card.metric) if card.line_x10 is not none else '' }}"
 data-version="{{ card.odds_version_id }}" data-keys="{{ card.correlation_keys | join(',') }}"
 data-lock="{{ card.lock_at | local_time }}" data-blurb="{{ card.blurb or '' }}"
+data-explain="{{ card | market_explain }}"
 data-sides='{{ card | sides_data | tojson }}'
 {%- endmacro %}
 
@@ -41,12 +42,14 @@ data-sides='{{ card | sides_data | tojson }}'
       </div>
       <button type="button" class="icon-btn" x-on:click="close" aria-label="Close">{{ icon("close") }}</button>
     </header>
+    <p class="muted small" x-show="explain" x-text="explain" data-testid="market-explain"></p>
     <p class="muted small" x-show="blurb" x-text="blurb"></p>
     <div class="toggles" role="group" aria-label="Pick a side">
       <template x-for="(s, i) in sides" x-bind:key="s.selection">
         <button type="button" class="toggle" x-on:click="chooseSide" x-bind:data-index="i" x-bind:aria-pressed="s.pressed" x-bind:class="s.kind" x-bind:disabled="s.disabled" x-bind:data-testid="s.testid">
           <span class="toggle-name" x-text="s.label"></span>
           <span class="toggle-odds num" x-text="s.oddsText"></span>
+          <span class="toggle-hint" x-show="s.hint" x-text="s.hint"></span>
         </button>
       </template>
     </div>
