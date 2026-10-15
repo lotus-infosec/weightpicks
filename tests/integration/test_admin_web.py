@@ -16,7 +16,7 @@ from app.services import admin, audit, auth, instance, markets, secrets
 from app.services.sync import record_failure
 from app.web.main import create_app
 from tests.integration import web
-from tests.integration.test_bets_settlement import account
+from tests.integration.test_bets_settlement import account, weight_market
 from tests.integration.world import World
 
 
@@ -309,3 +309,15 @@ def test_leaderboard_page(clients: tuple[TestClient, TestClient, World]) -> None
     assert player_c.get("/leaderboard?season=999").status_code == 200  # unknown -> current
     admin_c.__exit__(None, None, None)
     player_c.__exit__(None, None, None)
+
+
+def test_a_market_link_opens_the_admin_market_page(
+    clients: tuple[TestClient, TestClient, World],
+) -> None:
+    """Issue #58: Discord links point at /markets/<id>; the admin lands on the read-only
+    admin view (every bet, with names) instead of a 403."""
+    admin_c, _player_c, w = clients
+    market = weight_market(w, -5, day=date(2026, 10, 8))
+    r = admin_c.get(f"/markets/{market}", follow_redirects=False)
+    assert (r.status_code, r.headers["location"]) == (303, f"/admin/markets/{market}")
+    assert "Bets" in admin_c.get(f"/markets/{market}").text

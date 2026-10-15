@@ -218,4 +218,5 @@ def require_admin(session: Annotated[SessionInfo, Depends(require_session)]) -> 
 
 
 Player = Annotated[SessionInfo, Depends(require_player)]
+Signed = Annotated[SessionInfo, Depends(require_session)]  # any role; the route decides
 Admin = Annotated[SessionInfo, Depends(require_admin)]

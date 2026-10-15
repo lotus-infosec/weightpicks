@@ -17,7 +17,9 @@ from app.services.auth import AuthError, SessionInfo
 from app.services.bets import BetRejected, place_bet, place_parlay
 from app.web.security import (
     SESSION_COOKIE,
+    Forbidden,
     Player,
+    Signed,
     clear_session_cookie,
     client_ip,
     csrf_cookie_token,
@@ -310,7 +312,11 @@ def build_router() -> APIRouter:
         return render(request, "board.html", context)
 
     @router.get("/markets/{market_id}")
-    def market_page(request: Request, market_id: int, session: Player) -> Response:
+    def market_page(request: Request, market_id: int, session: Signed) -> Response:
+        if session.role == "admin":  # links in Discord posts: the admin's read-only view (#58)
+            return RedirectResponse(f"/admin/markets/{market_id}", status_code=303)
+        if session.role != "player":
+            raise Forbidden
         state = request.app.state
         with state.engine.connect() as conn:
             found = board.market(conn, market_id)
