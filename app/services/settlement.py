@@ -334,10 +334,11 @@ def settle_due(engine: Engine, clock: Clock) -> SettlePass:
 
 
 def reevaluate_parlay(conn: Connection, clock: Clock, bet_id: int, now: datetime) -> str:
-    """Resolve an open parlay from its legs: any lost leg loses it at once (the
-    other open legs are voided); once every leg is in, pushed/void legs drop out and it
-    pays floor(stake x the product of the won legs' decimal odds), or refunds the stake
-    when every leg dropped out. Same transaction as the leg change; returns the status."""
+    """Resolve an open parlay from its legs: any lost leg loses it at once (its other
+    legs stay open and still settle with their own result, so the bet shows how every
+    pick did); once every leg is in, pushed/void legs drop out and it pays
+    floor(stake x the product of the won legs' decimal odds), or refunds the stake when
+    every leg dropped out. Same transaction as the leg change; returns the status."""
     bet = conn.execute(
         select(Bet.account_id, Bet.user_id, Bet.stake_cents, Bet.status).where(Bet.id == bet_id)
     ).one()
@@ -349,13 +350,7 @@ def reevaluate_parlay(conn: Connection, clock: Clock, bet_id: int, now: datetime
     resolution = parlay.resolve(bet.stake_cents, [(leg.status, leg.american) for leg in legs])
     if resolution.status == "open":
         return "open"
-    if resolution.status == "lost":
-        conn.execute(
-            update(BetLeg)
-            .where(BetLeg.bet_id == bet_id, BetLeg.status == "open")
-            .values(status="void")
-        )
-    elif resolution.status == "won":
+    if resolution.status == "won":
         ledger.payout(
             conn,
             clock,
@@ -364,7 +359,7 @@ def reevaluate_parlay(conn: Connection, clock: Clock, bet_id: int, now: datetime
             idempotency_key=f"bet:{bet_id}:payout",
             ref_id=bet_id,
         )
-    else:
+    elif resolution.status != "lost":
         ledger.refund(
             conn,
             clock,
