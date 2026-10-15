@@ -9,7 +9,7 @@ from app.core.db import immediate
 from app.domain import parlay
 from app.domain.money import payout_cents
 from app.models import Bet, BetLeg, InstanceSettingsRow, OutboxMessage
-from app.services import admin, audit, ledger, settlement
+from app.services import admin, audit, board, ledger, settlement
 from app.services.bets import BetRejected, place_parlay
 from tests.integration.test_bets_settlement import (
     account,
@@ -115,7 +115,10 @@ def test_settlement_truths_through_real_markets(world: World) -> None:
         int(STAKE * parlay.combined([-110, -110])),
         ["won", "won"],
     )
-    assert status(w, early_loss.bet_id) == ("lost", 0, ["lost", "void"])  # loses at once
+    # Loses at once; the other leg stays open and settles with its own result later.
+    assert status(w, early_loss.bet_id) == ("lost", 0, ["lost", "open"])
+    settle_day(w, date(2026, 10, 14))
+    assert status(w, early_loss.bet_id) == ("lost", 0, ["lost", "won"])
     settle_day(w, date(2026, 10, 16))
     assert status(w, one_push.bet_id)[2] == ["push", "open"]
     settle_day(w, date(2026, 10, 22))
@@ -177,3 +180,30 @@ def test_voiding_a_leg_of_a_lost_parlay_changes_nothing(world: World) -> None:
     balance = account(w, user)[0]
     admin.void_market(w.engine, w.clock, audit.Actor(user_id=user), later, "bad line")
     assert status(w, bet_id)[0] == "lost" and account(w, user)[0] == balance
+    # The open leg on the voided market is closed as void (no refund: it was decided).
+    assert status(w, bet_id)[2] == ["lost", "void"]
+
+
+def test_legs_stored_void_by_an_earlier_loss_show_their_market_result(world: World) -> None:
+    """Before the fix, a lost parlay's other legs were stored as "void"; My Bets and the
+    admin page show them as their market did instead (open, then its result)."""
+    w = world
+    flags(w, parlays=True)
+    user = player(w, 1)
+    first, second = market(w, D5, "under"), market(w, D7, "over")
+    bet_id = bet(w, user, legs(w, first, second), "old").bet_id
+    with immediate(w.engine) as conn:  # what the old code stored once the parlay lost
+        conn.execute(
+            update(BetLeg)
+            .where(BetLeg.bet_id == bet_id, BetLeg.market_id == second)
+            .values(status="void")
+        )
+
+    def shown() -> list[str]:
+        with w.engine.connect() as conn:
+            row = {b.bet_id: b for b in board.my_bets(conn, user)}[bet_id]
+        return [leg.status for leg in row.legs] + [row.status]
+
+    assert shown()[1] == "open"
+    settle_day(w, date(2026, 10, 8))
+    assert shown() == ["lost", "won", "lost"]

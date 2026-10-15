@@ -163,6 +163,17 @@ def void_open_market(
         .order_by(Bet.id)
     ).all()
     voided += _void_bets(conn, clock, list(parlays), reason, kind="parlay")
+    # A decided parlay keeps its other legs open until their markets settle (#76); on a
+    # voided market that leg is closed as void too (no money moves: the bet is done).
+    conn.execute(
+        update(BetLeg)
+        .where(
+            BetLeg.market_id == market_id,
+            BetLeg.status == "open",
+            BetLeg.bet_id.in_(select(Bet.id).where(Bet.kind == "parlay", Bet.status != "open")),
+        )
+        .values(status="void")
+    )
     set_status(conn, [market_id], MarketStatus(market.status), MarketStatus.VOIDED, clock.now())
     if not announce:
         return voided

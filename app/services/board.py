@@ -97,14 +97,27 @@ class Wallet:
     pnl_cents: int
 
 
+def _leg_status(r: Any) -> str:
+    """A leg's result. Before the fix for lost parlays, the other legs of a parlay that
+    lost were stored as "void" although their markets weren't; show them as their
+    market did (still open, or the result it settled with)."""
+    if r.kind != "parlay" or r.leg_status != "void" or r.market_status == "voided":
+        return str(r.leg_status)
+    if r.market_status != "settled" or not r.outcome:
+        return "open"
+    winner = r.outcome.get("winner")
+    return "push" if winner is None else ("won" if r.side == winner else "lost")
+
+
 def _leg_reason(r: Any) -> str | None:
     """Why a leg is where it is: locked early by the admin (#60), voided or pushed
     (#44); a parlay leg voided only because its parlay was (#69) defers to the bet."""
-    if r.leg_status == "open" and r.lock_note:
+    status = _leg_status(r)
+    if status == "open" and r.lock_note:
         return locked_reason(r.lock_note)
-    if r.kind == "parlay" and r.leg_status == "void" and not r.void_reason:
+    if r.kind == "parlay" and status == "void" and not r.void_reason:
         return None
-    return result_reason(r.leg_status, r.void_reason, r.void_note, (r.outcome or {}).get("reason"))
+    return result_reason(status, r.void_reason, r.void_note, (r.outcome or {}).get("reason"))
 
 
 def _parlay_reason(status: str, legs: list[Any], rows: tuple[LegRow, ...]) -> str | None:
@@ -229,6 +242,7 @@ def _bets(conn: Connection, *conditions: Any, limit: int = 50) -> list[BetRow]:
             Bet.kind,
             Market.void_reason,
             Market.void_note,
+            Market.status.label("market_status"),
             Market.lock_note,
             Settlement.outcome,
         )
@@ -254,7 +268,7 @@ def _bets(conn: Connection, *conditions: Any, limit: int = 50) -> list[BetRow]:
                 r.side,
                 r.american,
                 r.line_x10,
-                r.leg_status,
+                _leg_status(r),
                 _leg_reason(r),
             )
             for r in legs
