@@ -52,8 +52,7 @@ def test_readme_screens(browser: Browser, rich_server: RichServer) -> None:
     expect(page.get_by_role("tab", name="Weekly")).to_have_attribute("aria-selected", "true")
     for metric in ("steps", "kcal"):
         page.locator(f'article[data-metric="{metric}"] button.mrow').first.click()
-        sheet.locator("button.toggle").last.click()
-        page.get_by_test_id("add-leg").click()
+        sheet.locator("button.toggle").last.click()  # joins the open parlay (issue #68)
     page.get_by_test_id("parlay-bar").click()
     page.get_by_test_id("parlay-stake").fill("10")
     expect(page.get_by_test_id("parlay-payout")).to_have_text(re.compile(r"^\$\d"))
