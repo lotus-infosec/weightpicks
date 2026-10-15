@@ -24,6 +24,9 @@ class SyncRun(Base):
     rows_new: Mapped[int] = mapped_column(default=0)
     complete_through: Mapped[dict[str, Any] | None] = mapped_column(JSON)  # metric -> ISO date
     error: Mapped[str | None] = mapped_column(Text)
+    # Issue #57: the watch's last upload to Garmin Connect when this sync ran.
+    watch_upload_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    watch_device: Mapped[str | None] = mapped_column(String(80))
 
 
 class Observation(Base):

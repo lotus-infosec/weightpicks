@@ -3,14 +3,17 @@
 {% block title %}{{ card.title }} · {{ instance.app_name }}{% endblock %}
 {% block content %}
 {% set frames = {"daily": "Daily", "weekly": "Weekly", "monthly": "Monthly", "prop": "Prop", "future": "Future"} %}
-{% set results = {"over": "Over", "under": "Under", "yes": "Yes", "no": "No", "tie": "Push: exact tie", "missing_weigh_in": "Push: no weigh-in", "missing_day": "Push: missing data", "reached": "Yes: reached", "not_reached": "No: not reached", "broken": "No: streak broken", "beat": "Yes: beat it", "short": "No: fell short"} %}
+{% set results = {"over": "Over", "under": "Under", "yes": "Yes", "no": "No", "tie": "Push: exact tie", "missing_weigh_in": "Push: no weigh-in", "missing_day": "Push: missing data", "no_watch_sync": "Push: the watch didn't sync", "reached": "Yes: reached", "not_reached": "No: not reached", "broken": "No: streak broken", "beat": "Yes: beat it", "short": "No: fell short"} %}
 <div x-data="slip" data-max-bet="{{ max_bet }}" data-balance="{{ wallet.balance_cents if wallet else 0 }}">
   <section class="market-hero" data-testid="market-hero">
     <div class="hero-meta"><span class="chip">{{ frames.get(card.timeframe, card.timeframe | capitalize) }}</span><span class="badge status-{{ card.status }}">{{ card.status }}</span>{% if card.provisional %}<span class="chip">provisional</span>{% endif %}</div>
     <h1 class="hero-title">{{ card.title }}</h1>
     {% if card.blurb %}<p class="muted blurb">{{ card.blurb }}</p>{% endif %}
     <div class="hero-line">{% if card.line_x10 is not none %}<span class="mrow-label">O/U</span><span class="hero-value num">{{ card.line_x10 | line(card.metric) }}</span>{% else %}<span class="hero-value">Yes or no</span>{% endif %}</div>
+    {% set explain = card | market_explain %}{% if explain %}<p class="muted small" data-testid="market-explain">{{ explain }}</p>{% endif %}
+    {% if card | side_hint("over") %}<ul class="plain side-hints small" data-testid="side-hints">{% for s in card.sides %}<li><strong>{{ s.side | capitalize }}</strong>: {{ card | side_hint(s.side) }}</li>{% endfor %}</ul>{% endif %}
     <p class="muted small">{{ "Locks" if open else "Locked" }} {{ card.lock_at | local_time }}</p>
+    {% if card.lock_note %}<p class="bet-reason" data-testid="lock-note">{{ card.lock_note | locked_reason }}</p>{% endif %}
     {% if outcome %}
     <p class="hero-result" data-testid="market-result">Result <strong>{{ results.get(outcome.reason, outcome.reason) }}</strong>{% if outcome.value_x10 is not none %} · actual {{ outcome.value_x10 | line(card.metric) }}{% endif %}</p>
     {% endif %}

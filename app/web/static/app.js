@@ -111,6 +111,7 @@
         get hasLine() { return Boolean(this.market && this.market.line); },
         get lockText() { return this.market ? "Locks " + this.market.lock : ""; },
         get blurb() { return this.market ? this.market.blurb : ""; },
+        get explain() { return this.market ? this.market.explain : ""; },
         get marketHref() { return this.market ? "/markets/" + this.market.id : "#"; },
         get hasSide() { return this.sideIndex >= 0; },
         get side() { return this.market && this.sideIndex >= 0 ? this.market.sides[this.sideIndex] : null; },
@@ -121,6 +122,7 @@
             return {
               selection: s.selection,
               label: s.label,
+              hint: s.hint || "",
               oddsText: s.oddsText,
               kind: "toggle-" + s.side,
               disabled: s.odds === null,
@@ -196,6 +198,7 @@
             keys: keysOf(d.keys),
             lock: d.lock,
             blurb: d.blurb,
+            explain: d.explain || "",
             sides: parseSides(d.sides),
           };
           const leg = this.inParlay;

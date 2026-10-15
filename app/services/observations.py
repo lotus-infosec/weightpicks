@@ -1,15 +1,17 @@
 """Read helpers over the immutable observations table."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Connection, select
+from sqlalchemy import Connection, func, select
 
 from app.core.config import Settings
 from app.domain.schedule import at_local, in_weigh_in_window, local_date, next_local_midnight
 from app.models import InstanceSettingsRow, Observation, SyncRun
+from app.providers.base import COUNT_METRICS
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +87,53 @@ def activity_counts(
             day = local_date(row.observed_at, zone)
             counts[day] = counts.get(day, 0) + 1
     return counts
+
+
+def workouts(
+    conn: Connection, start: date, end: date, tz: ZoneInfo | None = None
+) -> list[tuple[date, int]]:
+    """Every activity in local days [start, end] as (day, minutes), oldest first."""
+    zone = tz or current_zone(conn)
+    return [
+        (local_date(row.observed_at, zone), int(row.value))
+        for row in _between(conn, "activity", start, end, zone)
+    ]
+
+
+@dataclass(frozen=True, slots=True)
+class DailyTotalRow:
+    observation_id: int
+    metric: str
+    local_date: date
+    value: int
+
+
+def latest_totals(
+    conn: Connection, start: date, end: date, metrics: Sequence[str] = COUNT_METRICS
+) -> list[DailyTotalRow]:
+    """Each day's newest stored total per metric in [start, end]. A changed total is
+    stored as a correction (a new row), so the newest row wins (issue #57)."""
+    rank = (
+        func.row_number()
+        .over(
+            partition_by=(Observation.metric, Observation.local_date),
+            order_by=(Observation.observed_at.desc(), Observation.id.desc()),
+        )
+        .label("rank")
+    )
+    ranked = (
+        select(Observation.id, Observation.metric, Observation.local_date, Observation.value, rank)
+        .where(Observation.metric.in_(metrics), Observation.local_date.between(start, end))
+        .subquery()
+    )
+    return [
+        DailyTotalRow(r.id, r.metric, r.local_date, r.value)
+        for r in conn.execute(
+            select(ranked.c.id, ranked.c.metric, ranked.c.local_date, ranked.c.value)
+            .where(ranked.c.rank == 1)
+            .order_by(ranked.c.local_date, ranked.c.metric)
+        )
+    ]
 
 
 def latest_complete_through(conn: Connection) -> dict[str, date]:

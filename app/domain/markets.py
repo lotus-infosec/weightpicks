@@ -33,6 +33,7 @@ from app.domain.schedule import (
 )
 from app.domain.settlement import Outcome, settle_metric_total, settle_weight_change
 from app.domain.units import Unit
+from app.domain.watch import DEFAULT_CUTOFF, DEFAULT_GRACE_HOURS, check_settings
 
 # ---- lifecycle ---------------------------------------------------------------------
 
@@ -90,8 +91,13 @@ class Schedule:
     weekly_drop: time = time(18, 0)
     monthly_drop: time = time(18, 0)  # on the last day of the month
     weigh_in_end: time = WEIGH_IN_WINDOW_END
+    # Issue #57: a watch upload at or after this counts for the day; without one, the
+    # day's totals wait this many hours past the 02:00 check, then its markets push.
+    watch_sync_cutoff: time = DEFAULT_CUTOFF
+    watch_sync_grace_hours: int = DEFAULT_GRACE_HOURS
 
     def __post_init__(self) -> None:
+        check_settings(self.watch_sync_cutoff, self.watch_sync_grace_hours)
         if not 0 <= self.weekly_drop_weekday <= 6:
             raise ValueError("weekly_drop_weekday must be 0 (Mon) to 6 (Sun)")
         if self.daily_drop < self.weigh_in_end:

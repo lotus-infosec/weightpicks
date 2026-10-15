@@ -73,3 +73,34 @@ def test_stats_page_renders_the_data(clients: tuple[TestClient, TestClient, Worl
     assert player_c.get("/static/stats.js").status_code == 200
     admin_c.__exit__(None, None, None)
     player_c.__exit__(None, None, None)
+
+
+def test_workouts_show_each_workout_length(migrated_engine: Engine) -> None:
+    """Issue #66: one dot per workout (day, minutes) and a summary, not a daily count."""
+    from datetime import datetime
+
+    from app.providers.base import Activity, Batch
+
+    class Workouts(ScriptedProvider):
+        def fetch_since(self, since: datetime, now: datetime, *, days: int | None = None) -> Batch:
+            return Batch(
+                activities=[
+                    Activity("a1", local(2026, 10, 3, 7), 35, "running"),
+                    Activity("a2", local(2026, 10, 3, 18), 12, "walking"),
+                    Activity("a3", local(2026, 10, 4, 7), 8, "walking"),  # too short to count
+                    Activity("a4", local(2026, 10, 5, 7), 50, "cycling"),
+                ]
+            )
+
+    run_sync(migrated_engine, SimClock(local(2026, 10, 5, 12)), Workouts(), tz=NY, unit="lb")
+    with migrated_engine.connect() as conn:
+        data = stats.build(conn, AS_OF, 14, "lb", ("workouts",))
+    workouts = data["metrics"][0]
+    assert workouts["label"] == "Workouts"
+    assert workouts["dots"] == [
+        {"x": "2026-10-03", "y": 35},
+        {"x": "2026-10-03", "y": 12},
+        {"x": "2026-10-04", "y": 8},
+        {"x": "2026-10-05", "y": 50},
+    ]
+    assert (workouts["counted"], workouts["median"], workouts["min_minutes"]) == (3, 35, 10)

@@ -17,7 +17,7 @@
 
 <section class="card">
   <h2>{{ "Unfreeze" if frozen else "Freeze" }}</h2>
-  <p class="muted">{% if frozen %}Unfreezing reopens betting. After Goal Reached, start a new season instead.{% else %}Freezing stops new bets and pool entries and locks every open market. Nothing is refunded.{% endif %}</p>
+  <p class="muted">{% if frozen %}Unfreezing reopens betting on every open market and posts any of today's drops that were skipped while frozen. After Goal Reached, start a new season instead.{% else %}Freezing pauses betting: no new bets or pool entries. Open markets stay open and lock on schedule, bets already placed settle as usual, and nothing is refunded.{% endif %}</p>
   <form method="post" action="/admin/season/{{ 'unfreeze' if frozen else 'freeze' }}" class="stack">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
     {{ password() }}

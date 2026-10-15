@@ -268,26 +268,20 @@ def test_lock_schedule_cache() -> None:
     assert locks.needs_check(t + timedelta(seconds=1))
 
 
-def test_freezing_locks_every_open_market_and_stops_drops(world: World) -> None:
+def test_freezing_leaves_markets_open_and_stops_drops(world: World) -> None:
+    """Issue #59: a freeze pauses betting only; markets keep their own lock time."""
     markets.drop(world.engine, world.clock, world.config, Timeframe.DAILY, DAY)
     with immediate(world.engine) as conn:
-        assert instance.set_instance_state(conn, world.clock, instance.FROZEN) == 5
-    assert statuses(world.engine) == {"locked": 5}
+        instance.set_instance_state(conn, world.clock, instance.FROZEN)
+    assert statuses(world.engine) == {"open": 5}
+    assert markets.lock_due(world.engine, world.clock.now()).locked == 0
     world.clock.set(local(2026, 10, 4, 18))
     result = markets.drop(
         world.engine, world.clock, world.config, Timeframe.WEEKLY, date(2026, 10, 4)
     )
     assert result.created == [] and set(result.skipped.values()) == {"frozen"}
-    # Backstop: a market that appears while frozen is locked by the next lock pass.
     with immediate(world.engine) as conn:
-        conn.execute(update(InstanceSettingsRow).values(instance_state="active"))
-    markets.drop(world.engine, world.clock, world.config, Timeframe.WEEKLY, date(2026, 10, 4))
-    with immediate(world.engine) as conn:
-        conn.execute(update(InstanceSettingsRow).values(instance_state="frozen"))
-    assert markets.lock_due(world.engine, world.clock.now()).locked == 6
-    assert markets.lock_due(world.engine, world.clock.now()) == markets.LockPass(0, None)
-    with immediate(world.engine) as conn:
-        assert instance.set_instance_state(conn, world.clock, instance.ACTIVE) == 0
+        instance.set_instance_state(conn, world.clock, instance.ACTIVE)
         assert instance.current_state(conn) == "active"
 
 

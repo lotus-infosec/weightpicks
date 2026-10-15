@@ -20,9 +20,12 @@ concurrency:
 env:
   IMAGE: ghcr.io/${{ github.repository }}
 
+# Every job has a timeout-minutes: a stuck step (e.g. a stalled scanner download) fails
+# the job instead of hanging for GitHub's 6-hour default. Re-run failed jobs to retry.
 jobs:
   verify:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     outputs:
       version: ${{ steps.v.outputs.version }}
       prerelease: ${{ steps.v.outputs.prerelease }}
@@ -57,6 +60,7 @@ jobs:
   image:
     needs: [verify, ci]
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write
@@ -125,6 +129,7 @@ jobs:
     needs: [verify, image]
     if: needs.verify.outputs.publish == 'true' && needs.verify.outputs.previous != ''
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: read
@@ -151,6 +156,7 @@ jobs:
       always() && needs.verify.outputs.publish == 'true' && needs.image.result == 'success'
       && (needs.upgrade-test.result == 'success' || needs.upgrade-test.result == 'skipped')
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: write
     steps:

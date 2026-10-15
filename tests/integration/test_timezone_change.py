@@ -35,6 +35,7 @@ def test_preview_then_change_refunds_everything(mid_season: dict[str, Any]) -> N
         4,
         1,
     )
+    assert impact.parlay_cents > 0
     assert (impact.pools, impact.entries, impact.entry_cents) == (2, 4, 8_000)
     assert impact.redrop_daily and not impact.nothing_open
 
@@ -62,7 +63,7 @@ def test_preview_then_change_refunds_everything(mid_season: dict[str, Any]) -> N
             )
         ).one()
     assert set(old) == {"voided"}
-    assert parlay == "push"  # both legs voided: the whole stake comes back
+    assert parlay == "void"  # a voided leg voids the whole parlay: the stake comes back
     assert set(pool_status) == {"refunded"}
     assert new and all(k.endswith(f"@{CHICAGO}") and s == "open" for k, s in new)
     assert {k for _, _, k in posts if k.startswith("market_voided")} == set()  # one summary

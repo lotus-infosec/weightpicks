@@ -365,7 +365,8 @@ def _settings(settings: Settings, args: argparse.Namespace) -> int:
             print(
                 f"changing {impact.current} -> {impact.zone} pushes and refunds "
                 f"{impact.markets} market(s) ({impact.bets} bet(s), "
-                f"{Money(impact.stake_cents)}), {impact.parlays} parlay(s) lose those legs, "
+                f"{Money(impact.stake_cents)}), {impact.parlays} parlay(s) "
+                f"({Money(impact.parlay_cents)}), "
                 f"{impact.pools} event(s) ({Money(impact.entry_cents)}) are refunded"
             )
             if not args.yes:

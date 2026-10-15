@@ -59,7 +59,7 @@ def test_push_shows_the_settlement_reason(world: World) -> None:
     assert (row.status, row.reason) == ("push", "Push: an exact tie with the line")
 
 
-def test_parlay_legs_carry_their_reason(world: World) -> None:
+def test_a_voided_parlay_says_which_leg_voided_it(world: World) -> None:
     set_goal(world)  # also turns parlays on
     p = player(world, 1)
     keep = weight_market(world, -5, day=date(2026, 10, 7))
@@ -76,7 +76,9 @@ def test_parlay_legs_carry_their_reason(world: World) -> None:
     row = mine(world, p)[placed.bet_id]
     reasons = {leg.market_id: leg.reason for leg in row.legs}
     assert reasons == {keep: None, gone: "Voided by the admin: Duplicate market"}
-    assert row.status == "open" and row.reason is None
+    # Issue #69: a voided leg voids the whole parlay, and the bet says why.
+    assert row.status == "void"
+    assert row.reason == "Voided by the admin: Duplicate market. The whole parlay was refunded."
 
 
 def test_migration_fills_reasons_for_older_voids(world: World) -> None:

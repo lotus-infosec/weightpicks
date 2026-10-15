@@ -4,11 +4,12 @@ entry can never disagree. Password re-prompts are enforced by the web layer.
 """
 
 import secrets as pysecrets
-from datetime import timedelta
+from dataclasses import replace
+from datetime import time, timedelta
 from typing import Any
 
 import structlog
-from sqlalchemy import Connection, Engine, insert, select, update
+from sqlalchemy import Connection, Engine, func, insert, select, update
 
 from app.core.clock import Clock
 from app.core.db import immediate
@@ -17,7 +18,7 @@ from app.domain import setup as setup_steps
 from app.domain.economy import Economy
 from app.domain.ledger import AccountKind, InsufficientFunds
 from app.domain.markets import MarketStatus
-from app.domain.results import result_reason
+from app.domain.results import locked_reason, result_reason
 from app.models import (
     Account,
     BannedEmail,
@@ -35,7 +36,6 @@ from app.services import secrets as secret_store
 from app.services.audit import Actor
 from app.services.markets import set_status
 from app.services.outbox import Category, enqueue
-from app.services.settlement import reevaluate_parlay
 
 log = structlog.get_logger()
 
@@ -74,8 +74,11 @@ def _account(conn: Connection, user_id: int) -> tuple[int, int, int]:
     return row.id, row.balance_cents, row.season_id
 
 
-def _void_bets(conn: Connection, clock: Clock, bet_rows: list[Any], reason: str) -> int:
-    """Void and refund open bets (single legs); outbox one result per bet."""
+def _void_bets(
+    conn: Connection, clock: Clock, bet_rows: list[Any], reason: str, *, kind: str = "single"
+) -> int:
+    """Void and refund open bets, every open leg with them; outbox one result per bet.
+    A parlay's legs that already won or pushed keep their result for the record."""
     for bet in bet_rows:
         ledger.refund(
             conn,
@@ -85,24 +88,32 @@ def _void_bets(conn: Connection, clock: Clock, bet_rows: list[Any], reason: str)
             idempotency_key=f"bet:{bet.id}:refund",
             ref_id=bet.id,
         )
-        conn.execute(update(BetLeg).where(BetLeg.bet_id == bet.id).values(status="void"))
+        conn.execute(
+            update(BetLeg)
+            .where(BetLeg.bet_id == bet.id, BetLeg.status == "open")
+            .values(status="void")
+        )
         conn.execute(
             update(Bet)
             .where(Bet.id == bet.id)
             .values(status="void", payout_cents=bet.stake_cents, settled_at=clock.now())
         )
+        payload = {
+            "bet_id": bet.id,
+            "user_id": bet.user_id,
+            "result": "void",
+            "reason": reason,
+            "stake_cents": bet.stake_cents,
+            "payout_cents": bet.stake_cents,
+        }
+        if kind == "parlay":
+            legs = conn.execute(select(func.count()).where(BetLeg.bet_id == bet.id)).scalar_one()
+            payload |= {"kind": "parlay", "legs": int(legs)}
         enqueue(
             conn,
             clock,
-            category=Category.BET_RESULTS,
-            payload={
-                "bet_id": bet.id,
-                "user_id": bet.user_id,
-                "result": "void",
-                "reason": reason,
-                "stake_cents": bet.stake_cents,
-                "payout_cents": bet.stake_cents,
-            },
+            category=Category.PARLAY_RESULTS if kind == "parlay" else Category.BET_RESULTS,
+            payload=payload,
             dedupe_key=f"bet_result:{bet.id}",
         )
     return len(bet_rows)
@@ -138,17 +149,31 @@ def void_open_market(
         .order_by(Bet.id)
     ).all()
     voided = _void_bets(conn, clock, list(bets), reason)
-    # In a parlay only this leg is voided: it drops out and the parlay is re-evaluated.
-    parlay_legs = conn.execute(
-        select(BetLeg.id, BetLeg.bet_id)
-        .join(Bet, Bet.id == BetLeg.bet_id)
-        .where(BetLeg.market_id == market_id, BetLeg.status == "open", Bet.kind == "parlay")
-        .order_by(BetLeg.id)
+    # A voided leg voids its whole parlay and refunds the stake (issue #69); a pushed leg
+    # still just drops out (settlement). Parlays already decided are left alone.
+    parlays = conn.execute(
+        select(Bet.id, Bet.account_id, Bet.user_id, Bet.stake_cents)
+        .join(BetLeg, BetLeg.bet_id == Bet.id)
+        .where(
+            BetLeg.market_id == market_id,
+            BetLeg.status == "open",
+            Bet.kind == "parlay",
+            Bet.status == "open",
+        )
+        .order_by(Bet.id)
     ).all()
-    for leg_id, bet_id in parlay_legs:
-        conn.execute(update(BetLeg).where(BetLeg.id == leg_id).values(status="void"))
-        reevaluate_parlay(conn, clock, bet_id, clock.now())
-    voided += len(parlay_legs)
+    voided += _void_bets(conn, clock, list(parlays), reason, kind="parlay")
+    # A decided parlay keeps its other legs open until their markets settle (#76); on a
+    # voided market that leg is closed as void too (no money moves: the bet is done).
+    conn.execute(
+        update(BetLeg)
+        .where(
+            BetLeg.market_id == market_id,
+            BetLeg.status == "open",
+            BetLeg.bet_id.in_(select(Bet.id).where(Bet.kind == "parlay", Bet.status != "open")),
+        )
+        .values(status="void")
+    )
     set_status(conn, [market_id], MarketStatus(market.status), MarketStatus.VOIDED, clock.now())
     if not announce:
         return voided
@@ -197,6 +222,51 @@ def void_market(engine: Engine, clock: Clock, actor: Actor, market_id: int, reas
         busts.check(conn, clock, market.season_id)
     log.info("market_voided", market_id=market_id, bets=voided)
     return voided
+
+
+def lock_market(engine: Engine, clock: Clock, actor: Actor, market_id: int, note: str) -> None:
+    """Lock an open market now, before its lock time, with a reason players see (issue
+    #60). Bets already placed stay and settle as usual; a locked market never reopens."""
+    note = note.strip()[:200]
+    if not note:
+        raise AdminError("reason_required", "Give a reason for locking.")
+    now = clock.now()
+    with immediate(engine) as conn:
+        market = conn.execute(
+            select(Market.status, Market.title, Market.lock_at).where(Market.id == market_id)
+        ).one_or_none()
+        if market is None:
+            raise AdminError("not_found", "No such market.")
+        if market.status != MarketStatus.OPEN.value:
+            raise AdminError("not_open", f"A {market.status} market can't be locked.")
+        set_status(conn, [market_id], MarketStatus.OPEN, MarketStatus.LOCKED, now)
+        lock_at = min(market.lock_at, now)
+        conn.execute(
+            update(Market).where(Market.id == market_id).values(lock_note=note, lock_at=lock_at)
+        )
+        audit.record(
+            conn,
+            clock,
+            actor,
+            action="market.lock",
+            target=("market", market_id),
+            before={"status": market.status, "lock_at": market.lock_at.isoformat()},
+            after={"status": "locked", "lock_at": lock_at.isoformat()},
+            reason=note,
+        )
+        enqueue(
+            conn,
+            clock,
+            category=Category.MARKET_SETTLEMENTS,
+            payload={
+                "market_id": market_id,
+                "title": market.title,
+                "result": "locked",
+                "reason": locked_reason(note),
+            },
+            dedupe_key=f"market_locked:{market_id}",
+        )
+    log.info("market_locked_early", market_id=market_id)
 
 
 # ---- users --------------------------------------------------------------------------------
@@ -405,6 +475,41 @@ def set_public_url(engine: Engine, clock: Clock, actor: Actor | None, url: str |
             target=("settings", 1),
             before={"public_url": before},
             after={"public_url": url},
+        )
+    return True
+
+
+def set_watch_sync(
+    engine: Engine, clock: Clock, actor: Actor | None, cutoff: time, grace_hours: int
+) -> bool:
+    """Store the watch sync cutoff and grace period (issue #57; already checked by
+    domain.watch.parse_settings). Returns False when nothing changed. Audited."""
+    with immediate(engine) as conn:
+        stored = conn.execute(
+            select(InstanceSettingsRow.schedule).where(InstanceSettingsRow.id == 1)
+        ).scalar_one()
+        current = instance_service.schedule_from_json(stored)
+        before = {
+            "cutoff": f"{current.watch_sync_cutoff:%H:%M}",
+            "grace_hours": current.watch_sync_grace_hours,
+        }
+        after = {"cutoff": f"{cutoff:%H:%M}", "grace_hours": grace_hours}
+        if before == after:
+            return False
+        updated = replace(current, watch_sync_cutoff=cutoff, watch_sync_grace_hours=grace_hours)
+        conn.execute(
+            update(InstanceSettingsRow)
+            .where(InstanceSettingsRow.id == 1)
+            .values(schedule=instance_service.schedule_to_json(updated), updated_at=clock.now())
+        )
+        audit.record(
+            conn,
+            clock,
+            actor,
+            action="settings.watch_sync",
+            target=("settings", 1),
+            before=before,
+            after=after,
         )
     return True
 

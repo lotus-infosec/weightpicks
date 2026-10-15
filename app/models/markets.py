@@ -55,6 +55,8 @@ class Market(Base):
     # admin's note, shown to players.
     void_reason: Mapped[str | None] = mapped_column(String(32))
     void_note: Mapped[str | None] = mapped_column(String(200))
+    # Issue #60: the admin's reason for locking the market before its lock time.
+    lock_note: Mapped[str | None] = mapped_column(String(200))
     dedupe_key: Mapped[str] = mapped_column(String(300), unique=True)
     ai_run_id: Mapped[int | None]  # the ai_runs row that proposed it (origin 'ai')
     blurb: Mapped[str | None] = mapped_column(String(160))  # AI flavour text, never terms

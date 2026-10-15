@@ -27,7 +27,7 @@ class Fixed:
     def __init__(self, batch: Batch) -> None:
         self.batch = batch
 
-    def fetch_since(self, since: datetime, now: datetime) -> Batch:
+    def fetch_since(self, since: datetime, now: datetime, *, days: int | None = None) -> Batch:
         return self.batch
 
     def complete_through(self, now: datetime) -> dict[str, date]:

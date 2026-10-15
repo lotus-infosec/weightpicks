@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.clock import Clock
 from app.core.db import immediate
-from app.domain import parlay
+from app.domain import parlay, watch
 from app.domain.markets import COMPLETENESS_KEY, TEMPLATES, MarketStatus, SettlementData
 from app.domain.props import EARLY_TEMPLATES
 from app.domain.settlement import ENGINE_VERSION, Outcome, leg_result, readiness
@@ -26,19 +26,20 @@ from app.models import (
     Bet,
     BetLeg,
     Market,
-    Observation,
     OddsVersion,
     Selection,
     Settlement,
     SyncRun,
 )
-from app.providers.base import COUNT_METRICS, WORKOUT_MIN_MINUTES
-from app.services import busts, ledger
+from app.providers.base import WORKOUT_MIN_MINUTES
+from app.services import busts, instance, ledger
 from app.services.markets import set_status
 from app.services.observations import (
     activity_counts,
     canonical_weigh_ins,
+    current_zone,
     latest_complete_through,
+    latest_totals,
 )
 from app.services.outbox import Category, enqueue
 
@@ -92,24 +93,7 @@ def settlement_data(
         return SettlementData(weigh_ins={c.local_date: c.value for c in used}), inputs
 
     days = _days(start, end)
-    rank = (
-        func.row_number()
-        .over(
-            partition_by=(Observation.metric, Observation.local_date),
-            order_by=(Observation.observed_at.desc(), Observation.id.desc()),
-        )
-        .label("rank")
-    )
-    latest = (
-        select(Observation.id, Observation.metric, Observation.local_date, Observation.value, rank)
-        .where(Observation.metric.in_(COUNT_METRICS), Observation.local_date.between(start, end))
-        .subquery()
-    )
-    rows = conn.execute(
-        select(latest.c.id, latest.c.metric, latest.c.local_date, latest.c.value).where(
-            latest.c.rank == 1
-        )
-    ).all()
+    rows = latest_totals(conn, start, end)
     recorded = {r.local_date for r in rows}  # any daily total = the watch synced that day
     if metric == "workouts":
         counts = activity_counts(conn, start, end, min_minutes=WORKOUT_MIN_MINUTES)
@@ -122,11 +106,34 @@ def settlement_data(
         totals = {d: mine[d].value if d in mine else None for d in days}
         inputs = {
             "totals": [
-                {"local_date": d.isoformat(), "observation_id": r.id, "value": r.value}
+                {"local_date": d.isoformat(), "observation_id": r.observation_id, "value": r.value}
                 for d, r in sorted(mine.items())
             ]
         }
     return SettlementData(daily_totals=totals), inputs
+
+
+def _unsynced_days(conn: Connection, outcome: Outcome, data: SettlementData) -> list[date]:
+    """The missing days behind a push that the watch never synced (issue #57): its
+    latest upload, as of the last good sync, is before that day's cutoff."""
+    if outcome.reason != "missing_day":
+        return []
+    upload = conn.execute(
+        select(SyncRun.watch_upload_at)
+        .where(SyncRun.status == "ok")
+        .order_by(SyncRun.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if upload is None:  # the simulator, or a sync from before issue #57
+        return []
+    config = instance.read(conn)
+    cutoff = config.schedule.watch_sync_cutoff if config else watch.DEFAULT_CUTOFF
+    tz = current_zone(conn)
+    return [
+        day
+        for day, value in sorted(data.daily_totals.items())
+        if value is None and not watch.synced(day, upload, cutoff, tz)
+    ]
 
 
 def _current_line(conn: Connection, market_id: int) -> int | None:
@@ -153,6 +160,7 @@ def settle_market(engine: Engine, clock: Clock, market_id: int) -> SettleResult:
         template = TEMPLATES[m.template]
         every_day = m.template in EARLY_TEMPLATES
         line_x10 = _current_line(conn, market_id)
+        unsynced: list[date] = []
         if every_day and now < m.settle_after:
             # Early settlement (milestones, streaks): only an outcome already certain from
             # data that is complete (a successful sync after that day's window closed).
@@ -178,6 +186,9 @@ def settle_market(engine: Engine, clock: Clock, market_id: int) -> SettleResult:
                 conn, m.metric, m.window_start, m.window_end, every_day=every_day
             )
             outcome = template.settle(m.params, line_x10, data)
+            unsynced = _unsynced_days(conn, outcome, data)
+            if unsynced:
+                outcome = Outcome(None, None, "no_watch_sync")
         try:  # unique market_id: the idempotency backstop (status is checked above too)
             conn.execute(
                 insert(Settlement).values(
@@ -200,6 +211,14 @@ def settle_market(engine: Engine, clock: Clock, market_id: int) -> SettleResult:
             payload={"market_id": market_id, "title": m.title} | _outcome_json(outcome, line_x10),
             dedupe_key=f"market_settled:{market_id}",
         )
+        for day in unsynced:  # one admin alert per day, however many markets push
+            enqueue(
+                conn,
+                clock,
+                category=Category.ADMIN_ALERTS,
+                payload={"kind": "watch_sync_push", "day": day.isoformat()},
+                dedupe_key=f"watch_sync_push:{day.isoformat()}",
+            )
     log.info("market_settled", market_id=market_id, result=outcome.reason, bets=bets)
     return SettleResult(market_id, True, outcome.reason, bets)
 

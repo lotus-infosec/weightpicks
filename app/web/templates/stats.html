@@ -28,9 +28,15 @@
 </section>
 
 {% for m in data.metrics %}
-<section class="card">
+<section class="card"{% if m.metric == "workouts" %} data-testid="workouts-card"{% endif %}>
   <h2>{{ m.label }}</h2>
+  {% if m.metric == "workouts" %}
+  <p class="muted small" data-testid="workouts-summary">{% if m.counted %}{{ m.counted }} workout{{ "s" if m.counted != 1 }} of {{ m.min_minutes }}+ minutes in this range, typically {{ m.median }} minutes.{% else %}No workouts of {{ m.min_minutes }}+ minutes in this range yet.{% endif %}</p>
+  <div class="chart small"><canvas class="metric-chart" data-index="{{ loop.index0 }}" aria-label="Each workout's length in minutes, by day" role="img"></canvas></div>
+  <p class="muted small">Each dot is one workout and how long it lasted. Markets count workouts of {{ m.min_minutes }} minutes or more (above the dashed line).</p>
+  {% else %}
   <div class="chart small"><canvas class="metric-chart" data-index="{{ loop.index0 }}" aria-label="{{ m.label }} per day with a 7-day average" role="img"></canvas></div>
+  {% endif %}
 </section>
 {% endfor %}
 <script type="application/json" id="stats-data">{{ data | tojson }}</script>
