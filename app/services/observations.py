@@ -87,6 +87,17 @@ def activity_counts(
     return counts
 
 
+def workouts(
+    conn: Connection, start: date, end: date, tz: ZoneInfo | None = None
+) -> list[tuple[date, int]]:
+    """Every activity in local days [start, end] as (day, minutes), oldest first."""
+    zone = tz or current_zone(conn)
+    return [
+        (local_date(row.observed_at, zone), int(row.value))
+        for row in _between(conn, "activity", start, end, zone)
+    ]
+
+
 def latest_complete_through(conn: Connection) -> dict[str, date]:
     """`complete_through` from the most recent successful sync (empty before any)."""
     data = conn.execute(

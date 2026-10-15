@@ -85,6 +85,34 @@
     document.querySelectorAll("canvas.metric-chart").forEach((canvas) => {
       const m = data.metrics[Number(canvas.dataset.index)];
       if (!m) return;
+      if (m.metric === "workouts") {
+        // Issue #66: one dot per workout (its length), with the 10-minute line.
+        const counts = (p) => p.raw && p.raw.y >= m.min_minutes;
+        new Chart(canvas, {
+          type: "scatter",
+          data: {
+            labels: m.labels,
+            datasets: [
+              { label: "Workout", data: m.dots, pointRadius: 5, pointHoverRadius: 7,
+                pointBackgroundColor: (p) => (counts(p) ? over : alpha(muted, 0.5)),
+                pointBorderColor: (p) => (counts(p) ? over : alpha(muted, 0.5)) },
+              { type: "line", label: m.min_minutes + " min", data: m.labels.map(() => m.min_minutes),
+                borderColor: alpha(muted, 0.8), borderWidth: 1, borderDash: [4, 4], pointRadius: 0 },
+            ],
+          },
+          options: {
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: { filter: (item) => item.datasetIndex === 0,
+                         callbacks: { label: (item) => item.raw.y + " min" } },
+            },
+            scales: { x: Object.assign({ type: "category" }, scaleX),
+                      y: { beginAtZero: true, title: { display: true, text: "minutes" } } },
+          },
+        });
+        return;
+      }
       new Chart(canvas, {
         data: {
           labels: m.labels,
