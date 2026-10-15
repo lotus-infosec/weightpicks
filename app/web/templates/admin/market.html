@@ -6,11 +6,24 @@
 <p><a href="/admin/markets">← Markets</a></p>
 <section class="card">
   <h1>{{ card.title }}</h1>
-  <p>O/U <strong>{{ card.line_x10 | line(card.metric) }}</strong> · <span class="badge status-{{ card.status }}">{{ card.status }}</span> · locks {{ card.lock_at | local_time }}</p>
+  <p>O/U <strong>{{ card.line_x10 | line(card.metric) }}</strong> · <span class="badge status-{{ card.status }}">{{ card.status }}</span> · {{ "locks" if card.status == "open" else "locked" }} {{ card.lock_at | local_time }}</p>
+  {% if card.lock_note %}<p class="bet-reason" data-testid="lock-note">{{ card.lock_note | locked_reason }}</p>{% endif %}
   <p>{% for s in card.sides %}{{ s.side | capitalize }} {{ s.odds | odds }}{{ " · " if not loop.last }}{% endfor %}</p>
   {% if outcome %}<p class="result">Result: {{ outcome.reason }}{% if outcome.value_x10 is not none %} ({{ outcome.value_x10 | line(card.metric) }}){% endif %}</p>{% endif %}
 </section>
 {% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+{% if card.status == "open" %}
+<section class="card" data-testid="lock-market">
+  <h2>Lock this market now</h2>
+  <p class="muted">Stops new bets right away. Bets already placed stay and settle as usual (or void it later). A locked market can't reopen.</p>
+  <form method="post" action="/admin/markets/{{ card.market_id }}/lock" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>Reason <span class="muted small">(players see it on the market, in My Bets and Discord)</span> <input type="text" name="reason" required maxlength="200"></label>
+    {{ password() }}
+    <button type="submit" class="secondary">Lock market</button>
+  </form>
+</section>
+{% endif %}
 {% if card.status in ("open", "locked") %}
 <section class="card danger">
   <h2>Void this market</h2>

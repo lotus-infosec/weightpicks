@@ -14,6 +14,11 @@ PUSH_REASONS = {
 }
 
 
+def locked_reason(note: str) -> str:
+    """An open bet on a market the admin locked early (issue #60)."""
+    return f"Locked early by the admin: {note}"
+
+
 def result_reason(
     status: str, void_reason: str | None, void_note: str | None, outcome_reason: str | None
 ) -> str | None:

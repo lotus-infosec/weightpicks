@@ -39,7 +39,7 @@ Copy them off the machine every day, and keep `APP_SECRET_KEY` (from `.env`) som
 
 ## Players and the game
 
-Everything else is in Admin: players (freeze, ban, reset password), the bank (bailouts, adjustments, economy), markets (void), props, special events, seasons, settings and the audit log. Seasons and Goal Reached: [seasons.md](../seasons.md).
+Everything else is in Admin: players (freeze, ban, reset password), the bank (bailouts, adjustments, economy), markets (lock early or void, each with a reason players see), props, special events, seasons, settings and the audit log. Seasons and Goal Reached: [seasons.md](../seasons.md).
 
 ## Factory reset
 
