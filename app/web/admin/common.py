@@ -16,6 +16,7 @@ from app.web.security import client_ip
 
 MESSAGES = {
     "voided": "Market voided and every open stake refunded.",
+    "locked": "Market locked: no more bets. Bets already placed settle as usual.",
     "frozen": "Player frozen: they can log in but not bet.",
     "unfrozen": "Player unfrozen.",
     "banned": "Player removed. Their open bets were refunded and their email is blocked.",

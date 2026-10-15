@@ -163,6 +163,10 @@ def _market_settled(category: str, p: dict[str, Any], ctx: Context) -> dict[str,
             GREY,
             url=url,
         )
+    if p.get("result") == "locked":  # issue #60: no more bets; placed bets still settle
+        reason = safe(p.get("reason") or "locked early by the admin")
+        text = f"{title_text}\n{reason}\nBets already placed stay and settle as usual."
+        return _embed(ctx, category, "Market locked early", text, AMBER, url=url)
     winner = p.get("winner")
     if winner is None:
         reason = safe(p.get("reason") or "no result")
