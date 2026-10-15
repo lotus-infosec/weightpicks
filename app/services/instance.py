@@ -170,22 +170,19 @@ def current_state(conn: Connection) -> str:
     return state or ACTIVE
 
 
-def set_instance_state(conn: Connection, clock: Clock, state: str) -> int:
-    """Freeze or unfreeze the instance. Freezing locks every open market in the same
-    transaction, so no bet can slip in. Returns the number of markets locked."""
-    from app.services.markets import lock_open_markets
-
+def set_instance_state(conn: Connection, clock: Clock, state: str) -> None:
+    """Freeze or unfreeze the instance. Freezing stops new bets and event entries (the
+    web middleware and the services check the state); open markets keep their own lock
+    times, so unfreezing simply resumes betting (issue #59)."""
     if state not in (ACTIVE, FROZEN):
         raise ValueError(f"unknown instance state {state!r}")
-    now = clock.now()
     result = conn.execute(
         update(InstanceSettingsRow)
         .where(InstanceSettingsRow.id == 1)
-        .values(instance_state=state, updated_at=now)
+        .values(instance_state=state, updated_at=clock.now())
     )
     if result.rowcount != 1:
         raise LookupError("the settings row does not exist yet")
-    return lock_open_markets(conn, now, everything=True) if state == FROZEN else 0
 
 
 def public_url(config: InstanceConfig | None, settings: Settings) -> tuple[str, str]:

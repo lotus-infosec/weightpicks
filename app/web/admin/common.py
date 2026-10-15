@@ -40,7 +40,7 @@ MESSAGES = {
     "pool": "Special event published. Players can enter until the night before.",
     "pool_void": "Special event voided and every buy-in refunded.",
     "instance_frozen": "Instance frozen: no bets or pool entries until you unfreeze.",
-    "instance_unfrozen": "Instance unfrozen.",
+    "instance_unfrozen": "Instance unfrozen: betting is open again.",
     "goal": "Goal Reached: everything is settled or refunded and the instance is frozen.",
     "season": "New season started. Balances carried over; betting is open again.",
     "backup": "Backup created.",
