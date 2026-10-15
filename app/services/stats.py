@@ -6,13 +6,13 @@ from collections import defaultdict
 from datetime import date, timedelta
 from typing import Any
 
-from sqlalchemy import Connection, func, select
+from sqlalchemy import Connection, select
 
 from app.domain.lines import SIGMA_WINDOW_DAYS, WINDOW_DAYS, change_distribution, fit_weight
 from app.domain.units import Unit
 from app.models import Observation, Season
 from app.services.ledger import active_season_id
-from app.services.observations import activity_counts, canonical_weigh_ins
+from app.services.observations import activity_counts, canonical_weigh_ins, latest_totals
 
 RANGES = (14, 30, 90)
 PROJECTION_DAYS = 7
@@ -99,15 +99,8 @@ def _metric_series(
         return []
     values: dict[str, dict[date, int]] = defaultdict(dict)
     count_metrics = [m for m in wanted if m != "workouts"]
-    for metric, day, value in conn.execute(
-        select(Observation.metric, Observation.local_date, func.max(Observation.value))
-        .where(
-            Observation.metric.in_(count_metrics),
-            Observation.local_date.between(first - timedelta(days=6), last),
-        )
-        .group_by(Observation.metric, Observation.local_date)
-    ):
-        values[metric][day] = int(value)
+    for row in latest_totals(conn, first - timedelta(days=6), last, count_metrics):
+        values[row.metric][row.local_date] = row.value
     if "workouts" in wanted:
         steps_days = {
             d

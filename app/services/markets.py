@@ -31,8 +31,8 @@ from app.domain.markets import (
     transition,
 )
 from app.domain.schedule import local_date
-from app.models import InstanceSettingsRow, Market, Observation, OddsVersion, Selection
-from app.providers.base import COUNT_METRICS, WORKOUT_MIN_MINUTES
+from app.models import InstanceSettingsRow, Market, OddsVersion, Selection
+from app.providers.base import WORKOUT_MIN_MINUTES
 from app.services import instance
 from app.services.instance import InstanceConfig
 from app.services.ledger import active_season_id
@@ -40,6 +40,7 @@ from app.services.observations import (
     activity_counts,
     canonical_weigh_ins,
     latest_complete_through,
+    latest_totals,
 )
 from app.services.outbox import Category, enqueue
 
@@ -64,24 +65,9 @@ def pricing_data(conn: Connection, day: date) -> PricingData:
         for w in canonical_weigh_ins(conn, day - timedelta(days=SIGMA_WINDOW_DAYS - 1), day)
     }
     since = day - timedelta(days=COUNT_WINDOW_DAYS)
-    latest = (
-        func.row_number()
-        .over(
-            partition_by=(Observation.metric, Observation.local_date),
-            order_by=(Observation.observed_at.desc(), Observation.id.desc()),
-        )
-        .label("rank")
-    )
-    ranked = (
-        select(Observation.metric, Observation.local_date, Observation.value, latest)
-        .where(Observation.metric.in_(COUNT_METRICS), Observation.local_date.between(since, day))
-        .subquery()
-    )
     totals: dict[str, dict[date, int]] = defaultdict(dict)
-    for metric, local_day, value in conn.execute(
-        select(ranked.c.metric, ranked.c.local_date, ranked.c.value).where(ranked.c.rank == 1)
-    ):
-        totals[metric][local_day] = value
+    for row in latest_totals(conn, since, day):
+        totals[row.metric][row.local_date] = row.value
     # A day with any daily total but no 10+ minute activity is a real zero-workout day.
     workouts = dict.fromkeys({d for per_day in totals.values() for d in per_day}, 0)
     workouts |= activity_counts(conn, since, day, min_minutes=WORKOUT_MIN_MINUTES)
