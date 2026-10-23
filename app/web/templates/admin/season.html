@@ -48,6 +48,12 @@
       <label>Starting weight ({{ unit }}) <input type="text" inputmode="decimal" name="start_weight" value="{{ latest }}" required></label>
       <label>Goal weight ({{ unit }}) <input type="text" inputmode="decimal" name="goal_weight" required></label>
     </div>
+    {% if unsettled %}
+    <div class="card danger" data-testid="season-unsettled">
+      <p><strong>Still open or locked: {{ unsettled }}.</strong> Starting the season first settles whatever the data already decides, then voids and refunds the rest (players see "a new season started").</p>
+      <label class="check"><input type="checkbox" name="void_open" data-testid="void-open"> Void and refund everything still open</label>
+    </div>
+    {% endif %}
     {{ password() }}
     <button type="submit" class="primary">Start season</button>
   </form>

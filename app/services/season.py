@@ -12,7 +12,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import structlog
-from sqlalchemy import Connection, Engine, insert, select, update
+from sqlalchemy import Connection, Engine, func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.core.clock import Clock
@@ -175,41 +175,7 @@ def goal_reached(
             season.started_at,
         )
     # 2-3. Settle what complete data decides (incl. milestones the goal weigh-in crossed).
-    settled = settlement.settle_due(engine, clock).settled
-    # 4. Void and refund everything that can't be decided yet.
-    with immediate(engine) as conn:
-        left = (
-            conn.execute(
-                select(Market.id)
-                .where(
-                    Market.season_id == season_id,
-                    Market.status.in_((MarketStatus.OPEN.value, MarketStatus.LOCKED.value)),
-                )
-                .order_by(Market.id)
-            )
-            .scalars()
-            .all()
-        )
-        for market_id in left:
-            admin.void_open_market(conn, clock, market_id, "goal_reached")
-    # 5. Pools: settle the ones whose target day is complete, refund the rest.
-    with engine.connect() as conn:
-        open_pools = (
-            conn.execute(
-                select(Pool.id).where(
-                    Pool.season_id == season_id, Pool.status.in_(("open", "locked"))
-                )
-            )
-            .scalars()
-            .all()
-        )
-    finished = refunded = 0
-    for pool_id in open_pools:
-        if pools.settle_pool(engine, clock, pool_id):
-            finished += 1
-            continue
-        with immediate(engine) as conn:
-            refunded += pools.refund_pool(conn, clock, pool_id, "goal_reached")
+    settled, left, finished, refunded = _resolve_open(engine, clock, season_id, "goal_reached")
     # 6. Expire AI suggestions, announce, bust check.
     with immediate(engine) as conn:
         now = clock.now()
@@ -245,6 +211,50 @@ def goal_reached(
 # ---- freeze / unfreeze -------------------------------------------------------------------
 
 
+def _resolve_open(
+    engine: Engine, clock: Clock, season_id: int, reason: str
+) -> tuple[int, list[int], int, int]:
+    """Goal Reached and starting a new season: settle every market and special event the
+    data already decides, then void and refund the rest with `reason`. Returns (markets
+    settled, market ids voided, events settled, events refunded)."""
+    settled = settlement.settle_due(engine, clock).settled
+    # 4. Void and refund everything that can't be decided yet.
+    with immediate(engine) as conn:
+        left = (
+            conn.execute(
+                select(Market.id)
+                .where(
+                    Market.season_id == season_id,
+                    Market.status.in_((MarketStatus.OPEN.value, MarketStatus.LOCKED.value)),
+                )
+                .order_by(Market.id)
+            )
+            .scalars()
+            .all()
+        )
+        for market_id in left:
+            admin.void_open_market(conn, clock, market_id, reason)
+    # 5. Pools: settle the ones whose target day is complete, refund the rest.
+    with engine.connect() as conn:
+        open_pools = (
+            conn.execute(
+                select(Pool.id).where(
+                    Pool.season_id == season_id, Pool.status.in_(("open", "locked"))
+                )
+            )
+            .scalars()
+            .all()
+        )
+    finished = refunded = 0
+    for pool_id in open_pools:
+        if pools.settle_pool(engine, clock, pool_id):
+            finished += 1
+            continue
+        with immediate(engine) as conn:
+            refunded += pools.refund_pool(conn, clock, pool_id, reason)
+    return settled, list(left), finished, refunded
+
+
 def set_frozen(engine: Engine, clock: Clock, actor: audit.Actor, frozen: bool) -> int:
     """Pause or resume betting. Open markets stay open and lock at their own time
     (issue #59); unfreezing posts today's drops that were skipped while frozen. Returns
@@ -278,29 +288,57 @@ def set_frozen(engine: Engine, clock: Clock, actor: audit.Actor, frozen: bool) -
 # ---- new season --------------------------------------------------------------------------
 
 
+def unsettled(conn: Connection) -> tuple[int, int]:
+    """(markets, special events) still open or locked: what blocks a new season."""
+    live = (MarketStatus.OPEN.value, MarketStatus.LOCKED.value)
+    markets = conn.execute(select(func.count()).where(Market.status.in_(live))).scalar_one()
+    events = conn.execute(
+        select(func.count()).where(Pool.status.in_(("open", "locked")))
+    ).scalar_one()
+    return int(markets), int(events)
+
+
+def describe_unsettled(markets: int, events: int) -> str:
+    """ "3 markets and 1 special event" (issue #85: say what is left, not "some")."""
+    parts = [f"{markets} market{'s' if markets != 1 else ''}"] if markets else []
+    if events:
+        parts.append(f"{events} special event{'s' if events != 1 else ''}")
+    return " and ".join(parts)
+
+
 def new_season(
-    engine: Engine, clock: Clock, actor: audit.Actor, *, start_x10: int, goal_x10: int
+    engine: Engine,
+    clock: Clock,
+    actor: audit.Actor,
+    *,
+    start_x10: int,
+    goal_x10: int,
+    void_open: bool = False,
 ) -> int:
-    """End the current season and start the next with balances carried over."""
+    """End the current season and start the next with balances carried over.
+    `void_open` (the admin ticked it, issue #85) first settles whatever the data already
+    decides and voids and refunds every other open market and special event."""
     if start_x10 <= 0 or goal_x10 <= 0 or start_x10 == goal_x10:
         raise SeasonError("weights", "Enter a starting weight and a different goal weight.")
+    with engine.connect() as conn:
+        if instance.current_state(conn) != instance.FROZEN:
+            raise SeasonError("not_frozen", "Freeze the instance (or reach the goal) first.")
+        current = _season(conn)
+    resolved: tuple[int, list[int], int, int] | None = None
+    if void_open and current is not None:
+        resolved = _resolve_open(engine, clock, current.id, "season_ended")
     with immediate(engine) as conn:
         if instance.current_state(conn) != instance.FROZEN:
             raise SeasonError("not_frozen", "Freeze the instance (or reach the goal) first.")
         old = _season(conn)
-        open_markets = conn.execute(
-            select(Market.id).where(
-                Market.status.in_((MarketStatus.OPEN.value, MarketStatus.LOCKED.value))
-            )
-        ).first()
-        open_pools = conn.execute(
-            select(Pool.id).where(Pool.status.in_(("open", "locked")))
-        ).first()
-        if open_markets or open_pools:
+        markets, events = unsettled(conn)
+        if markets or events:
             raise SeasonError(
                 "unsettled",
-                "Some markets or pools are still open or locked. Reach the goal (it settles "
-                "or refunds everything) or void them first.",
+                f"{describe_unsettled(markets, events)} "
+                f"{'is' if markets + events == 1 else 'are'} still open or locked. Tick "
+                '"Void and refund everything still open" to end them now, or void them '
+                "first (Markets, Events).",
             )
         now = clock.now()
         balances: dict[int, int] = {}
@@ -362,7 +400,17 @@ def new_season(
                 "goal_x10": goal_x10,
                 "players": len(players),
                 "carried_cents": carried,
-            },
+            }
+            | (
+                {
+                    "settled_markets": resolved[0],
+                    "voided_markets": len(resolved[1]),
+                    "settled_events": resolved[2],
+                    "refunded_events": resolved[3],
+                }
+                if resolved
+                else {}
+            ),
         )
         number = conn.execute(select(Season.number).where(Season.id == season_id)).scalar_one()
         enqueue(
