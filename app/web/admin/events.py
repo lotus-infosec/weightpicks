@@ -186,6 +186,7 @@ def register(router: APIRouter) -> None:
             canon = canonical_weigh_ins(conn, today - timedelta(days=13), today)
             rows = season.history(conn)
             frozen = instance.current_state(conn) == instance.FROZEN
+            markets, events = season.unsettled(conn)
         current = next((r for r in rows if r.ended_at is None), None)
         return render(
             request,
@@ -194,6 +195,7 @@ def register(router: APIRouter) -> None:
                 "seasons": rows,
                 "current": current,
                 "frozen": frozen,
+                "unsettled": season.describe_unsettled(markets, events),
                 "latest": f"{canon[-1].value / 10:.1f}" if canon else "",
                 "unit": config.unit if config else state.settings.wp_unit,
                 "error": error,
@@ -239,7 +241,12 @@ def register(router: APIRouter) -> None:
                 return season_page(request, "Enter both weights, like 212.4.", 400)
             await run_in_threadpool(
                 lambda: season.new_season(
-                    state.engine, state.domain_clock, who, start_x10=start, goal_x10=goal
+                    state.engine,
+                    state.domain_clock,
+                    who,
+                    start_x10=start,
+                    goal_x10=goal,
+                    void_open=form.get("void_open") == "on",
                 )
             )
         except season.SeasonError as exc:

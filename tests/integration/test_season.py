@@ -22,7 +22,7 @@ from app.models import (
     Pool,
     Season,
 )
-from app.services import auth, instance, ledger, markets, pools, season
+from app.services import admin, auth, instance, ledger, markets, pools, season
 from app.services.audit import Actor
 from app.services.bets import BetRejected, place_parlay
 from app.web.main import create_app
@@ -265,6 +265,76 @@ def test_goal_reached_still_locks_and_resolves_open_markets(world: World) -> Non
     market = weight_market(w, -5, day=date(2026, 10, 8))
     season.goal_reached(w.engine, w.clock, actor=admin_actor(w))
     assert statuses(w, market) == ["voided"]
+
+
+def test_new_season_names_what_blocks_it_and_can_void_it_all(
+    mid_season: dict[str, Any],
+) -> None:
+    """Issue #85: after voiding every market, an open special event still blocked the new
+    season with a vague "some markets or pools" error. The error now says what is left,
+    and the admin can have everything still open voided and refunded."""
+    w = mid_season["world"]
+    p1, p2 = mid_season["p1"], mid_season["p2"]
+    actor = admin_actor(w)
+    season.set_frozen(w.engine, w.clock, actor, True)
+    with w.engine.connect() as conn:
+        live = (
+            conn.execute(select(Market.id).where(Market.status.in_(("open", "locked"))))
+            .scalars()
+            .all()
+        )
+    for market_id in live:  # what the tester did: void every market by hand
+        admin.void_market(w.engine, w.clock, actor, market_id, "cleaning up")
+    with pytest.raises(season.SeasonError) as info:
+        season.new_season(w.engine, w.clock, actor, start_x10=2194, goal_x10=2100)
+    assert info.value.code == "unsettled"
+    assert info.value.message.startswith("2 special events are still open or locked.")
+
+    before = {p1: account(w, p1)[0], p2: account(w, p2)[0]}
+    new_id = season.new_season(
+        w.engine, w.clock, actor, start_x10=2194, goal_x10=2100, void_open=True
+    )
+    with w.engine.connect() as conn:
+        pool_status = set(conn.execute(select(Pool.status)).scalars())
+        after = conn.execute(
+            select(AuditEntry.after).where(AuditEntry.action == "season.new")
+        ).scalar_one()
+        carried = dict(
+            conn.execute(
+                select(Account.user_id, Account.balance_cents).where(
+                    Account.season_id == new_id, Account.kind == "player"
+                )
+            ).all()
+        )
+        assert ledger.verify(conn).ok
+    assert pool_status == {"refunded"}
+    assert after["refunded_events"] == 2 and after["voided_markets"] == 0
+    assert all(carried[p] >= before[p] for p in (p1, p2))  # buy-ins came back first
+
+
+def test_void_open_voids_markets_with_the_new_season_reason(world: World) -> None:
+    actor = admin_actor(world)
+    p = player(world, 1)
+    market = weight_market(world, -5, day=date(2026, 10, 8))
+    placed = bet(world, p, market, "over")
+    season.set_frozen(world.engine, world.clock, actor, True)
+    with world.engine.connect() as conn:
+        assert season.describe_unsettled(*season.unsettled(conn)).endswith("market")
+    season.new_season(
+        world.engine, world.clock, actor, start_x10=2194, goal_x10=2100, void_open=True
+    )
+    from app.services import board
+
+    with world.engine.connect() as conn:
+        row = {b.bet_id: b for b in board.my_bets(conn, p)}[placed.bet_id]
+    assert (row.status, row.reason) == ("void", "Voided: a new season started")
+
+
+def test_describe_unsettled() -> None:
+    assert season.describe_unsettled(3, 1) == "3 markets and 1 special event"
+    assert season.describe_unsettled(1, 0) == "1 market"
+    assert season.describe_unsettled(0, 2) == "2 special events"
+    assert season.describe_unsettled(0, 0) == ""
 
 
 def test_new_season_carries_balances_and_restarts_pnl(mid_season: dict[str, Any]) -> None:

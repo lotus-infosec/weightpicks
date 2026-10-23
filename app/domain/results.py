@@ -5,6 +5,7 @@ VOID_REASONS = {
     "admin": "Voided by the admin",
     "goal_reached": "Voided: the goal was reached first",
     "timezone_changed": "Voided: the time zone changed",
+    "season_ended": "Voided: a new season started",
 }
 PUSH_REASONS = {
     "tie": "Push: an exact tie with the line",

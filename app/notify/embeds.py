@@ -305,6 +305,7 @@ POOL_REASONS = {
     "goal_reached": "the goal was reached first",
     "admin_void": "the admin called it off",
     "timezone_changed": "the time zone changed",
+    "season_ended": "a new season started",
 }
 
 

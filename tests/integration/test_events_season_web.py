@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from app.core.clock import SimClock
 from app.core.db import immediate
@@ -222,3 +222,22 @@ def test_season_page_freeze_goal_and_new_season(admin: tuple[TestClient, World])
         post(c, "/admin/season", "/admin/season/nope", {"admin_password": web.PASSWORD}).status_code
         == 404
     )
+
+
+def test_new_season_form_offers_to_void_whats_still_open(admin: tuple[TestClient, World]) -> None:
+    """Issue #85: the Season page says what is still open and, with the box ticked,
+    voids and refunds it so the new season can start."""
+    from tests.integration.test_bets_settlement import weight_market
+
+    c, w = admin
+    weight_market(w, -5, day=date(2026, 10, 8))
+    post(c, "/admin/season", "/admin/season/freeze", {"admin_password": web.PASSWORD})
+    page = c.get("/admin/season").text
+    assert 'data-testid="season-unsettled"' in page and "Still open or locked: 1 market." in page
+    weights = {"start_weight": "219.4", "goal_weight": "210", "admin_password": web.PASSWORD}
+    blocked = post(c, "/admin/season", "/admin/season/new", weights)
+    assert blocked.status_code == 400 and "1 market is still open or locked" in blocked.text
+    started = post(c, "/admin/season", "/admin/season/new", weights | {"void_open": "on"})
+    assert started.headers["location"] == "/admin/season?ok=season"
+    with w.engine.connect() as conn:
+        assert conn.execute(select(func.count()).select_from(Season)).scalar_one() == 2

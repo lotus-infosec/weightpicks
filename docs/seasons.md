@@ -44,7 +44,7 @@ Set the goal during `/setup`, or for later seasons when you start one.
 **Freezing:** Admin → Season → **Freeze** pauses betting: no new bets or pool entries. Open markets stay open and lock at their usual time, bets already placed settle as usual, and nothing is refunded. **Unfreeze** reopens betting and posts any of today's drops that were skipped while frozen (if their lock time hasn't passed). Players see a "Betting is paused" banner, and their history stays available.
 - After Goal Reached you can't unfreeze; you start a new season instead.
 
-**Starting a new season:** Admin → Season → **Start a new season**. It's available while the instance is frozen and nothing is still open.
+**Starting a new season:** Admin → Season → **Start a new season**, available while the instance is frozen. If markets or special events are still open or locked, the card lists them; tick **Void and refund everything still open** and starting the season first settles whatever the data already decides, then voids and refunds the rest (players see "a new season started"). Without the tick it refuses and says what's left.
 - **Weights:** enter the starting weight (pre-filled with the latest weigh-in) and the new goal.
 - **Balances carry over:** every player starts the new season with last season's ending balance. Profit and loss restarts at zero, so the leaderboard starts level. New players still get the starting bankroll.
 - **Betting reopens,** and the next scheduled drop posts the new season's markets.

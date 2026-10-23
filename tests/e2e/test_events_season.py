@@ -85,6 +85,11 @@ def test_events_and_season(browser: Browser, rich_server: RichServer, size: str)
     freeze.get_by_test_id("freeze-toggle").click()
     expect(page.get_by_role("status")).to_contain_text("Instance frozen")
     expect(page.get_by_test_id("new-season")).to_be_visible()
+    # Issue #85: what is still open is spelled out, with the box to void it all.
+    expect(page.get_by_test_id("season-unsettled")).to_contain_text("Still open or locked:")
+    expect(page.get_by_test_id("void-open")).not_to_be_checked()
+    page.get_by_test_id("new-season").scroll_into_view_if_needed()
+    check(page, "admin-season-frozen", size, errors)
     context.close()
 
     # Player again: the frozen banner, and the Events form refuses.
