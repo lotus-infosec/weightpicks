@@ -37,6 +37,10 @@ Posts older than a day are dropped rather than sent late.
 No post can ping anyone: `@everyone`, `@here` and user or role mentions are disabled on
 every post, even if a player picks such a display name.
 
+Every post is sent under the app's name with its logo as the picture (your Appearance
+upload, or the default). Discord fetches the logo itself, so the picture appears only when
+the public URL (Admin → Settings) is an `https://` address it can reach.
+
 ## Kinds of post
 
 | Kind | When |

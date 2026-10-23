@@ -178,3 +178,17 @@ def test_watch_sync_alerts() -> None:
     pushed = text({"kind": "watch_sync_push", "day": "2026-10-06"})
     assert "Tue Oct 6" in pushed and "refunded" in pushed
     assert "nonsense" in text({"kind": "watch_sync_push", "day": "nonsense"})
+
+
+@pytest.mark.parametrize("category", sorted(PAYLOADS))
+def test_every_post_carries_the_logo_as_its_avatar(category: str) -> None:
+    """Issue #87: the webhook picture is the instance's logo, served at /brand."""
+    body = embeds.build(category, PAYLOADS[category], ctx())
+    assert body["avatar_url"] == "https://picks.example.invalid/brand/logo-192.png"
+
+
+def test_no_avatar_without_a_public_https_address() -> None:
+    assert embeds.avatar_url("http://127.0.0.1:8000") is None
+    assert embeds.avatar_url("https://picks.example.org/") == (
+        "https://picks.example.org/brand/logo-192.png"
+    )
