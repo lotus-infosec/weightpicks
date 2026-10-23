@@ -22,7 +22,7 @@ def post_week(engine: Engine, clock: Clock, tz: ZoneInfo, monday: date) -> bool:
     end = at_local(monday, time(0), tz)
     with immediate(engine) as conn:
         season_id = active_season_id(conn)
-        rows = leaderboard.standings(conn, season_id)[:TOP]
+        rows = leaderboard.ranked(leaderboard.standings(conn, season_id))[:TOP]
         if not rows or season_id is None:
             return False
         week = leaderboard.settled_pnl(conn, season_id, since=start, until=end)

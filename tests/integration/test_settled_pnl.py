@@ -46,7 +46,7 @@ def test_placing_a_bet_does_not_move_pnl_settling_does(world: World) -> None:
     assert standings[a].pnl_cents == ledger_pnl(world, a) > 0
     assert standings[b].pnl_cents == ledger_pnl(world, b) == -1_000
     assert (standings[a].wins, standings[b].wins) == (1, 0)
-    assert [s.user_id for s in sorted(standings.values(), key=lambda s: s.rank)] == [a, b]
+    assert [(standings[a].rank, standings[b].rank)] == [(1, 2)]
     with world.engine.connect() as conn:
         assert ledger.verify(conn).ok
 
@@ -77,3 +77,39 @@ def test_a_refunded_event_is_zero(world: World) -> None:
     with world.engine.begin() as conn:
         pools.refund_pool(conn, world.clock, pool_id, "admin_void")
     assert board(world)[a].pnl_cents == 0 == ledger_pnl(world, a)
+
+
+def test_players_without_a_result_are_listed_last_unranked(world: World) -> None:
+    """Issue #84: $0 from never finishing a bet mustn't outrank a loss."""
+    winner, loser, idle, waiting = (player(world, n) for n in (1, 2, 3, 4))
+    actual = change(date(2026, 10, 5), date(2026, 10, 6))
+    market = weight_market(world, actual - 5)  # over wins
+    bet(world, winner, market, "over")
+    bet(world, loser, market, "under")
+    later = weight_market(world, -5, day=date(2026, 10, 9))
+    bet(world, waiting, later, "over")  # only an open bet: no result yet
+    to_settle_time(world)
+    assert settlement.settle_market(world.engine, world.clock, market).settled
+    with world.engine.connect() as conn:
+        rows = leaderboard.standings(conn, active_season_id(conn))
+    # Unranked players follow, by name ("P3" before "P4").
+    assert [(r.user_id, r.rank) for r in rows] == [
+        (winner, 1),
+        (loser, 2),
+        (idle, None),
+        (waiting, None),
+    ]
+    assert [r.user_id for r in leaderboard.ranked(rows)] == [winner, loser]
+
+
+def test_leaderboard_page_shows_unranked_players_last(world: World) -> None:
+    from app.core.clock import SystemClock
+    from app.services import auth
+    from app.web.main import create_app
+    from tests.integration import web
+
+    code = auth.rotate_registration_code(world.engine, SystemClock())
+    with web.client(create_app(world.settings, domain_clock=world.clock)) as c:
+        web.register(c, code, 1)
+        page = c.get("/leaderboard").text
+    assert 'data-testid="unranked"' in page and "No results yet" in page

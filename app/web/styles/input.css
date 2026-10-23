@@ -184,6 +184,7 @@
   .tile-value { @apply text-base font-semibold; }
   .ranks { @apply flex flex-col gap-2; }
   .rank-row { @apply flex items-center gap-3 rounded-2xl px-4; min-height: 64px; background: var(--color-surface); border: 1px solid var(--color-line); }
+  .rank-row.unranked { opacity: 0.72; }
   .rank-row.me { border-color: var(--accent-line); background: color-mix(in srgb, var(--color-accent) 6%, var(--color-surface)); }
   .rank-num { @apply text-sm font-semibold text-center; width: 20px; color: var(--text-3); }
   .rank-row.top .rank-num { color: var(--color-accent); }
