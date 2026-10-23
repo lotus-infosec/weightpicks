@@ -276,3 +276,23 @@ def test_links_use_the_admin_public_url(
     queue(engine, clock, "market_settlements", "m2", market_id=8, result="void", title="T")
     dispatcher(settings, clock).run_pass(engine)
     assert discord.bodies[-1]["embeds"][0]["url"] == f"{settings.wp_base_url}/markets/8"
+
+
+def test_goal_reached_names_its_top_three(
+    env: tuple[Engine, Settings, SimClock], discord: FakeDiscord
+) -> None:
+    """Issue #86: the top three of the Goal Reached post are named, not "A player"."""
+    from app.services.users import ensure_player
+
+    engine, settings, clock = env
+    with immediate(engine) as conn:
+        alex = ensure_player(conn, clock, "alex@example.invalid", "Alex")
+        sam = ensure_player(conn, clock, "sam@example.invalid", "Sam")
+    hook(engine, clock, "goal_reached", discord.url())
+    public(engine, clock)
+    top = [{"user_id": alex, "pnl_cents": 5_000}, {"user_id": sam, "pnl_cents": -2_000}]
+    queue(engine, clock, "goal_reached", "goal:1", season=1, start_x10=2200, goal_x10=2100, top=top)
+    assert dispatcher(settings, clock).run_pass(engine).sent == 1
+    (body,) = discord.bodies
+    text = body["embeds"][0]["description"]
+    assert "1st: Alex (+$50.00)" in text and "2nd: Sam" in text and "A player" not in text
