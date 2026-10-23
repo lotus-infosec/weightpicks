@@ -2,7 +2,7 @@
 # One image, several roles (web, worker, cli) chosen by docker/entrypoint.sh.
 # Base images are pinned by digest; Dependabot proposes updates.
 
-FROM ghcr.io/astral-sh/uv:0.13.1@sha256:4a1f3666816dafadd20ceb71eac9a7d56d7ef30279f7d64048519ab901ada336 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.5@sha256:32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff AS uv
 
 # ---- css: compile the stylesheet with the pinned Tailwind standalone CLI ----
 FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587 AS css
