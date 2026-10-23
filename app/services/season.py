@@ -218,7 +218,7 @@ def goal_reached(
             .where(AiProposal.status == "pending")
             .values(status="expired", reason="goal reached", decided_at=now)
         )
-        top = leaderboard.standings(conn, season_id)[:3]
+        top = leaderboard.ranked(leaderboard.standings(conn, season_id))[:3]
         enqueue(
             conn,
             clock,

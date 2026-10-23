@@ -90,6 +90,7 @@ def test_weekly_standings_post_once_with_last_weeks_pnl(world: World) -> None:
     w = world
     mark_setup_done(w.engine, w.settings)
     a, b = player(w, 1), player(w, 2)
+    assert b != a  # b places nothing: unranked, so not in the post
     market = weight_market(w, -5)
     bet(w, a, market, "over", 1_000)
     to_settle_time(w)  # it settles inside the week, so it counts (open bets don't)
@@ -104,7 +105,7 @@ def test_weekly_standings_post_once_with_last_weeks_pnl(world: World) -> None:
             select(OutboxMessage.payload).where(OutboxMessage.category == "weekly_standings")
         ).scalars()
     assert payload["week"] == "2026-W41"
-    assert {r["user_id"] for r in payload["rows"]} == {a, b}
+    assert {r["user_id"] for r in payload["rows"]} == {a}  # b has no result yet (#84)
     row_a = next(r for r in payload["rows"] if r["user_id"] == a)
     assert row_a["week_pnl_cents"] == row_a["pnl_cents"] != 0  # all of it finished that week
     assert "balance_cents" not in row_a and "wins" in row_a
@@ -112,7 +113,10 @@ def test_weekly_standings_post_once_with_last_weeks_pnl(world: World) -> None:
 
 def test_standings_skip_when_days_late(world: World) -> None:
     w = world
-    player(w, 1)
+    market = weight_market(w, -5)
+    bet(w, player(w, 1), market, "over", 1_000)
+    to_settle_time(w)  # a finished bet: the player is ranked (#84)
+    assert settlement.settle_market(w.engine, w.clock, market).settled
     job = WeeklyStandingsJob(instance.read(w.engine.connect()))  # type: ignore[arg-type]
     w.clock.set(local(2026, 10, 14, 12))  # Wednesday: Monday's post would be stale
     assert run_due([job], w.engine, w.clock) == ["weekly_standings"]
@@ -122,3 +126,11 @@ def test_standings_skip_when_days_late(world: World) -> None:
             select(func.count()).where(OutboxMessage.category == "weekly_standings")
         ).scalar_one()
     assert n == 1  # only the direct call queued one
+
+
+def test_no_weekly_post_while_nobody_has_a_result(world: World) -> None:
+    """Issue #84: players without a finished bet or event aren't ranked, so with none
+    ranked there is nothing to post."""
+    player(world, 1)
+    world.clock.set(local(2026, 10, 12, 9, 30))
+    assert standings.post_week(world.engine, world.clock, NY, date(2026, 10, 12)) is False

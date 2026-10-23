@@ -8,18 +8,18 @@
   {% for s in season_options %}<a href="/leaderboard?season={{ s.season_id }}" class="tab{{ ' active' if s.season_id == season_id }}">Season {{ s.number }}{% if s.current %} (now){% endif %}</a>{% endfor %}
 </nav>
 {% endif %}
-<p class="muted small">Ranked by profit and loss from finished bets and events, then wins. Open bets count once they settle; allowances and bailouts never count.</p>
+<p class="muted small">Ranked by profit and loss from finished bets and events, then wins. Open bets count once they settle; allowances and bailouts never count. Players with no finished bet or event yet are listed last, unranked.</p>
 {% if not rows %}<div class="empty-state"><strong>No players yet</strong><p class="muted">Share the registration code to get people in.</p></div>{% else %}
 <ol class="ranks" data-testid="leaderboard">
   {% for r in rows %}
-  <li class="rank-row{{ ' me' if r.user_id == session.user_id }}{{ ' top' if r.rank == 1 }}">
-    <span class="rank-num num">{{ r.rank }}</span>
+  <li class="rank-row{{ ' me' if r.user_id == session.user_id }}{{ ' top' if r.rank == 1 }}{{ ' unranked' if r.rank is none }}"{% if r.rank is none %} data-testid="unranked"{% endif %}>
+    <span class="rank-num num">{{ r.rank if r.rank is not none else "–" }}</span>
     <span class="avatar" aria-hidden="true">{{ r.display_name[:1] | upper }}</span>
     <span class="rank-main">
       <span class="rank-name">{{ r.display_name }}{% if r.user_id == session.user_id %} <span class="badge">you</span>{% endif %}</span>
-      <span class="rank-meta">{{ r.wins }} win{{ "" if r.wins == 1 else "s" }} · {{ r.open_bets }} open</span>
+      <span class="rank-meta">{% if r.rank is none %}No results yet{% else %}{{ r.wins }} win{{ "" if r.wins == 1 else "s" }}{% endif %} · {{ r.open_bets }} open</span>
     </span>
-    <strong class="rank-pnl num {{ 'good' if r.pnl_cents > 0 else ('bad' if r.pnl_cents < 0) }}" data-label="P&amp;L">{{ r.pnl_cents | signed_money }}</strong>
+    {% if r.rank is none %}<span class="rank-pnl muted" data-label="P&amp;L">–</span>{% else %}<strong class="rank-pnl num {{ 'good' if r.pnl_cents > 0 else ('bad' if r.pnl_cents < 0) }}" data-label="P&amp;L">{{ r.pnl_cents | signed_money }}</strong>{% endif %}
   </li>
   {% endfor %}
 </ol>

@@ -19,7 +19,7 @@ from app.services.ledger import active_season_id
 
 @dataclass(frozen=True, slots=True)
 class Standing:
-    rank: int
+    rank: int | None  # None: no decided result yet, listed last and unranked (issue #84)
     user_id: int
     display_name: str
     pnl_cents: int  # settled P&L
@@ -109,7 +109,26 @@ def wins(conn: Connection, season_id: int) -> dict[int, int]:
     return totals
 
 
+def with_results(conn: Connection, season_id: int) -> set[int]:
+    """Players with a decided result this season: a bet won or lost, or a settled event.
+    A push or refund decides nothing, so it doesn't count (issue #84)."""
+    bets = conn.execute(
+        select(Bet.user_id)
+        .where(Bet.season_id == season_id, Bet.status.in_(("won", "lost")))
+        .distinct()
+    ).scalars()
+    events = conn.execute(
+        select(PoolEntry.user_id)
+        .join(Pool, Pool.id == PoolEntry.pool_id)
+        .where(Pool.season_id == season_id, Pool.status == "settled")
+        .distinct()
+    ).scalars()
+    return {*bets, *events}
+
+
 def standings(conn: Connection, season_id: int | None) -> list[Standing]:
+    """Ranked by settled P&L, then wins, then name. Players with no decided result yet
+    come last, unranked: $0 isn't a result, so it mustn't outrank a loss (issue #84)."""
     if season_id is None:
         return []
     open_bets = dict(
@@ -131,10 +150,26 @@ def standings(conn: Connection, season_id: int | None) -> list[Standing]:
     ).all()
     pnl = settled_pnl(conn, season_id)
     won = wins(conn, season_id)
-    ranked = sorted(players, key=lambda p: (-pnl.get(p.id, 0), -won.get(p.id, 0), p.display_name))
+    decided = with_results(conn, season_id)
+    ranked = sorted(
+        (p for p in players if p.id in decided),
+        key=lambda p: (-pnl.get(p.id, 0), -won.get(p.id, 0), p.display_name),
+    )
+    waiting = sorted((p for p in players if p.id not in decided), key=lambda p: p.display_name)
+    ranks: list[int | None] = [*range(1, len(ranked) + 1), *([None] * len(waiting))]
     return [
         Standing(
-            i, p.id, p.display_name, pnl.get(p.id, 0), won.get(p.id, 0), open_bets.get(p.id, 0)
+            rank,
+            p.id,
+            p.display_name,
+            pnl.get(p.id, 0),
+            won.get(p.id, 0),
+            open_bets.get(p.id, 0),
         )
-        for i, p in enumerate(ranked, 1)
+        for rank, p in zip(ranks, [*ranked, *waiting], strict=True)
     ]
+
+
+def ranked(rows: list[Standing]) -> list[Standing]:
+    """Only players with a rank: the ones Discord's standings and Goal Reached list."""
+    return [r for r in rows if r.rank is not None]
