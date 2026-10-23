@@ -105,11 +105,23 @@ def _embed(
         embed["fields"] = fields[:FIELD_LIMIT]
     if url:
         embed["url"] = url
-    return {
+    body: dict[str, Any] = {
         "username": ctx.app_name[:80],
         "embeds": [embed],
         "allowed_mentions": {"parse": []},
     }
+    avatar = avatar_url(ctx.base_url)
+    if avatar:
+        body["avatar_url"] = avatar
+    return body
+
+
+def avatar_url(base_url: str) -> str | None:
+    """The instance's logo (Appearance upload, else the default) as the webhook's
+    picture (issue #87). Discord fetches it itself, so only a public https address."""
+    if not base_url.lower().startswith("https://"):
+        return None
+    return f"{base_url.rstrip('/')}/brand/logo-192.png"
 
 
 def _bet_placed(category: str, p: dict[str, Any], ctx: Context) -> dict[str, Any]:
