@@ -6,19 +6,19 @@ Releases are listed on the [Releases page](https://github.com/lotus-infosec/weig
 
 ```bash
 cd /opt/weightpicks
-sudo ./scripts/upgrade.sh 1.2.0
+sudo ./scripts/upgrade.sh 1.3.0
 ```
 
 It:
 
 1. checks that both containers are healthy and the ledger verifies (nothing changes if not);
-2. takes a backup labelled `pre-1.2.0` and verifies it;
-3. checks out the release's files (`git checkout v1.2.0`) if the clone has no local changes;
-4. sets `WP_VERSION=1.2.0` in `.env` and pulls the new image;
+2. takes a backup labelled `pre-1.3.0` and verifies it;
+3. checks out the release's files (`git checkout v1.3.0`) if the clone has no local changes;
+4. sets `WP_VERSION=1.3.0` in `.env` and pulls the new image;
 5. restarts: the web container applies migrations before serving, the worker waits for them;
 6. waits until both are healthy and verifies the ledger again.
 
-If anything fails it stops and prints the exact commands to go back. Installed with `--build`? Use `sudo git checkout v1.2.0 && sudo ./scripts/upgrade.sh --build`.
+If anything fails it stops and prints the exact commands to go back. Installed with `--build`? Use `sudo git checkout v1.3.0 && sudo ./scripts/upgrade.sh --build`.
 
 ## Roll back
 
@@ -42,5 +42,5 @@ sudo docker compose restart
 Images are built by GitHub Actions from signed tags, with build provenance:
 
 ```bash
-gh attestation verify oci://ghcr.io/lotus-infosec/weightpicks:1.2.0 --owner lotus-infosec
+gh attestation verify oci://ghcr.io/lotus-infosec/weightpicks:1.3.0 --owner lotus-infosec
 ```
