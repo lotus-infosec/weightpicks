@@ -95,8 +95,10 @@ def _webhooks(conn: Any, settings: Settings) -> dict[str, str]:
 
 def _context(conn: Any, rows: list[Any], app_name: str, base_url: str, now: datetime) -> Any:
     user_ids = {r.payload.get("user_id") for r in rows}
-    for r in rows:
-        user_ids |= {row.get("user_id") for row in r.payload.get("rows", [])}
+    for r in rows:  # player lists: weekly standings' "rows", Goal Reached's "top" (#86)
+        for value in r.payload.values():
+            if isinstance(value, list):
+                user_ids |= {item.get("user_id") for item in value if isinstance(item, dict)}
     market_ids = {r.payload.get("market_id") for r in rows}
     users = {
         uid: (REMOVED_PLAYER if status == "banned" else name)
