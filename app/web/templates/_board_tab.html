@@ -1,4 +1,30 @@
 {% from "_macros.html" import market_row %}
+{# One special event (pool). Defined here so it sees the page's csrf and instance. #}
+{% macro pool_card(p) -%}
+  <article class="market pool" data-testid="pool-{{ p.pool_id }}">
+    <header><span class="market-title">{{ p.title }}</span> <span class="badge status-{{ p.status }}">{{ p.status }}</span></header>
+    <p>{{ p.question }}</p>
+    <p class="small">Weight on <strong>{{ p.target_date.strftime("%a %b %-d") }}</strong> · buy-in <strong>{{ p.buy_in_cents | money }}</strong> · {{ p.entries }} in · pot <strong data-testid="pot">{{ p.pot_cents | money }}</strong></p>
+    {% if pool_message and pool_id == p.pool_id %}<p class="{{ 'notice' if pool_ok else 'alert' }}" role="status" data-testid="pool-message">{{ pool_message }}</p>{% endif %}
+    {% if p.open and instance.frozen %}
+    {% if p.my_guess_x10 %}<p class="small">Your guess: <strong>{{ "%.1f"|format(p.my_guess_x10 / 10) }}</strong></p>{% endif %}
+    <p class="muted small">Entries are paused while betting is paused.</p>
+    {% elif p.open %}
+    <form hx-post="/api/pools/{{ p.pool_id }}/enter" hx-target="#board" method="post" action="/api/pools/{{ p.pool_id }}/enter" class="pool-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      <label>Your guess ({{ instance.unit }})
+        <input type="text" inputmode="decimal" name="guess" value="{{ '%.1f'|format(p.my_guess_x10 / 10) if p.my_guess_x10 else '' }}" required data-testid="guess"></label>
+      <button type="submit" class="primary" data-testid="enter">{{ "Change guess" if p.my_guess_x10 else "Buy in for " ~ (p.buy_in_cents | money) }}</button>
+    </form>
+    <p class="muted small">Closest without going over wins. You can change your guess for free until {{ p.lock_at | local_time }}. Other guesses stay hidden until then.</p>
+    {% else %}
+    {% if p.my_guess_x10 %}<p class="small">Your guess: <strong>{{ "%.1f"|format(p.my_guess_x10 / 10) }}</strong></p>{% endif %}
+    {% if p.result_x10 %}<p class="small">The scale said <strong>{{ "%.1f"|format(p.result_x10 / 10) }}</strong>.</p>{% elif p.status == "refunded" %}<p class="small">Everyone was refunded.</p>{% endif %}
+    {% if p.guesses %}<ul class="plain small guesses">{% for name, guess, paid in p.guesses %}<li>{{ name }}: {{ "%.1f"|format(guess / 10) }}{% if paid and p.status == "settled" %} <span class="badge status-won">won {{ paid | money }}</span>{% endif %}</li>{% endfor %}</ul>{% endif %}
+    {% endif %}
+  </article>
+{%- endmacro %}
 {# The tabs are part of the swapped fragment so the active tab follows the content. #}
 <div class="tabs" role="tablist">
   {% for t in tabs %}
@@ -11,33 +37,13 @@
 {% if not pools %}<p class="muted empty">No special events yet. Watch this space.</p>{% endif %}
 <div class="cards" data-testid="events">
   {% for p in pools %}
-  <article class="market pool" data-testid="pool-{{ p.pool_id }}">
-    <header><span class="market-title">{{ p.title }}</span> <span class="badge status-{{ p.status }}">{{ p.status }}</span></header>
-    <p>{{ p.question }}</p>
-    <p class="small">Weight on <strong>{{ p.target_date.strftime("%a %b %-d") }}</strong> · buy-in <strong>{{ p.buy_in_cents | money }}</strong> · {{ p.entries }} in · pot <strong data-testid="pot">{{ p.pot_cents | money }}</strong></p>
-    {% if pool_message and pool_id == p.pool_id %}<p class="{{ 'notice' if pool_ok else 'alert' }}" role="status" data-testid="pool-message">{{ pool_message }}</p>{% endif %}
-    {% if p.open and instance.frozen %}
-    {% if p.my_guess_x10 %}<p class="small">Your guess: <strong>{{ "%.1f"|format(p.my_guess_x10 / 10) }}</strong></p>{% endif %}
-    <p class="muted small">Entries are paused while betting is paused.</p>
-    {% elif p.open %}
-    <form hx-post="/api/pools/{{ p.pool_id }}/enter" hx-target="#board" method="post" action="/api/pools/{{ p.pool_id }}/enter" class="pool-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf }}">
-      <label>Your guess ({{ instance.unit }})
-        <input type="text" inputmode="decimal" name="guess" value="{{ '%.1f'|format(p.my_guess_x10 / 10) if p.my_guess_x10 else '' }}" required data-testid="guess"></label>
-      <button type="submit" class="primary" data-testid="enter">{{ "Change guess" if p.my_guess_x10 else "Buy in for " ~ (p.buy_in_cents | money) }}</button>
-    </form>
-    <p class="muted small">Closest without going over wins. You can change your guess for free until {{ p.lock_at | local_time }}. Other guesses stay hidden until then.</p>
-    {% else %}
-    {% if p.my_guess_x10 %}<p class="small">Your guess: <strong>{{ "%.1f"|format(p.my_guess_x10 / 10) }}</strong></p>{% endif %}
-    {% if p.result_x10 %}<p class="small">The scale said <strong>{{ "%.1f"|format(p.result_x10 / 10) }}</strong>.</p>{% elif p.status == "refunded" %}<p class="small">Everyone was refunded.</p>{% endif %}
-    {% if p.guesses %}<ul class="plain small guesses">{% for name, guess, paid in p.guesses %}<li>{{ name }}: {{ "%.1f"|format(guess / 10) }}{% if paid and p.status == "settled" %} <span class="badge status-won">won {{ paid | money }}</span>{% endif %}</li>{% endfor %}</ul>{% endif %}
-    {% endif %}
-  </article>
+  {{ pool_card(p) }}
   {% endfor %}
 </div>
 {% else %}
 {% set labels = {"daily": "Daily", "weekly": "Weekly", "monthly": "Monthly", "prop": "Props", "future": "Futures"} %}
-{% if not groups %}
+{% if pool_message and wallet %}<span class="wallet" id="balance" data-testid="balance" hx-swap-oob="true">{{ wallet.balance_cents | money }}</span>{% endif %}
+{% if not groups and not pools %}
 <div class="empty-state" data-testid="board-empty">
   <strong>No open markets right now</strong>
   <p class="muted">New lines drop every day at 11:00. Meanwhile, see how your bets are doing.</p>
@@ -53,4 +59,14 @@
 </div>
 </section>
 {% endfor %}
+{% if pools %}
+<section class="market-group" data-testid="group-events">
+<h2 class="group-title">Special events</h2>
+<div class="cards">
+  {% for p in pools %}
+  {{ pool_card(p) }}
+  {% endfor %}
+</div>
+</section>
+{% endif %}
 {% endif %}
