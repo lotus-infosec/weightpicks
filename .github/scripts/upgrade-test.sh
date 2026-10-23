@@ -56,6 +56,17 @@ with immediate(e) as c:
 PY
 compose exec -T worker wp seed
 compose exec -T worker wp sim advance --days 3 >/dev/null
+# The sim clock starts at the real time of the run; move on to the next local noon so the
+# day's markets are open (between the 22:00 lock and the 11:00 drop none are).
+hours=$(compose exec -T worker python - <<'PY'
+from app.core.config import Settings
+from app.core.db import make_engine
+from app.services.sim import app_clock
+s = Settings(); now = app_clock(s, make_engine(s.db_url)).now().astimezone(s.tz)
+print((12 - now.hour) % 24 or 24)
+PY
+)
+compose exec -T worker wp sim advance --hours "$hours" >/dev/null
 compose exec -T worker python - <<'PY'
 # Every player bets on every open side once, then a week plays out (settlements, allowances).
 from sqlalchemy import select
