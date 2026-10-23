@@ -48,6 +48,15 @@ def test_events_and_season(browser: Browser, rich_server: RichServer, size: str)
     expect(page.get_by_test_id("pool-message")).to_contain_text("Guess updated")
     expect(page.locator("article.pool").first).not_to_contain_text("218.5")  # Alex's guess
     check(page, "board-events", size, errors)
+    # Issue #88: the All tab lists open events too, under the markets.
+    page.goto(f"{url}/")
+    events = page.get_by_test_id("group-events")
+    expect(events).to_contain_text("Special events")
+    expect(events.locator("article.pool").first.get_by_test_id("enter")).to_have_text(
+        "Change guess"
+    )
+    events.scroll_into_view_if_needed()
+    check(page, "board-all-events", size, errors)
     context.close()
 
     # Admin: a manual event preview, then the Season page; freeze it.

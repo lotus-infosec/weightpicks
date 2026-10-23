@@ -288,11 +288,16 @@ def build_router() -> APIRouter:
                 (t, board.open_markets(conn, t, now))
                 for t in (timeframes if tab == "all" else [tab] if tab != "events" else [])
             ]
+            pools: list[board.PoolCard] = []
+            if tab == "events":
+                pools = board.pools(conn, user_id, now)
+            elif tab == "all" and "events" in tabs:  # issue #88: events open for entries too
+                pools = [p for p in board.pools(conn, user_id, now) if p.open]
             return {
                 "tab": tab,
                 "tabs": tabs,
                 "groups": [(t, cards) for t, cards in groups if cards or tab != "all"],
-                "pools": board.pools(conn, user_id, now) if tab == "events" else [],
+                "pools": pools,
                 "wallet": board.wallet(conn, user_id),
                 "parlays": bool(flags.get("parlays")),
                 "max_legs": config.economy.max_parlay_legs if config else Economy().max_parlay_legs,
@@ -394,7 +399,7 @@ def build_router() -> APIRouter:
 
     @router.post("/api/pools/{pool_id}/enter")
     async def enter_pool(request: Request, pool_id: int, session: Player) -> Response:
-        """Join a pool or change your guess (HTMX form; re-renders the Events tab)."""
+        """Join a pool or change your guess (HTMX form; re-renders the tab it came from)."""
         form = await read_form(request)
         state = request.app.state
         message, ok, status = "", False, 200
@@ -412,7 +417,8 @@ def build_router() -> APIRouter:
             message, ok = ("You're in. Good luck!" if new else "Guess updated."), True
         except pools.PoolError as exc:
             message, status = exc.message, 409
-        context = board_context(request, session.user_id, "events") | {
+        back_to = "all" if form.get("tab") == "all" else "events"  # where the form was
+        context = board_context(request, session.user_id, back_to) | {
             "pool_message": message,
             "pool_ok": ok,
             "pool_id": pool_id,

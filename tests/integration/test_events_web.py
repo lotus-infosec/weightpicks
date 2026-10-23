@@ -97,6 +97,26 @@ def _rival(w: World) -> int:
     return user
 
 
+def test_open_events_show_on_the_all_tab(player: tuple[TestClient, World, int]) -> None:
+    """Issue #88: the All tab lists special events still open for entries, and entering
+    from it stays on the All tab. Locked events stay on the Events tab only."""
+    c, w, pool_id = player
+    page = c.get("/").text
+    assert 'data-testid="group-events"' in page and "Columbus Day pot" in page
+    assert 'name="tab" value="all"' in page
+    token = web.page_csrf(c, "/")
+    joined = c.post(
+        f"/api/pools/{pool_id}/enter",
+        data={"csrf_token": token, "guess": "219.5", "tab": "all"},
+        headers={"HX-Request": "true"},
+    ).text
+    assert "Good luck!" in joined and 'data-testid="group-events"' in joined
+    assert 'aria-selected="true">All</a>' in joined
+    w.clock.set(local(2026, 10, 11, 22, 5))  # locked: no longer open for entries
+    assert "Columbus Day pot" not in c.get("/").text
+    assert "Columbus Day pot" in c.get("/?tab=events").text
+
+
 def test_full_page_pool_entry_keeps_the_parlay_leg_limit(
     player: tuple[TestClient, World, int],
 ) -> None:
